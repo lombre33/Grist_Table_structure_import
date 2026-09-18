@@ -10,9 +10,14 @@ Trois actions métier possibles, toutes via l'API officielle du widget
 
 - **Import, mode « Nouvelle table »** : crée une table (action `AddTable`) dans le
   document où le widget est ouvert, à partir du texte collé et analysé.
-- **Import, mode « Table existante »** : ajoute des colonnes (actions `AddColumn`,
-  envoyées groupées en un seul appel) à une table déjà présente dans ce document —
-  uniquement celles dont l'identifiant n'existe pas déjà sur cette table.
+- **Import, mode « Table existante »** : ajoute des colonnes (actions
+  `AddVisibleColumn`, envoyées groupées en un seul appel) à une table déjà présente
+  dans ce document — uniquement celles dont l'identifiant n'existe pas déjà sur cette
+  table. `AddVisibleColumn` (plutôt que `AddColumn`, plus permissive mais qui laisse la
+  colonne invisible dans les grilles déjà existantes, visible seulement via « Données
+  sources ») est l'action que Grist lui-même utilise pour que la colonne apparaisse
+  immédiatement dans les vues de la table, exactement comme avec le bouton « + » natif
+  d'une grille.
 - **Import, `visible_col` (colonne d'affichage)** : quand le texte analysé précise,
   pour une colonne de référence, quelle colonne de la table cible utiliser comme
   « colonne d'affichage » (voir « Métadonnées de colonne capturées à l'export » plus

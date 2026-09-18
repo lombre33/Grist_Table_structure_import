@@ -7,9 +7,27 @@
  */
 
 const RESERVED_COLUMN_IDS = new Set(["id", "manualSort"]);
+const REF_ID_FIELDS = new Set(["id", "parentId", "visibleCol"]);
 
 function isHiddenColumn(colId) {
   return RESERVED_COLUMN_IDS.has(colId) || colId.startsWith("gristHelper_") || colId.startsWith("#");
+}
+
+/**
+ * Coerces a `_grist_Tables`/`_grist_Tables_column` row-id field (`id`,
+ * `parentId`, `visibleCol` — all `Ref:` columns onto a metadata table) to a
+ * plain number. In the common case the value already is one; this only
+ * matters if a future Grist version (or a self-hosted variant) ever encodes
+ * a same-document Reference cell in the tagged `[L, tableId, rowId]` form
+ * documented for `GristObjCode.Reference` (`app/common/gristTypes.ts`)
+ * instead of a bare number — every row-id equality check in this module
+ * (`visibleSortedColumns`, `existingColumnIds`, ...) goes through this, so
+ * that possibility can't silently make every comparison fail. `0`/missing
+ * stays `0` ("no reference"), matching Grist's own convention.
+ */
+function toRowId(value) {
+  if (Array.isArray(value)) return Number(value[value.length - 1]) || 0;
+  return Number(value) || 0;
 }
 
 /**
@@ -21,9 +39,10 @@ export function zipRows(columnOriented) {
   const keys = Object.keys(columnOriented).filter((key) => key !== "id");
   const rows = new Array(ids.length);
   for (let i = 0; i < ids.length; i++) {
-    const row = { id: ids[i] };
+    const row = { id: toRowId(ids[i]) };
     for (const key of keys) {
-      row[key] = columnOriented[key][i];
+      const value = columnOriented[key][i];
+      row[key] = REF_ID_FIELDS.has(key) ? toRowId(value) : value;
     }
     rows[i] = row;
   }

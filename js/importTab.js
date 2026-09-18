@@ -399,7 +399,14 @@ export function initImportTab(grist, gristAvailable) {
         return;
       }
 
-      const actions = newColumns.map((col) => ["AddColumn", target.tableId, col.id, buildColumnPayload(col)]);
+      // AddVisibleColumn, not the plainer AddColumn: AddColumn only adds the
+      // column to the table's schema and to its "raw data" section — it
+      // stays invisible on any regular grid/card view already on a page,
+      // only showing up under Raw Data. AddVisibleColumn (same signature)
+      // additionally adds a field for the column to every existing 'record'
+      // view section of that table, exactly like the "+" column button
+      // does in Grist's own grid view. See README.md/SECURITY.md.
+      const actions = newColumns.map((col) => ["AddVisibleColumn", target.tableId, col.id, buildColumnPayload(col)]);
       await grist.docApi.applyUserActions(actions);
 
       let visibleColNote = "";
