@@ -1,6 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { resolveColumnType, describeType, TABLE_ID_RE } from "../js/gristTypes.js";
+import {
+  resolveColumnType,
+  describeType,
+  TABLE_ID_RE,
+  buildTypeExpression,
+  defaultLiteralForType,
+} from "../js/gristTypes.js";
 
 function resolve(dslType, argsRaw) {
   const warnings = [];
@@ -82,6 +88,34 @@ test("describeType produces readable French labels", () => {
   assert.equal(describeType("Ref:Foo"), "Référence vers « Foo »");
   assert.equal(describeType("RefList:Foo"), "Références vers « Foo » (liste)");
   assert.equal(describeType("DateTime:UTC"), "Date et heure (UTC)");
+});
+
+test("buildTypeExpression mirrors gencode.py's get_grist_type", () => {
+  assert.equal(buildTypeExpression("Text"), "grist.Text()");
+  assert.equal(buildTypeExpression("Any"), "grist.Any()");
+  assert.equal(buildTypeExpression("Choice"), "grist.Choice()");
+  assert.equal(buildTypeExpression("DateTime:UTC"), "grist.DateTime('UTC')");
+  assert.equal(buildTypeExpression("Ref:Other_Table"), "grist.Reference('Other_Table')");
+  assert.equal(buildTypeExpression("RefList:Other_Table"), "grist.ReferenceList('Other_Table')");
+  assert.equal(buildTypeExpression("Attachments"), "grist.Attachments()");
+});
+
+test("buildTypeExpression escapes a single quote in its argument", () => {
+  assert.equal(buildTypeExpression("Ref:It's_A_Table"), "grist.Reference('It\\'s_A_Table')");
+});
+
+test("defaultLiteralForType matches Grist's _type_defaults", () => {
+  assert.equal(defaultLiteralForType("Text"), "''");
+  assert.equal(defaultLiteralForType("Choice"), "''");
+  assert.equal(defaultLiteralForType("Date"), "None");
+  assert.equal(defaultLiteralForType("ChoiceList"), "None");
+  assert.equal(defaultLiteralForType("Bool"), "False");
+  assert.equal(defaultLiteralForType("Numeric"), "0.0");
+  assert.equal(defaultLiteralForType("Int"), "0");
+  assert.equal(defaultLiteralForType("Ref:Foo"), "0");
+  assert.equal(defaultLiteralForType("RefList:Foo"), "None");
+  assert.equal(defaultLiteralForType("Any"), "None");
+  assert.equal(defaultLiteralForType("SomethingUnknown"), "None");
 });
 
 test("TABLE_ID_RE matches valid Grist/Python identifiers only", () => {

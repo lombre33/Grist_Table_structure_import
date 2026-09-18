@@ -5,14 +5,40 @@ simplement (revue de code manuelle ou outillée), en vue d'un audit.
 
 ## Ce que fait réellement le widget
 
-Une seule action métier : après analyse d'un texte collé par l'utilisateur, créer
-**une nouvelle table** (action `AddTable`) dans le document Grist où le widget est
-ouvert, via l'API officielle du widget (`grist.docApi.applyUserActions`).
+Trois actions métier possibles, toutes via l'API officielle du widget
+(`grist.docApi`), jamais davantage :
 
-Le widget ne modifie et ne supprime jamais de table, colonne ou donnée existante. Si
-l'identifiant de table choisi existe déjà, la création est refusée côté widget (double
-vérification : au moment de l'aperçu, puis juste avant l'envoi de l'action, pour éviter
-une collision créée entre-temps).
+- **Import, mode « Nouvelle table »** : crée une table (action `AddTable`) dans le
+  document où le widget est ouvert, à partir du texte collé et analysé.
+- **Import, mode « Table existante »** : ajoute des colonnes (actions `AddColumn`,
+  envoyées groupées en un seul appel) à une table déjà présente dans ce document —
+  uniquement celles dont l'identifiant n'existe pas déjà sur cette table.
+- **Export** : lecture seule. Le widget lit la structure des tables de ce document
+  (`grist.docApi.fetchTable` sur les tables de métadonnées `_grist_Tables` et
+  `_grist_Tables_column` — voir « Lecture des tables de métadonnées » ci-dessous) et
+  affiche le code généré à l'écran ; rien n'est modifié dans le document, rien n'est
+  envoyé où que ce soit. L'utilisateur copie le texte lui-même s'il veut l'utiliser
+  ailleurs.
+
+Le widget ne modifie et ne supprime **jamais** de table, colonne ou donnée existante :
+il ne fait qu'ajouter. Si l'identifiant choisi pour une nouvelle table existe déjà, la
+création est refusée côté widget (double vérification : au moment de l'aperçu, puis
+juste avant l'envoi de l'action, pour éviter une collision créée entre-temps) ; en mode
+« Table existante », une colonne dont l'identifiant est déjà pris sur la table choisie
+n'est jamais touchée, quel que soit son type réel.
+
+## Lecture des tables de métadonnées
+
+Les modes « Table existante » et « Export » lisent `_grist_Tables` et
+`_grist_Tables_column` — les tables internes où Grist décrit lui-même la structure du
+document (identifiants de table, colonnes, types...). Ce n'est pas un accès caché ou
+détourné : c'est le mécanisme normal `grist.docApi.fetchTable(tableId)` de l'API
+publique du widget, appliqué à ces tables comme à n'importe quelle autre — l'implémentation
+côté Grist (`GristDocAPIImpl.fetchTable`, dans `app/client/components/WidgetFrame.ts`
+du code source de Grist) ne fait aucune distinction entre une table système et une table
+utilisateur, seul le niveau d'accès du widget (« full », déjà nécessaire pour créer une
+table) est vérifié. Cette lecture reste locale au document : aucune de ces données ne
+quitte le navigateur.
 
 ## Aucune donnée envoyée à l'extérieur
 
@@ -113,10 +139,11 @@ Points notables :
 ## Portée d'accès demandée à Grist
 
 Le widget appelle `grist.ready({ requiredAccess: "full" })`. Ce niveau est nécessaire
-pour pouvoir créer une table (`applyUserActions`) et lister les tables existantes
-(`listTables`) ; Grist affiche explicitement à l'utilisateur, lors du premier ajout du
-widget, une demande d'autorisation pour ce niveau d'accès — ce consentement est géré par
-Grist lui-même, pas par ce widget.
+pour créer une table ou des colonnes (`applyUserActions`), lister les tables existantes
+(`listTables`) et lire leur structure (`fetchTable`, voir ci-dessus) ; Grist affiche
+explicitement à l'utilisateur, lors du premier ajout du widget, une demande
+d'autorisation pour ce niveau d'accès — ce consentement est géré par Grist lui-même, pas
+par ce widget.
 
 ## Pourquoi charger un script externe plutôt que le regrouper localement
 

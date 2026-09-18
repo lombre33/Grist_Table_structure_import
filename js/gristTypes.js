@@ -114,4 +114,56 @@ export function describeType(type) {
   }
 }
 
+/**
+ * Default value (as a Python literal) Grist uses for each pure column type,
+ * taken verbatim from `_type_defaults` in Grist's own `sandbox/grist/usertypes.py`.
+ * Used only to fill in `return <default>` for a formula column whose real
+ * formula is blank — exactly what Grist's own Code View generator does.
+ */
+const TYPE_DEFAULT_LITERALS = {
+  Any: "None",
+  Attachments: "None",
+  Blob: "None",
+  Bool: "False",
+  Choice: "''",
+  ChoiceList: "None",
+  Date: "None",
+  DateTime: "None",
+  Id: "0",
+  Int: "0",
+  Numeric: "0.0",
+  Ref: "0",
+  RefList: "None",
+  Text: "''",
+};
+
+function getPureType(type) {
+  const idx = type.indexOf(":");
+  return idx === -1 ? type : type.slice(0, idx);
+}
+
+/**
+ * Python literal (as text) for a blank column of the given Grist `type`,
+ * e.g. "Text" -> "''", "Ref:Foo" -> "0".
+ */
+export function defaultLiteralForType(type) {
+  return TYPE_DEFAULT_LITERALS[getPureType(type)] ?? "None";
+}
+
+/**
+ * Inverse of resolveColumnType(): builds the `grist.Xxx(...)` constructor
+ * expression for a real Grist column `type` string (e.g. "Ref:Foo",
+ * "DateTime:UTC"), mirroring `get_grist_type()` in Grist's own
+ * `sandbox/grist/gencode.py` (the code that generates "Code View") exactly,
+ * including the Ref -> Reference / RefList -> ReferenceList renaming.
+ * `reverse_of=...` is intentionally not reproduced (rare feature, see README).
+ */
+export function buildTypeExpression(type) {
+  const idx = type.indexOf(":");
+  const rawName = idx === -1 ? type : type.slice(0, idx);
+  const name = rawName === "Ref" ? "Reference" : rawName === "RefList" ? "ReferenceList" : rawName;
+  const arg = (idx === -1 ? "" : type.slice(idx + 1)).trim().replace(/'/g, "\\'");
+  return `grist.${name}(${arg ? `'${arg}'` : ""})`;
+}
+
 export { TABLE_ID_RE };

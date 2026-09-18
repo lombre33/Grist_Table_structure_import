@@ -7,74 +7,153 @@
 <script>
   // Stub of the real grist-plugin-api.js, for local/manual testing only.
   // This file is never part of the published widget (see .github/workflows/pages.yml,
-  // which only ever copies index.html, style.css and js/*.js).
-  window.__harness = { createCalls: [] };
+  // which only ever copies index.html, style.css, favicon.svg and js/*.js).
+  const TABLES = {
+    id: [1, 2, 3],
+    tableId: ["Existing_Table", "Other_Table", "Existing_Table_summary_Age"],
+    summarySourceTable: [0, 0, 1],
+  };
+  const COLUMNS = {
+    id: [1, 2, 3, 4, 5],
+    parentId: [1, 1, 1, 1, 2],
+    colId: ["manualSort", "Name", "Age", "Computed", "Label"],
+    type: ["ManualSortPos", "Text", "Int", "Numeric", "Text"],
+    isFormula: [false, false, false, true, false],
+    formula: ["", "", "", "$Age * 2", ""],
+    parentPos: [1, 2, 3, 4, 1],
+    label: ["manualSort", "Name", "Age", "Computed", "Label"],
+  };
+
+  window.__harness = { actionCalls: [] };
   window.grist = {
     ready() {},
     docApi: {
       async listTables() {
-        return ["Existing_Table"];
+        return TABLES.tableId.filter((id) => !id.startsWith("_grist_"));
+      },
+      async fetchTable(tableId) {
+        if (tableId === "_grist_Tables") return TABLES;
+        if (tableId === "_grist_Tables_column") return COLUMNS;
+        throw new Error(`unstubbed fetchTable(${tableId})`);
       },
       async applyUserActions(actions) {
-        window.__harness.createCalls.push(actions);
-        return { retValues: [{}] };
+        window.__harness.actionCalls.push(actions);
+        return { retValues: actions.map(() => ({})) };
       },
     },
   };
 </script>
 </head>
 <body>
-<header>
-  <h1>Import de structure de table</h1>
-  <p>Harnais de test manuel — reproduit index.html avec une API Grist simulée.</p>
-</header>
+<div class="shell">
 
-<main>
-  <section aria-labelledby="source-heading">
-    <h2 id="source-heading">1. Code source de la table</h2>
-    <label for="source-input">Code Python de la table (issu d'un autre document Grist)</label>
-    <textarea id="source-input" rows="14" spellcheck="false"></textarea>
-    <div class="actions">
-      <button id="analyze-btn" type="button">Analyser</button>
+  <header class="masthead">
+    <p class="eyebrow">Widget Grist</p>
+    <h1>Structure de table</h1>
+    <p class="lede">Harnais de test manuel — reproduit index.html avec une API Grist simulée.</p>
+  </header>
+
+  <div class="tabs" role="tablist" aria-label="Mode">
+    <button id="tab-import" class="tab" role="tab" type="button" aria-selected="true" aria-controls="panel-import">Import</button>
+    <button id="tab-export" class="tab" role="tab" type="button" aria-selected="false" aria-controls="panel-export" tabindex="-1">Export</button>
+  </div>
+
+  <section id="panel-import" class="panel" role="tabpanel" aria-labelledby="tab-import">
+
+    <div class="block">
+      <p class="eyebrow">1. Code source</p>
+      <label for="source-input">Code Python d'une table</label>
+      <textarea id="source-input" rows="12" spellcheck="false"></textarea>
+      <div class="actions">
+        <button id="analyze-btn" type="button" class="btn btn-primary">Analyser</button>
+      </div>
     </div>
+
+    <div id="mode-block" class="block" hidden>
+      <p class="eyebrow">2. Que faire de ce code ?</p>
+      <div class="mode-picker">
+        <label class="mode-card">
+          <input type="radio" name="import-mode" value="create" class="mode-radio" checked>
+          <span class="mode-card-title">Nouvelle table</span>
+          <span class="mode-card-desc">Crée une table dédiée. Recommandé.</span>
+        </label>
+        <label class="mode-card">
+          <input type="radio" name="import-mode" value="existing" class="mode-radio">
+          <span class="mode-card-title">Table existante</span>
+          <span class="mode-card-desc">Ajoute les colonnes manquantes à une table déjà présente.</span>
+        </label>
+      </div>
+    </div>
+
+    <section id="preview-section" class="block" hidden aria-labelledby="preview-heading">
+      <p class="eyebrow" id="preview-heading">3. Vérification avant application</p>
+
+      <div id="table-picker-row" class="field" hidden>
+        <label for="table-select">Table à importer (plusieurs trouvées)</label>
+        <select id="table-select"></select>
+      </div>
+
+      <div id="table-id-row" class="field">
+        <label for="table-id-input">Identifiant de la nouvelle table</label>
+        <input id="table-id-input" type="text" autocomplete="off">
+        <p id="table-id-error" class="field-error" hidden></p>
+      </div>
+
+      <div id="target-table-row" class="field" hidden>
+        <label for="target-table-select">Table à compléter</label>
+        <select id="target-table-select"></select>
+        <p id="target-table-error" class="field-error" hidden></p>
+      </div>
+
+      <table id="columns-preview">
+        <thead>
+          <tr>
+            <th scope="col">Colonne</th>
+            <th scope="col">Type Grist</th>
+            <th id="status-column-header" scope="col" hidden>Statut</th>
+          </tr>
+        </thead>
+        <tbody id="columns-preview-body"></tbody>
+      </table>
+
+      <div id="warnings-block" hidden>
+        <p class="eyebrow">Remarques</p>
+        <ul id="warnings-list"></ul>
+      </div>
+
+      <div id="create-actions" class="actions">
+        <button id="action-btn" type="button" class="btn btn-primary" disabled>Créer la table dans ce document</button>
+      </div>
+    </section>
+
+    <section id="import-status-region" aria-live="polite"></section>
   </section>
 
-  <section id="preview-section" hidden aria-labelledby="preview-heading">
-    <h2 id="preview-heading">2. Vérification avant création</h2>
+  <section id="panel-export" class="panel" role="tabpanel" aria-labelledby="tab-export" hidden>
 
-    <div id="table-picker-row" hidden>
-      <label for="table-select">Table à importer</label>
-      <select id="table-select"></select>
+    <div class="block">
+      <p class="eyebrow">1. Tables à exporter</p>
+      <ul id="export-table-list" class="checklist"></ul>
+      <p id="export-tables-empty" class="hint" hidden>Aucune table exportable trouvée dans ce document.</p>
+      <div class="actions">
+        <button id="refresh-tables-btn" type="button" class="btn btn-ghost">Actualiser la liste</button>
+        <button id="generate-btn" type="button" class="btn btn-primary" disabled>Générer le code</button>
+      </div>
     </div>
 
-    <div id="table-id-row">
-      <label for="table-id-input">Identifiant de la table dans ce document</label>
-      <input id="table-id-input" type="text" autocomplete="off">
-      <p id="table-id-error" class="field-error" hidden></p>
+    <div id="export-output-block" class="block" hidden>
+      <p class="eyebrow">2. Code généré</p>
+      <textarea id="export-output" rows="16" readonly spellcheck="false"></textarea>
+      <div class="actions">
+        <button id="copy-btn" type="button" class="btn">Copier</button>
+        <span id="copy-status" class="hint" aria-live="polite"></span>
+      </div>
     </div>
 
-    <table id="columns-preview">
-      <thead>
-        <tr>
-          <th scope="col">Colonne</th>
-          <th scope="col">Type Grist créé</th>
-        </tr>
-      </thead>
-      <tbody id="columns-preview-body"></tbody>
-    </table>
-
-    <div id="warnings-block" hidden>
-      <h3>Remarques</h3>
-      <ul id="warnings-list"></ul>
-    </div>
-
-    <div id="create-actions" class="actions">
-      <button id="create-btn" type="button" disabled>Créer la table dans ce document</button>
-    </div>
+    <section id="export-status-region" aria-live="polite"></section>
   </section>
 
-  <section id="status-region" aria-live="polite"></section>
-</main>
+</div>
 
 <script type="module" src="../../js/app.js"></script>
 </body>

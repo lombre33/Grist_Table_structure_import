@@ -1,27 +1,40 @@
-# Import de structure de table Grist
+# Structure de table Grist — Import / Export
 
 Widget personnalisé pour [Grist](https://www.getgrist.com/), à héberger sur GitHub Pages.
 
-Il permet de recréer, dans le document Grist où le widget est ajouté, une table déjà
-configurée (colonnes, types, listes de choix, références...) à partir du code Python
-d'une table copié depuis un **autre** document Grist (menu de la table, « Code View »).
+Deux onglets :
 
-Aucune donnée n'est envoyée où que ce soit : le texte collé est analysé entièrement dans
-le navigateur, et la seule action effectuée est la création de la table dans le document
-Grist courant, via l'API officielle du widget.
+- **Import** : recrée, dans le document Grist où le widget est ajouté, la structure
+  d'une table (colonnes, types, références...) à partir de son code Python (menu de la
+  table, « Code View »), copié depuis n'importe quel document Grist.
+- **Export** : choisit une ou plusieurs tables de **ce** document et génère leur code, au
+  même format, prêt à être collé ailleurs (y compris dans ce même widget, dans un autre
+  document).
 
-## Utilisation
+Aucune donnée n'est envoyée où que ce soit : tout est lu et analysé entièrement dans le
+navigateur, et la seule action effectuée sur demande est la création d'une table ou
+l'ajout de colonnes dans le document Grist courant, via l'API officielle du widget.
+
+## Import
 
 1. Dans le document Grist source, ouvrez la table à dupliquer puis son menu **Code View**
-   pour obtenir son code (voir exemple ci-dessous).
-2. Dans le document Grist de destination, ajoutez ce widget (voir « Installation »),
-   collez le code dans la zone de texte, puis cliquez sur **Analyser**.
-3. Vérifiez l'aperçu (identifiant de table, liste des colonnes et types détectés,
-   remarques éventuelles), ajustez l'identifiant de table si besoin.
-4. Cliquez sur **Créer la table dans ce document**.
+   pour obtenir son code (voir exemple ci-dessous) — ou utilisez l'onglet **Export** de ce
+   même widget sur ce document.
+2. Dans le document Grist de destination, ouvrez l'onglet **Import**, collez le code dans
+   la zone de texte, puis cliquez sur **Analyser**.
+3. Choisissez ce qu'il doit se passer :
+   - **Nouvelle table** (recommandé, sélectionné par défaut) : crée une table dédiée avec
+     toutes les colonnes détectées.
+   - **Table existante** : ajoute uniquement les colonnes qui manquent à une table déjà
+     présente dans ce document ; les colonnes dont l'identifiant existe déjà sur la table
+     choisie sont repérées « Déjà présente » dans l'aperçu et ignorées — leur type n'est
+     jamais modifié.
+4. Vérifiez l'aperçu (types détectés, colonnes ignorées, remarques éventuelles), puis
+   cliquez sur le bouton d'action.
 
-Le widget ne modifie jamais une table existante : si l'identifiant choisi correspond à
-une table déjà présente, la création est refusée et vous devez en choisir un autre.
+Le widget ne modifie ni ne supprime jamais une colonne ou une table existante : en mode
+« Nouvelle table », un identifiant déjà pris est refusé (choisissez-en un autre) ; en
+mode « Table existante », seules les colonnes absentes sont ajoutées.
 
 ### Exemple de code accepté
 
@@ -48,7 +61,11 @@ widget vous laisse alors choisir la table à importer.
 
 ### Correspondance des types
 
-| Écrit dans le code                    | Type de colonne créé dans Grist |
+Cette table sert dans les deux sens : à l'import, pour choisir le type de colonne créé ;
+à l'export, pour écrire l'expression correspondant au vrai type de la colonne (voir
+« Export » plus bas).
+
+| Écrit dans le code                    | Type de colonne Grist |
 |----------------------------------------|----------------------------------|
 | `grist.Text()`                         | Texte                            |
 | `grist.Numeric()`                      | Numérique                        |
@@ -63,10 +80,10 @@ widget vous laisse alors choisir la table à importer.
 | `grist.Attachments()`                  | Pièces jointes                   |
 | tout le reste / type non reconnu       | Quelconque (`Any`)               |
 
-Toutes les colonnes sont créées comme colonnes de données (pas de formules), y compris
-celles écrites avec `@grist.formulaType(...)` dans le code source : ce format sert à
-Grist à afficher aussi les colonnes de données normales dans la Code View, il ne signifie
-pas que la colonne d'origine est une formule.
+À l'import, toutes les colonnes sont créées comme colonnes de données (pas de formules),
+y compris celles écrites avec `@grist.formulaType(...)` dans le code source : ce format
+sert à Grist à afficher aussi les colonnes de données normales dans la Code View, il ne
+signifie pas que la colonne d'origine est une formule.
 
 ### Limites connues
 
@@ -82,6 +99,29 @@ pas que la colonne d'origine est une formule.
 - Les arguments de constructeur complexes (expressions, parenthèses imbriquées) ne sont
   pas interprétés ; seul le premier argument texte entre guillemets est lu (nom de table
   cible, fuseau horaire).
+
+## Export
+
+1. Ouvrez l'onglet **Export**. La liste des tables de ce document se charge
+   automatiquement (bouton **Actualiser la liste** pour la rafraîchir).
+2. Cochez une ou plusieurs tables, puis cliquez sur **Générer le code**.
+3. Copiez le code affiché (bouton **Copier**, ou sélection manuelle du texte) et
+   collez-le où vous en avez besoin — par exemple dans l'onglet **Import** de ce même
+   widget, ouvert sur un autre document.
+
+Le format généré suit exactement celui de la vraie « Code View » de Grist : mêmes lignes
+d'import en en-tête, mêmes expressions `grist.Xxx(...)`, même ordre (colonnes de données
+d'abord, puis colonnes de formule), mêmes lignes vides. Les tables système de Grist
+(`_grist_*`) et les tables de synthèse (créées par un widget Synthèse/Pivot) ne sont pas
+proposées : ce ne sont pas des tables qu'on recrée avec une simple action « nouvelle
+table ».
+
+Seule la structure (types de colonnes) est garantie fidèle. Pour une colonne de formule,
+la formule d'origine est recopiée quand elle existe, mais telle que Grist la stocke en
+interne (syntaxe `$Colonne`, sans traduire vers le `rec.Colonne` affiché par la vraie
+Code View) ; une formule vide est remplacée par la valeur par défaut du type, comme le
+fait Grist lui-même. Ceci n'affecte pas l'import : seul le type déclaré par
+`@grist.formulaType(...)` est utilisé, jamais le corps de la fonction.
 
 ## Installation (hébergement GitHub Pages)
 
@@ -123,13 +163,18 @@ publié (voir `.github/workflows/pages.yml`, qui ne copie que `index.html`, `sty
 Structure :
 
 ```
-index.html         page du widget
-style.css           mise en forme
-js/parser.js        lecture du texte source (regex uniquement, jamais exécuté)
-js/gristTypes.js     conversion des types Python → types de colonne Grist
-js/dom.js            construction du DOM sans innerHTML
-js/app.js            interface : analyse, aperçu, création de la table
-test/                tests unitaires (node --test, aucune dépendance)
+index.html            page du widget (onglets Import / Export)
+style.css              mise en forme
+js/parser.js           lecture du code source (regex uniquement, jamais exécuté)
+js/gristTypes.js       types Python <-> types de colonne Grist, dans les deux sens
+js/schema.js           lecture de la structure réelle du document (_grist_Tables*)
+js/codeGenerator.js    génère le code Python à partir d'une structure de table
+js/dom.js              construction du DOM sans innerHTML
+js/util.js             petits utilitaires partagés (délai, pluriel, messages d'erreur)
+js/importTab.js        logique de l'onglet Import (nouvelle table / table existante)
+js/exportTab.js        logique de l'onglet Export
+js/app.js              point d'entrée : bascule d'onglet, initialisation
+test/                  tests unitaires (node --test, aucune dépendance)
 ```
 
 ## Sécurité
