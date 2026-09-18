@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' https://docs.getgrist.com 'unsafe-eval'; style-src 'self'; img-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none';">
+<title>Import de structure de table Grist</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="stylesheet" href="style.css">
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+</head>
+<body>
+<header>
+  <h1>Import de structure de table</h1>
+  <p>
+    Collez ci-dessous le code d'une table Grist (menu de la table &laquo;&nbsp;Code View&nbsp;&raquo;)
+    pour recréer, dans ce document, une table avec les mêmes colonnes et les mêmes types.
+  </p>
+</header>
+
+<main>
+  <section aria-labelledby="source-heading">
+    <h2 id="source-heading">1. Code source de la table</h2>
+    <label for="source-input">Code Python de la table (issu d'un autre document Grist)</label>
+    <textarea id="source-input" rows="14" spellcheck="false"
+      placeholder="@grist.UserTable&#10;class MaTable:&#10;  MaColonne = grist.Text()"></textarea>
+    <div class="actions">
+      <button id="analyze-btn" type="button">Analyser</button>
+    </div>
+  </section>
+
+  <section id="preview-section" hidden aria-labelledby="preview-heading">
+    <h2 id="preview-heading">2. Vérification avant création</h2>
+
+    <div id="table-picker-row" hidden>
+      <label for="table-select">Table à importer</label>
+      <select id="table-select"></select>
+    </div>
+
+    <div id="table-id-row">
+      <label for="table-id-input">Identifiant de la table dans ce document</label>
+      <input id="table-id-input" type="text" autocomplete="off">
+      <p id="table-id-error" class="field-error" hidden></p>
+    </div>
+
+    <table id="columns-preview">
+      <thead>
+        <tr>
+          <th scope="col">Colonne</th>
+          <th scope="col">Type Grist créé</th>
+        </tr>
+      </thead>
+      <tbody id="columns-preview-body"></tbody>
+    </table>
+
+    <div id="warnings-block" hidden>
+      <h3>Remarques</h3>
+      <ul id="warnings-list"></ul>
+    </div>
+
+    <div id="create-actions" class="actions">
+      <button id="create-btn" type="button" disabled>Créer la table dans ce document</button>
+    </div>
+  </section>
+
+  <section id="status-region" aria-live="polite"></section>
+</main>
+
+<footer>
+  <p>
+    Le texte collé est analysé uniquement dans votre navigateur ; aucune donnée n'est envoyée
+    en dehors de ce document Grist. Les valeurs de liste de choix ne sont importées que si elles
+    apparaissent explicitement dans le code collé ; les colonnes de référence peuvent nécessiter
+    de choisir manuellement la colonne d'affichage après création.
+  </p>
+</footer>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

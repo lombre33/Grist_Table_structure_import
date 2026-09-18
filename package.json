@@ -1,0 +1,12 @@
+{
+  "name": "grist-table-structure-import",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Widget custom Grist : recrée dans un document la structure d'une table copiée depuis un autre document Grist (Code View).",
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}

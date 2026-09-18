@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Run unit tests (zero dependency: no install step)
+        run: npm test
+
+      - name: Security lint — forbid eval/Function/innerHTML/document.write in shipped code
+        run: |
+          set -euo pipefail
+          if grep -RInE '\beval\s*\(|new[[:space:]]+Function\s*\(|\.innerHTML[[:space:]]*=|document\.write\s*\(' \
+              --include='*.js' js/; then
+            echo "Forbidden pattern found in js/ (see above)."
+            exit 1
+          fi
+          echo "No forbidden pattern found in js/."
+
+      - name: Forbid third-party runtime scripts beyond the official Grist plugin API
+        run: |
+          set -euo pipefail
+          if grep -oE '<script[^>]*src="[^"]*"' index.html \
+              | grep -v 'src="https://docs.getgrist.com/grist-plugin-api.js"' \
+              | grep -v 'src="js/app.js"'; then
+            echo "Unexpected external script reference in index.html."
+            exit 1
+          fi
+          echo "Only the expected scripts are referenced."

@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Harnais de test manuel (non publié)</title>
+<link rel="stylesheet" href="../../style.css">
+<script>
+  // Stub of the real grist-plugin-api.js, for local/manual testing only.
+  // This file is never part of the published widget (see .github/workflows/pages.yml,
+  // which only ever copies index.html, style.css and js/*.js).
+  window.__harness = { createCalls: [] };
+  window.grist = {
+    ready() {},
+    docApi: {
+      async listTables() {
+        return ["Existing_Table"];
+      },
+      async applyUserActions(actions) {
+        window.__harness.createCalls.push(actions);
+        return { retValues: [{}] };
+      },
+    },
+  };
+</script>
+</head>
+<body>
+<header>
+  <h1>Import de structure de table</h1>
+  <p>Harnais de test manuel — reproduit index.html avec une API Grist simulée.</p>
+</header>
+
+<main>
+  <section aria-labelledby="source-heading">
+    <h2 id="source-heading">1. Code source de la table</h2>
+    <label for="source-input">Code Python de la table (issu d'un autre document Grist)</label>
+    <textarea id="source-input" rows="14" spellcheck="false"></textarea>
+    <div class="actions">
+      <button id="analyze-btn" type="button">Analyser</button>
+    </div>
+  </section>
+
+  <section id="preview-section" hidden aria-labelledby="preview-heading">
+    <h2 id="preview-heading">2. Vérification avant création</h2>
+
+    <div id="table-picker-row" hidden>
+      <label for="table-select">Table à importer</label>
+      <select id="table-select"></select>
+    </div>
+
+    <div id="table-id-row">
+      <label for="table-id-input">Identifiant de la table dans ce document</label>
+      <input id="table-id-input" type="text" autocomplete="off">
+      <p id="table-id-error" class="field-error" hidden></p>
+    </div>
+
+    <table id="columns-preview">
+      <thead>
+        <tr>
+          <th scope="col">Colonne</th>
+          <th scope="col">Type Grist créé</th>
+        </tr>
+      </thead>
+      <tbody id="columns-preview-body"></tbody>
+    </table>
+
+    <div id="warnings-block" hidden>
+      <h3>Remarques</h3>
+      <ul id="warnings-list"></ul>
+    </div>
+
+    <div id="create-actions" class="actions">
+      <button id="create-btn" type="button" disabled>Créer la table dans ce document</button>
+    </div>
+  </section>
+
+  <section id="status-region" aria-live="polite"></section>
+</main>
+
+<script type="module" src="../../js/app.js"></script>
+</body>
+</html>
