@@ -120,10 +120,14 @@
         <select id="table-select"></select>
       </div>
 
+      <div id="table-multi-picker-row" class="field" hidden>
+        <label>Tables à créer (plusieurs trouvées)</label>
+        <ul id="table-multi-select" class="checklist"></ul>
+      </div>
+
       <div id="table-id-row" class="field">
-        <label for="table-id-input">Identifiant de la nouvelle table</label>
-        <input id="table-id-input" type="text" autocomplete="off">
-        <p id="table-id-error" class="field-error" hidden></p>
+        <label>Identifiant(s) de la nouvelle table</label>
+        <div id="table-ids-list"></div>
       </div>
 
       <div id="target-table-row" class="field" hidden>

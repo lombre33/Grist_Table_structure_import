@@ -14,9 +14,10 @@ export function initImportTab(grist, gristAvailable) {
   const previewSection = document.getElementById("preview-section");
   const tablePickerRow = document.getElementById("table-picker-row");
   const tableSelect = document.getElementById("table-select");
+  const tableMultiPickerRow = document.getElementById("table-multi-picker-row");
+  const tableMultiSelect = document.getElementById("table-multi-select");
   const tableIdRow = document.getElementById("table-id-row");
-  const tableIdInput = document.getElementById("table-id-input");
-  const tableIdError = document.getElementById("table-id-error");
+  const tableIdsList = document.getElementById("table-ids-list");
   const targetTableRow = document.getElementById("target-table-row");
   const targetTableSelect = document.getElementById("target-table-select");
   const targetTableError = document.getElementById("target-table-error");
@@ -41,19 +42,21 @@ export function initImportTab(grist, gristAvailable) {
 
   let parsedTables = [];
   let baseWarnings = [];
-  let selectedIndex = 0;
-  let tableIdEditedByUser = false;
+  let selectedIndex = 0; // "Table existante" mode: which parsed table is the source.
   let existingTableIds = null;
   let docSchema = null;
-  let currentColumns = [];
+  let existingModeColumns = []; // "Table existante" mode: resolved columns of the source table.
+
+  // "Nouvelle table" mode: one entry per parsed table the user has checked
+  // to create, each owning its own destination-id <input>/error <p> (see
+  // renderTableIdsList) and its own resolved columns (see renderCreateMode).
+  // { index, table, id, inputEl, errorEl, resolvedColumns }
+  let createTableEntries = [];
 
   analyzeBtn.addEventListener("click", onAnalyze);
   tableSelect.addEventListener("change", onTableSelectionChange);
-  tableIdInput.addEventListener("input", () => {
-    tableIdEditedByUser = true;
-    renderSelectedTable();
-  });
-  targetTableSelect.addEventListener("change", renderSelectedTable);
+  tableMultiSelect.addEventListener("change", onCreateSelectionChange);
+  targetTableSelect.addEventListener("change", () => renderExistingMode(parsedTables[selectedIndex]));
   for (const radio of modeRadios) radio.addEventListener("change", onModeChange);
   actionBtn.addEventListener("click", onAction);
 
@@ -69,21 +72,24 @@ export function initImportTab(grist, gristAvailable) {
     const { tables, warnings } = parseGristSchema(sourceInput.value);
     parsedTables = tables;
     baseWarnings = warnings;
-    tableIdEditedByUser = false;
     selectedIndex = 0;
     existingTableIds = null;
     docSchema = null;
+    createTableEntries = [];
 
     const hasTables = tables.length > 0;
     modeBlock.hidden = !hasTables;
     previewSection.hidden = false;
     columnsPreview.hidden = !hasTables;
     createActions.hidden = !hasTables;
-    tablePickerRow.hidden = true;
 
     if (!hasTables) {
       clear(columnsBody);
-      currentColumns = [];
+      clear(tableIdsList);
+      clear(tableMultiSelect);
+      existingModeColumns = [];
+      tablePickerRow.hidden = true;
+      tableMultiPickerRow.hidden = true;
       actionBtn.disabled = true;
       renderWarnings(baseWarnings);
       return;
@@ -103,8 +109,13 @@ export function initImportTab(grist, gristAvailable) {
     }
 
     populateTableSelect(tables);
-    if (mode() === "existing") populateTargetTableSelect();
-    renderSelectedTable();
+    populateTableMultiSelect(tables);
+    updateModeUI();
+    onCreateSelectionChange();
+    if (mode() === "existing") {
+      populateTargetTableSelect();
+      renderExistingMode(parsedTables[selectedIndex]);
+    }
   }
 
   async function fetchSchemaSafely() {
@@ -146,16 +157,22 @@ export function initImportTab(grist, gristAvailable) {
       await ensureDocSchema();
       analyzeBtn.disabled = false;
     }
-    if (mode() === "existing") populateTargetTableSelect();
-    renderSelectedTable();
+    if (mode() === "existing") {
+      populateTargetTableSelect();
+      renderExistingMode(parsedTables[selectedIndex]);
+    } else {
+      renderCreateMode();
+    }
   }
 
   function updateModeUI() {
     const existing = mode() === "existing";
+    const multi = parsedTables.length > 1;
     tableIdRow.hidden = existing;
+    tablePickerRow.hidden = !(existing && multi);
+    tableMultiPickerRow.hidden = !(!existing && multi);
     targetTableRow.hidden = !existing;
     statusColumnHeader.hidden = !existing;
-    if (!existing) actionBtn.textContent = "Créer la table dans ce document";
   }
 
   function populateTableSelect(tables) {
@@ -164,7 +181,20 @@ export function initImportTab(grist, gristAvailable) {
       tableSelect.appendChild(el("option", { value: String(index), text: table.tableId }));
     });
     tableSelect.value = "0";
-    tablePickerRow.hidden = tables.length <= 1;
+  }
+
+  function populateTableMultiSelect(tables) {
+    clear(tableMultiSelect);
+    tables.forEach((table, index) => {
+      tableMultiSelect.appendChild(
+        el("li", {}, [
+          el("label", {}, [
+            el("input", { type: "checkbox", value: String(index), checked: true }),
+            el("span", { text: table.tableId }),
+          ]),
+        ])
+      );
+    });
   }
 
   function populateTargetTableSelect() {
@@ -193,35 +223,46 @@ export function initImportTab(grist, gristAvailable) {
 
   function onTableSelectionChange() {
     selectedIndex = Number(tableSelect.value);
-    tableIdEditedByUser = false;
-    renderSelectedTable();
-  }
-
-  function renderSelectedTable() {
-    const table = parsedTables[selectedIndex];
-    if (!table) return;
-    if (mode() === "create") renderCreateMode(table);
-    else renderExistingMode(table);
+    renderExistingMode(parsedTables[selectedIndex]);
   }
 
   /**
-   * Resolves a `visible_col='TargetColId'` kwarg (see js/gristTypes.js) to
-   * the target column's real row id, by looking it up in the destination
-   * document's own schema. Only possible when the referenced table already
-   * exists there — which is required anyway for the column to import as a
-   * Reference/ReferenceList rather than `Any` (see resolveColumns above) —
-   * so this never needs to reason about a table created in the same
-   * request. Returns null (caller then warns and drops it) when the schema
-   * isn't available or the named column isn't found there.
+   * Which parsed-table indices are checked, for "Nouvelle table" mode. When
+   * there is only one parsed table, the checklist is never shown (nothing
+   * to choose) and that single table always counts as selected.
    */
-  function resolveVisibleColRef(refTarget, visibleColId) {
-    if (!docSchema) return null;
-    const targetTable = docSchema.tables.find((t) => t.tableId === refTarget);
-    if (!targetTable) return null;
-    const match = docSchema.allColumns.find(
-      (c) => c.parentId === targetTable.tableRef && c.colId === visibleColId
-    );
-    return match ? match.id : null;
+  function getSelectedCreateIndices() {
+    if (parsedTables.length <= 1) return parsedTables.map((_, index) => index);
+    return Array.from(tableMultiSelect.querySelectorAll("input:checked")).map((input) => Number(input.value));
+  }
+
+  /**
+   * Rebuilds `createTableEntries` from the current checklist selection,
+   * reusing (rather than resetting) the entry — and whatever destination id
+   * the user already typed into it — for a table that stays selected across
+   * a checkbox change, per README.md's "en une étape" requirement.
+   */
+  function onCreateSelectionChange() {
+    const indices = getSelectedCreateIndices();
+    const previous = new Map(createTableEntries.map((entry) => [entry.index, entry]));
+    createTableEntries = indices.map((index) => previous.get(index) || { index, table: parsedTables[index], id: parsedTables[index].tableId });
+    renderTableIdsList();
+    renderCreateMode();
+  }
+
+  function renderTableIdsList() {
+    clear(tableIdsList);
+    for (const entry of createTableEntries) {
+      const input = el("input", { type: "text", autocomplete: "off", value: entry.id });
+      const errorEl = el("p", { class: "field-error", hidden: true });
+      input.addEventListener("input", () => {
+        entry.id = input.value;
+        renderCreateMode();
+      });
+      entry.inputEl = input;
+      entry.errorEl = errorEl;
+      tableIdsList.appendChild(el("div", { class: "table-id-entry" }, [el("label", { text: entry.table.tableId }), input, errorEl]));
+    }
   }
 
   function resolveColumns(table, targetTableId) {
@@ -256,23 +297,98 @@ export function initImportTab(grist, gristAvailable) {
     return { resolvedColumns, resolutionWarnings };
   }
 
-  function renderCreateMode(table) {
-    if (!tableIdEditedByUser) tableIdInput.value = table.tableId;
-    const { resolvedColumns, resolutionWarnings } = resolveColumns(table, tableIdInput.value.trim());
+  /**
+   * Resolves a `visible_col='TargetColId'` kwarg (see js/gristTypes.js) to
+   * the target column's real row id, by looking it up in the destination
+   * document's own schema. Only possible when the referenced table already
+   * exists there — which is required anyway for the column to import as a
+   * Reference/ReferenceList rather than `Any` (see resolveColumns above) —
+   * so this never needs to reason about a table created in the same
+   * request. Returns null (caller then warns and drops it) when the schema
+   * isn't available or the named column isn't found there.
+   */
+  function resolveVisibleColRef(refTarget, visibleColId) {
+    if (!docSchema) return null;
+    const targetTable = docSchema.tables.find((t) => t.tableId === refTarget);
+    if (!targetTable) return null;
+    const match = docSchema.allColumns.find((c) => c.parentId === targetTable.tableRef && c.colId === visibleColId);
+    return match ? match.id : null;
+  }
 
-    clear(columnsBody);
-    for (const col of resolvedColumns) {
-      columnsBody.appendChild(
-        el("tr", {}, [el("td", { text: col.id }), el("td", { text: describeType(col.resolved.type) })])
-      );
+  /**
+   * Renders the combined preview for every checked table in "Nouvelle
+   * table" mode: one discreet separator row per table (only shown when more
+   * than one is selected — a single table's preview stays exactly as
+   * before) followed by its columns, and one destination-id field per
+   * table (see renderTableIdsList). Re-resolves and re-validates
+   * everything on every call, so it stays correct whether triggered by
+   * Analyser, a checklist change, or typing into any id field.
+   */
+  function renderCreateMode() {
+    const multi = createTableEntries.length > 1;
+    const idCounts = new Map();
+    for (const entry of createTableEntries) {
+      const value = entry.id.trim();
+      idCounts.set(value, (idCounts.get(value) || 0) + 1);
     }
 
-    currentColumns = resolvedColumns;
-    renderWarnings([...baseWarnings, ...resolutionWarnings]);
-    validateTableId();
+    clear(columnsBody);
+    const allWarnings = [];
+    let anyColumns = false;
+    let allValid = createTableEntries.length > 0;
+
+    for (const entry of createTableEntries) {
+      const destId = entry.id.trim();
+      const { resolvedColumns, resolutionWarnings } = resolveColumns(entry.table, destId);
+      entry.resolvedColumns = resolvedColumns;
+      allWarnings.push(
+        ...(multi ? resolutionWarnings.map((warning) => `Table « ${destId || entry.table.tableId} » — ${warning}`) : resolutionWarnings)
+      );
+
+      if (multi) {
+        columnsBody.appendChild(
+          el("tr", { class: "table-separator" }, [el("td", { colspan: "2", text: destId || entry.table.tableId })])
+        );
+      }
+      for (const col of resolvedColumns) {
+        columnsBody.appendChild(
+          el("tr", {}, [el("td", { text: col.id }), el("td", { text: describeType(col.resolved.type) })])
+        );
+        anyColumns = true;
+      }
+
+      const isDuplicate = idCounts.get(destId) > 1;
+      if (!validateOneTableId(entry, isDuplicate)) allValid = false;
+    }
+
+    renderWarnings([...baseWarnings, ...allWarnings]);
+    actionBtn.disabled = !allValid || !anyColumns;
+    actionBtn.textContent = multi
+      ? `Créer ${createTableEntries.length} tables dans ce document`
+      : "Créer la table dans ce document";
+  }
+
+  function validateOneTableId(entry, isDuplicate) {
+    const value = entry.id.trim();
+    let message = "";
+    if (!value) {
+      message = "L'identifiant ne peut pas être vide.";
+    } else if (!TABLE_ID_RE.test(value)) {
+      message =
+        "L'identifiant doit commencer par une lettre ou « _ » et ne contenir que des lettres, " +
+        "chiffres et « _ » (pas d'espace ni d'accent).";
+    } else if (isDuplicate) {
+      message = "Identifiant utilisé plusieurs fois dans cette sélection.";
+    } else if (existingTableIds && existingTableIds.includes(value)) {
+      message = `Une table « ${value} » existe déjà dans ce document ; choisissez un autre identifiant.`;
+    }
+    entry.errorEl.hidden = !message;
+    entry.errorEl.textContent = message;
+    return !message;
   }
 
   function renderExistingMode(table) {
+    if (!table) return;
     const target = getTargetTable();
     const known = target && docSchema ? existingColumnIds(docSchema.allColumns, target.ref) : null;
     const { resolvedColumns: resolved, resolutionWarnings } = resolveColumns(table, target && target.tableId);
@@ -293,7 +409,7 @@ export function initImportTab(grist, gristAvailable) {
       );
     }
 
-    currentColumns = resolvedColumns;
+    existingModeColumns = resolvedColumns;
     renderWarnings([...baseWarnings, ...resolutionWarnings]);
 
     const newCount = resolvedColumns.filter((col) => col.isNew).length;
@@ -303,25 +419,6 @@ export function initImportTab(grist, gristAvailable) {
       : newCount === 0
       ? "Aucune nouvelle colonne à ajouter"
       : `Ajouter ${newCount} ${pluralize(newCount, "colonne")} à cette table`;
-  }
-
-  function validateTableId() {
-    const value = tableIdInput.value.trim();
-    let message = "";
-    if (!value) {
-      message = "L'identifiant de table ne peut pas être vide.";
-    } else if (!TABLE_ID_RE.test(value)) {
-      message =
-        "L'identifiant doit commencer par une lettre ou « _ » et ne contenir que des lettres, " +
-        "chiffres et « _ » (pas d'espace ni d'accent).";
-    } else if (existingTableIds && existingTableIds.includes(value)) {
-      message = `Une table « ${value} » existe déjà dans ce document ; choisissez un autre identifiant.`;
-    }
-    tableIdError.hidden = !message;
-    tableIdError.textContent = message;
-    const valid = !message;
-    actionBtn.disabled = !valid || currentColumns.length === 0;
-    return valid;
   }
 
   function renderWarnings(list) {
@@ -338,48 +435,61 @@ export function initImportTab(grist, gristAvailable) {
       else await runAddColumns();
     } finally {
       analyzeBtn.disabled = false;
-      renderSelectedTable();
+      if (mode() === "existing") renderExistingMode(parsedTables[selectedIndex]);
+      else renderCreateMode();
     }
   }
 
   async function runCreate() {
-    if (currentColumns.length === 0 || !validateTableId()) return;
-    const tableId = tableIdInput.value.trim();
+    if (createTableEntries.length === 0) return;
+    renderCreateMode();
+    if (createTableEntries.some((entry) => !entry.errorEl.hidden) || createTableEntries.every((entry) => entry.resolvedColumns.length === 0)) {
+      return;
+    }
 
-    setStatus("Création de la table en cours…", "info");
+    const multi = createTableEntries.length > 1;
+    setStatus(multi ? "Création des tables en cours…" : "Création de la table en cours…", "info");
     try {
       const freshTables = await withTimeout(grist.docApi.listTables(), GRIST_CALL_TIMEOUT_MS, TIMEOUT_MESSAGE);
-      if (freshTables.includes(tableId)) {
-        setStatus(`La table « ${tableId} » existe déjà dans ce document. Choisissez un autre identifiant.`, "error");
+      const collisions = createTableEntries.filter((entry) => freshTables.includes(entry.id.trim()));
+      if (collisions.length > 0) {
+        setStatus(
+          `${pluralize(collisions.length, "Cette table existe", "Ces tables existent")} déjà dans ce document : ` +
+            `${collisions.map((entry) => entry.id.trim()).join(", ")}. Choisissez d'autres identifiants.`,
+          "error"
+        );
         return;
       }
-      const columnsPayload = currentColumns.map(buildColumnPayload);
-      await grist.docApi.applyUserActions([["AddTable", tableId, columnsPayload]]);
-      existingTableIds = [...(existingTableIds || []), tableId];
+
+      const addTableActions = createTableEntries.map((entry) => [
+        "AddTable",
+        entry.id.trim(),
+        entry.resolvedColumns.map(buildColumnPayload),
+      ]);
+      await grist.docApi.applyUserActions(addTableActions);
+      existingTableIds = [...(existingTableIds || []), ...createTableEntries.map((entry) => entry.id.trim())];
 
       let visibleColNote = "";
-      const visibleColActions = buildVisibleColActions(tableId, currentColumns);
-      if (visibleColActions.length > 0) {
-        // A separate call: AddTable's own column payload silently ignores a
-        // `visibleCol` field (confirmed against Grist's own source, see
-        // README.md), so it must be applied afterwards, exactly as Grist's
-        // client itself does for "SHOW COLUMN". A failure here does not
-        // undo the table/columns that were already created successfully.
+      const allVisibleColActions = createTableEntries.flatMap((entry) =>
+        buildVisibleColActions(entry.id.trim(), entry.resolvedColumns)
+      );
+      if (allVisibleColActions.length > 0) {
         try {
-          await grist.docApi.applyUserActions(visibleColActions);
+          await grist.docApi.applyUserActions(allVisibleColActions);
         } catch (err) {
-          const n = visibleColActions.length / 2;
+          const n = allVisibleColActions.length / 2;
           visibleColNote = ` ${pluralize(n, "Colonne", "Colonnes")} d'affichage (visible_col) ${pluralize(n, "non appliquée", "non appliquées")} : ${errorMessage(err)}.`;
         }
       }
 
-      setStatus(
-        `Table « ${tableId} » créée avec ${columnsPayload.length} ${pluralize(columnsPayload.length, "colonne")}.` +
-          visibleColNote,
-        "success"
-      );
+      const totalColumns = createTableEntries.reduce((n, entry) => n + entry.resolvedColumns.length, 0);
+      const summary = multi
+        ? `${createTableEntries.length} tables créées (${createTableEntries.map((entry) => entry.id.trim()).join(", ")}), ` +
+          `${totalColumns} ${pluralize(totalColumns, "colonne")} au total.`
+        : `Table « ${createTableEntries[0].id.trim()} » créée avec ${totalColumns} ${pluralize(totalColumns, "colonne")}.`;
+      setStatus(summary + visibleColNote, "success");
     } catch (err) {
-      setStatus(`Échec de la création de la table : ${errorMessage(err)}`, "error");
+      setStatus(`Échec de la création : ${errorMessage(err)}`, "error");
     }
   }
 
@@ -391,7 +501,7 @@ export function initImportTab(grist, gristAvailable) {
     try {
       const freshSchema = await withTimeout(fetchDocSchema(grist), GRIST_CALL_TIMEOUT_MS, TIMEOUT_MESSAGE);
       const known = existingColumnIds(freshSchema.allColumns, target.ref);
-      const newColumns = currentColumns.filter((col) => !known.has(col.id));
+      const newColumns = existingModeColumns.filter((col) => !known.has(col.id));
 
       if (newColumns.length === 0) {
         docSchema = freshSchema;

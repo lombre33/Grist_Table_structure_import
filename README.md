@@ -24,17 +24,24 @@ l'ajout de colonnes dans le document Grist courant, via l'API officielle du widg
    la zone de texte, puis cliquez sur **Analyser**.
 3. Choisissez ce qu'il doit se passer :
    - **Nouvelle table** (recommandé, sélectionné par défaut) : crée une table dédiée avec
-     toutes les colonnes détectées.
+     toutes les colonnes détectées. Si le texte collé contient plusieurs tables, elles
+     sont toutes cochées par défaut ; décochez celles à ne pas créer. L'aperçu affiche
+     alors les colonnes de chaque table cochée à la suite, séparées par un intitulé
+     discret, avec un champ d'identifiant par table (pré-rempli avec le nom d'origine,
+     modifiable) — tout est créé en une seule fois, en un seul clic.
    - **Table existante** : ajoute uniquement les colonnes qui manquent à une table déjà
-     présente dans ce document ; les colonnes dont l'identifiant existe déjà sur la table
-     choisie sont repérées « Déjà présente » dans l'aperçu et ignorées — leur type n'est
-     jamais modifié.
+     présente dans ce document (une seule table source à la fois) ; les colonnes dont
+     l'identifiant existe déjà sur la table choisie sont repérées « Déjà présente » dans
+     l'aperçu et ignorées — leur type n'est jamais modifié. Les colonnes ajoutées
+     apparaissent immédiatement dans les grilles déjà existantes de cette table, pas
+     seulement dans « Données sources ».
 4. Vérifiez l'aperçu (types détectés, colonnes ignorées, remarques éventuelles), puis
    cliquez sur le bouton d'action.
 
 Le widget ne modifie ni ne supprime jamais une colonne ou une table existante : en mode
-« Nouvelle table », un identifiant déjà pris est refusé (choisissez-en un autre) ; en
-mode « Table existante », seules les colonnes absentes sont ajoutées.
+« Nouvelle table », un identifiant déjà pris (y compris en double entre deux tables de la
+même sélection) est refusé (choisissez-en un autre) ; en mode « Table existante », seules
+les colonnes absentes sont ajoutées.
 
 ### Exemple de code accepté
 

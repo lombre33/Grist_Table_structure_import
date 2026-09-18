@@ -323,6 +323,33 @@ table#columns-preview {
   border-color: var(--accent);
 }
 
+/* Discreet per-table separator row, shown in the columns preview only when
+   creating more than one table at once. */
+.table-separator td {
+  padding-top: 12px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+
+/* One destination-id field per table to create, in "Nouvelle table" mode. */
+.table-ids-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.table-id-entry label {
+  font-weight: 600;
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-bottom: 3px;
+}
+
 .status-pill-skip {
   color: var(--muted);
 }
