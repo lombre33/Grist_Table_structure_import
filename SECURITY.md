@@ -13,6 +13,19 @@ Trois actions métier possibles, toutes via l'API officielle du widget
 - **Import, mode « Table existante »** : ajoute des colonnes (actions `AddColumn`,
   envoyées groupées en un seul appel) à une table déjà présente dans ce document —
   uniquement celles dont l'identifiant n'existe pas déjà sur cette table.
+- **Import, `visible_col` (colonne d'affichage)** : quand le texte analysé précise,
+  pour une colonne de référence, quelle colonne de la table cible utiliser comme
+  « colonne d'affichage » (voir « Métadonnées de colonne capturées à l'export » plus
+  bas), le widget envoie, dans un second appel `applyUserActions` juste après la
+  création, exactement les deux actions que l'interface Grist elle-même envoie quand
+  un utilisateur choisit « SHOW COLUMN » : `ModifyColumn` (enregistre la référence)
+  puis `SetDisplayFormula` (fait effectivement afficher la valeur cible plutôt que la
+  référence brute). Ces deux actions ne ciblent **jamais** que la colonne qui vient
+  d'être créée par ce même appel — jamais une colonne préexistante — donc l'invariant
+  « le widget n'ajoute, ne modifie ni ne supprime jamais une colonne existante » n'est
+  pas affecté. Un échec de ce second appel (par ex. table cible entre-temps
+  supprimée) n'annule pas la création déjà effectuée ; il est signalé séparément à
+  l'utilisateur.
 - **Export** : lecture seule. Le widget lit la structure des tables de ce document
   (`grist.docApi.fetchTable` sur les tables de métadonnées `_grist_Tables` et
   `_grist_Tables_column` — voir « Lecture des tables de métadonnées » ci-dessous) et
@@ -21,11 +34,12 @@ Trois actions métier possibles, toutes via l'API officielle du widget
   ailleurs.
 
 Le widget ne modifie et ne supprime **jamais** de table, colonne ou donnée existante :
-il ne fait qu'ajouter. Si l'identifiant choisi pour une nouvelle table existe déjà, la
-création est refusée côté widget (double vérification : au moment de l'aperçu, puis
-juste avant l'envoi de l'action, pour éviter une collision créée entre-temps) ; en mode
-« Table existante », une colonne dont l'identifiant est déjà pris sur la table choisie
-n'est jamais touchée, quel que soit son type réel.
+il ne fait qu'ajouter (et, pour `visible_col` ci-dessus, compléter une colonne qu'il
+vient tout juste de créer lui-même dans le même flux). Si l'identifiant choisi pour une
+nouvelle table existe déjà, la création est refusée côté widget (double vérification :
+au moment de l'aperçu, puis juste avant l'envoi de l'action, pour éviter une collision
+créée entre-temps) ; en mode « Table existante », une colonne dont l'identifiant est
+déjà pris sur la table choisie n'est jamais touchée, quel que soit son type réel.
 
 ## Lecture des tables de métadonnées
 
@@ -59,6 +73,62 @@ ignoré et signalé comme avertissement, sans jamais faire échouer l'analyse ni
 interprété comme du code. Voir `test/parser.test.mjs` (cas « never throws on
 arbitrary/malicious-looking input ») pour une vérification automatisée de cette
 propriété.
+
+## Métadonnées de colonne capturées à l'export (choix, styles, `widget_options`)
+
+L'Export capture, en plus du type de chaque colonne, un ensemble de métadonnées :
+libellé (`label`), description, et le contenu de `widgetOptions` propre à la colonne
+(dont les valeurs d'une liste de choix et leur style individuel — voir README.md,
+section « Export »). Ceci ajoute deux mécanismes, tous deux de la simple analyse de
+texte déterministe, jamais de l'évaluation :
+
+- **Un scanner de profondeur de parenthèses/crochets** (`findMatchingClose` dans
+  `js/parser.js`), qui remplace l'ancienne extraction par regex `\(([^)]*)\)` pour
+  trouver la parenthèse fermante d'un appel `grist.Xxx(...)` : il compte simplement la
+  profondeur d'imbrication caractère par caractère, en ignorant le contenu des chaînes
+  entre guillemets (simples ou doubles, avec gestion de l'échappement `\`) pour qu'une
+  parenthèse littérale dans une valeur (ex. un choix nommé `'Oui (confirmé)'`) ne
+  termine pas la capture prématurément. Aucune exécution, aucune interprétation du
+  contenu : uniquement un comptage de caractères délimiteurs. Voir
+  `test/parser.test.mjs` pour les cas de test (valeurs avec parenthèses, parenthèses
+  non refermées, guillemets échappés).
+- **`JSON.parse` sur la valeur capturée de `widget_options='<JSON>'`**, à l'import
+  (`js/gristTypes.js`) : `JSON.parse` n'exécute jamais son argument comme du code
+  (contrairement à `eval`) — il ne fait qu'analyser une syntaxe de données stricte et
+  échoue sans effet de bord sur tout ce qui n'est pas un JSON valide. Cet appel est de
+  plus entouré d'un `try/catch` : une valeur malformée est ignorée (avec un
+  avertissement affiché dans l'aperçu), elle ne fait jamais échouer l'import.
+
+Le résultat de ce `JSON.parse` (et, à l'export, le `widgetOptions` brut déjà présent
+dans le document) passe systématiquement par `sanitizeWidgetOptions()`
+(`js/gristTypes.js`), qui :
+
+- retire toujours la clé `rulesOptions` (styles de mise en forme conditionnelle) :
+  elle n'a de sens qu'associée à un champ `rules` du schéma de la colonne (une liste de
+  références vers des colonnes formule cachées) que ce widget ne capture pas — la
+  conserver seule produirait un état incohérent, silencieusement inerte, plutôt qu'un
+  risque de sécurité en soi ; Grist lui-même l'exclut pour la même raison lors de ses
+  propres copies internes de colonnes ;
+- réduit `dropdownCondition` à son seul texte de formule (`.text`), sans la version
+  compilée (`.parsed`) que seul Grist sait reconstruire correctement à partir du
+  document de destination ;
+- valide chaque couleur (`textColor`, `fillColor`, et leurs équivalents d'en-tête et,
+  par choix, dans `choiceOptions`) avec `/^#[0-9A-Fa-f]{6}$/`, et chaque indicateur
+  (gras, italique, souligné, barré, retour à la ligne...) comme un booléen strict :
+  toute valeur qui ne correspond pas est simplement omise, jamais écrite telle quelle ;
+- pour `choiceOptions`, ne conserve que les clés de style réellement utilisées par
+  Grist pour un choix (les mêmes couleurs/indicateurs que ci-dessus), toute autre clé
+  étant abandonnée ;
+- laisse passer, inchangée, toute autre clé générique non listée ci-dessus (options de
+  format propres à chaque type — alignement, devise, format de date... — voir
+  README.md) : ce widget n'a pas besoin de connaître par avance chaque clé possible
+  pour la restituer fidèlement, seulement celles qui présentent un risque réel ou qui
+  n'ont de sens que couplées à des données qu'il ne transporte pas.
+
+Cette même fonction est utilisée à l'export (avant d'écrire `widget_options=`) et à
+l'import (sur la valeur reçue), donc un seul et même filtre décide, à un seul endroit
+du code, de ce qui est sûr à faire transiter d'un document à l'autre — voir
+`test/gristTypes.test.mjs` pour la couverture de tests de `sanitizeWidgetOptions`.
 
 ## Pas d'`innerHTML`
 

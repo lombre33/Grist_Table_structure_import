@@ -85,20 +85,45 @@ y compris celles écrites avec `@grist.formulaType(...)` dans le code source : c
 sert à Grist à afficher aussi les colonnes de données normales dans la Code View, il ne
 signifie pas que la colonne d'origine est une formule.
 
+### Métadonnées de colonne restaurées à l'import
+
+En plus du type, l'import restaure — quand ils sont présents dans le texte collé sous
+la forme des arguments nommés supplémentaires décrits plus bas (« Métadonnées
+capturées à l'export ») — le libellé (`label`), la description, la liste de choix et
+son style (couleurs, gras...) pour Choix/Choix multiples, et le reste des options
+d'affichage de la colonne (`widgetOptions` : alignement, retour à la ligne, format
+numérique/date, etc.). Un texte Code View réel, provenant directement de Grist (sans
+ces arguments), s'importe exactement comme avant : seul le type est alors repris, comme
+précédemment.
+
 ### Limites connues
 
 - Les valeurs d'une liste de choix ne sont reprises que si elles apparaissent
-  explicitement dans le code sous la forme `choices=['A', 'B']` (rarement le cas :
-  Code View n'expose habituellement pas ces valeurs). Sinon, la colonne est créée en
-  type Choix/Choix multiples mais sans liste préremplie.
-- Pour une colonne de référence, la « colonne d'affichage » (visible column) n'est pas
+  explicitement dans le code sous la forme `choices=['A', 'B']`. Un texte collé depuis
+  la vraie Code View de Grist (qui n'expose habituellement pas ces valeurs) ne les
+  contient pas ; un texte généré par l'onglet **Export** de ce même widget, si.
+- Pour une colonne de référence, la « colonne d'affichage » (visible column) est
+  restaurée automatiquement quand le texte collé précise `visible_col='NomDeColonne'`
+  **et** que cette colonne cible existe déjà dans le document de destination — ce qui
+  est de toute façon nécessaire pour que la colonne s'importe en Référence plutôt qu'en
+  `Any` (voir ci-dessous). Cas non géré, signalé par un avertissement plutôt qu'une
+  erreur silencieuse : une auto-référence vers la table en cours de création elle-même,
+  en mode « Nouvelle table » (la colonne cible n'existe pas encore au moment de la
+  résolution ; en mode « Table existante », ce même cas fonctionne, la table cible
+  existant déjà). Sans `visible_col`, comme avant, la colonne d'affichage n'est pas
   définie automatiquement ; vous pouvez la choisir manuellement après création.
 - Si une colonne référence une table qui n'existe pas encore dans le document de
   destination (et n'est pas la table en cours de création), elle est importée en type
   `Any` plutôt qu'en référence, avec un avertissement affiché dans l'aperçu.
-- Les arguments de constructeur complexes (expressions, parenthèses imbriquées) ne sont
-  pas interprétés ; seul le premier argument texte entre guillemets est lu (nom de table
-  cible, fuseau horaire).
+- Les arguments de constructeur complexes (expressions, appels imbriqués autres que les
+  arguments nommés reconnus ci-dessous) ne sont pas interprétés ; seuls le premier
+  argument texte entre guillemets (nom de table cible, fuseau horaire) et les arguments
+  nommés `choices=`, `widget_options=`, `label=`, `description=`, `visible_col=` sont
+  lus — le reste est ignoré sans faire échouer l'import de la colonne.
+- Une valeur contenant une parenthèse ou un crochet littéral (ex. un choix nommé
+  `'Oui (confirmé)'`) est prise en charge correctement (voir SECURITY.md) ; un appel
+  dont les parenthèses ne sont pas correctement refermées est en revanche ignoré comme
+  contenu non reconnu, avec un avertissement.
 
 ## Export
 
@@ -109,7 +134,7 @@ signifie pas que la colonne d'origine est une formule.
    collez-le où vous en avez besoin — par exemple dans l'onglet **Import** de ce même
    widget, ouvert sur un autre document.
 
-Le format généré suit exactement celui de la vraie « Code View » de Grist : mêmes lignes
+Le format généré suit celui de la vraie « Code View » de Grist : mêmes lignes
 d'import en en-tête, mêmes expressions `grist.Xxx(...)`, même ordre (colonnes de données
 d'abord, puis colonnes de formule), mêmes lignes vides. Les tables système de Grist
 (`_grist_*`) et les tables de synthèse (créées par un widget Synthèse/Pivot) ne sont pas
@@ -122,6 +147,59 @@ interne (syntaxe `$Colonne`, sans traduire vers le `rec.Colonne` affiché par la
 Code View) ; une formule vide est remplacée par la valeur par défaut du type, comme le
 fait Grist lui-même. Ceci n'affecte pas l'import : seul le type déclaré par
 `@grist.formulaType(...)` est utilisé, jamais le corps de la fonction.
+
+### Métadonnées capturées à l'export
+
+Au-delà du type de chaque colonne, l'export capture et restitue le plus possible de sa
+configuration réelle, pour que l'import qui suit la restaure fidèlement — en particulier
+les choix définis (liste et style par choix), qui sont le cas le plus courant. Ceci est
+fait en ajoutant, sur la même ligne que chaque `grist.Xxx(...)`, des arguments nommés
+supplémentaires, tous optionnels :
+
+- **`choices=[...]`** : la liste des valeurs d'un Choix/Choix multiples.
+- **`widget_options='<JSON>'`** : le reste des options d'affichage de la colonne
+  (`widgetOptions`, tel que Grist les stocke), sous forme d'un objet JSON — notamment le
+  style par choix (`choiceOptions` : couleur de texte/fond, gras...), l'alignement, le
+  retour à la ligne, le format numérique ou de date, et toute autre option générique
+  rencontrée. Quelques clés sont volontairement exclues ou réduites (styles de mise en
+  forme conditionnelle, formule compilée d'une condition de liste déroulante) : voir
+  SECURITY.md pour le détail et la justification de chacune. Absent entièrement si la
+  colonne n'a aucune option à en dehors des choix.
+- **`label='...'`** : le libellé affiché de la colonne, uniquement s'il diffère de son
+  identifiant (Grist les fait correspondre par défaut).
+- **`description='...'`** : la description de la colonne, si elle est renseignée.
+- **`visible_col='NomDeColonne'`** : pour une colonne de référence, l'identifiant (pas
+  l'identifiant technique interne, propre au document et sans signification ailleurs) de
+  la colonne de la table cible utilisée comme « colonne d'affichage ».
+
+**Ce sont des arguments propres à ce widget, pas le format officiel de la Code View de
+Grist** : Grist lui-même n'écrit, au mieux, que `choices=[...]` dans de rares cas, jamais
+les autres. Un texte Code View authentique, collé depuis Grist sans ces arguments,
+continue de s'importer exactement comme avant (seul le type est alors repris) — ces
+arguments sont une extension strictement additive du format, reconnue par l'onglet
+**Import** de ce même widget. Voir SECURITY.md pour comment ce texte supplémentaire est
+analysé (toujours par simple lecture de texte, jamais exécuté) et « Limites connues »
+ci-dessus pour les cas non couverts.
+
+### Tables référencées non sélectionnées
+
+Si les tables cochées contiennent une colonne de référence (simple ou liste) vers une
+table de ce document qui n'est elle-même pas cochée, un bandeau d'information apparaît
+au-dessus de la liste, énumérant la ou les tables concernées et la colonne qui pointe
+vers chacune. Deux choix, tous deux non bloquants (le bouton **Générer le code** reste
+utilisable dans tous les cas) :
+
+- **Inclure ces tables** : coche-les automatiquement (et peut faire réapparaître le
+  bandeau si l'une d'elles référence à son tour une autre table non cochée) ;
+- **Continuer sans elles** : masque le bandeau pour cette situation précise ; il
+  réapparaît si la sélection change de façon à produire un ensemble différent de tables
+  manquantes.
+
+Générer le code sans inclure une table référencée n'est pas une erreur : la colonne de
+référence correspondante s'importera simplement en type `Any` dans le document de
+destination si la table cible n'y existe pas non plus, avec un avertissement affiché
+dans l'aperçu de l'onglet **Import** (voir « Limites connues » ci-dessus) — exactement
+comme pour toute référence vers une table absente.
 
 ## Installation (hébergement GitHub Pages)
 
@@ -165,10 +243,14 @@ Structure :
 ```
 index.html            page du widget (onglets Import / Export)
 style.css              mise en forme
-js/parser.js           lecture du code source (regex uniquement, jamais exécuté)
-js/gristTypes.js       types Python <-> types de colonne Grist, dans les deux sens
-js/schema.js           lecture de la structure réelle du document (_grist_Tables*)
-js/codeGenerator.js    génère le code Python à partir d'une structure de table
+js/parser.js           lecture du code source (regex + scanner de parenthèses/crochets,
+                        jamais exécuté)
+js/gristTypes.js       types Python <-> types de colonne Grist, métadonnées étendues
+                        (choix, styles, widgetOptions...), dans les deux sens
+js/schema.js           lecture de la structure réelle du document (_grist_Tables*),
+                        détection des tables référencées non sélectionnées
+js/codeGenerator.js    génère le code Python (types + métadonnées) à partir d'une
+                        structure de table
 js/dom.js              construction du DOM sans innerHTML
 js/util.js             petits utilitaires partagés (délai, pluriel, messages d'erreur)
 js/importTab.js        logique de l'onglet Import (nouvelle table / table existante)

@@ -102,6 +102,16 @@
       <p class="eyebrow">1. Tables à exporter</p>
       <ul id="export-table-list" class="checklist"></ul>
       <p id="export-tables-empty" class="hint" hidden>Aucune table exportable trouvée dans ce document.</p>
+
+      <div id="export-refs-banner" class="status status-info refs-banner" hidden>
+        <p id="export-refs-banner-intro"></p>
+        <ul id="export-refs-list" class="refs-list"></ul>
+        <div class="actions">
+          <button id="refs-include-btn" type="button" class="btn btn-primary">Inclure ces tables</button>
+          <button id="refs-dismiss-btn" type="button" class="btn btn-ghost">Continuer sans elles</button>
+        </div>
+      </div>
+
       <div class="actions">
         <button id="refresh-tables-btn" type="button" class="btn btn-ghost">Actualiser la liste</button>
         <button id="generate-btn" type="button" class="btn btn-primary" disabled>Générer le code</button>

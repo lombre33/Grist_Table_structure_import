@@ -92,7 +92,7 @@ export function initImportTab(grist, gristAvailable) {
     analyzeBtn.disabled = true;
     try {
       existingTableIds = await withTimeout(grist.docApi.listTables(), GRIST_CALL_TIMEOUT_MS, TIMEOUT_MESSAGE);
-      if (mode() === "existing") docSchema = await fetchSchemaSafely();
+      await ensureDocSchema();
     } catch (err) {
       baseWarnings = [
         ...baseWarnings,
@@ -119,14 +119,34 @@ export function initImportTab(grist, gristAvailable) {
     }
   }
 
+  /**
+   * "Table existante" mode always needs the full document schema (to list
+   * target tables and detect already-present columns). "Nouvelle table"
+   * mode does not, *unless* at least one parsed column carries a
+   * `visible_col=` kwarg (this widget's own extension, see
+   * js/gristTypes.js), which can only be resolved to a real row id by
+   * looking up the target table's columns in that same schema (see
+   * resolveVisibleColRef below) — so it is fetched lazily in that case too,
+   * to avoid an unnecessary extra read for the common case.
+   */
+  function needsDocSchema() {
+    return mode() === "existing" || parsedTables.some((table) => table.columns.some((col) => col.argsRaw.includes("visible_col")));
+  }
+
+  async function ensureDocSchema() {
+    if (docSchema || !needsDocSchema()) return docSchema;
+    docSchema = await fetchSchemaSafely();
+    return docSchema;
+  }
+
   async function onModeChange() {
     updateModeUI();
-    if (mode() === "existing" && parsedTables.length > 0 && !docSchema) {
+    if (parsedTables.length > 0 && !docSchema && needsDocSchema()) {
       analyzeBtn.disabled = true;
-      docSchema = await fetchSchemaSafely();
+      await ensureDocSchema();
       analyzeBtn.disabled = false;
-      populateTargetTableSelect();
     }
+    if (mode() === "existing") populateTargetTableSelect();
     renderSelectedTable();
   }
 
@@ -184,6 +204,26 @@ export function initImportTab(grist, gristAvailable) {
     else renderExistingMode(table);
   }
 
+  /**
+   * Resolves a `visible_col='TargetColId'` kwarg (see js/gristTypes.js) to
+   * the target column's real row id, by looking it up in the destination
+   * document's own schema. Only possible when the referenced table already
+   * exists there — which is required anyway for the column to import as a
+   * Reference/ReferenceList rather than `Any` (see resolveColumns above) —
+   * so this never needs to reason about a table created in the same
+   * request. Returns null (caller then warns and drops it) when the schema
+   * isn't available or the named column isn't found there.
+   */
+  function resolveVisibleColRef(refTarget, visibleColId) {
+    if (!docSchema) return null;
+    const targetTable = docSchema.tables.find((t) => t.tableId === refTarget);
+    if (!targetTable) return null;
+    const match = docSchema.allColumns.find(
+      (c) => c.parentId === targetTable.tableRef && c.colId === visibleColId
+    );
+    return match ? match.id : null;
+  }
+
   function resolveColumns(table, targetTableId) {
     const resolutionWarnings = [];
     const resolvedColumns = table.columns.map((col) => {
@@ -199,6 +239,16 @@ export function initImportTab(grist, gristAvailable) {
           );
           resolved.type = "Any";
           resolved.widgetOptions = null;
+          resolved.visibleColId = null;
+        }
+      }
+      if (resolved.visibleColId && (resolved.type.startsWith("Ref:") || resolved.type.startsWith("RefList:"))) {
+        resolved.visibleColRef = resolveVisibleColRef(resolved.refTarget, resolved.visibleColId);
+        if (!resolved.visibleColRef) {
+          resolutionWarnings.push(
+            `Colonne « ${col.id} » : colonne d'affichage « ${resolved.visibleColId} » introuvable dans ` +
+              `la table « ${resolved.refTarget} » de ce document, ignorée (visible_col).`
+          );
         }
       }
       return { ...col, resolved };
@@ -306,8 +356,26 @@ export function initImportTab(grist, gristAvailable) {
       const columnsPayload = currentColumns.map(buildColumnPayload);
       await grist.docApi.applyUserActions([["AddTable", tableId, columnsPayload]]);
       existingTableIds = [...(existingTableIds || []), tableId];
+
+      let visibleColNote = "";
+      const visibleColActions = buildVisibleColActions(tableId, currentColumns);
+      if (visibleColActions.length > 0) {
+        // A separate call: AddTable's own column payload silently ignores a
+        // `visibleCol` field (confirmed against Grist's own source, see
+        // README.md), so it must be applied afterwards, exactly as Grist's
+        // client itself does for "SHOW COLUMN". A failure here does not
+        // undo the table/columns that were already created successfully.
+        try {
+          await grist.docApi.applyUserActions(visibleColActions);
+        } catch (err) {
+          const n = visibleColActions.length / 2;
+          visibleColNote = ` ${pluralize(n, "Colonne", "Colonnes")} d'affichage (visible_col) ${pluralize(n, "non appliquée", "non appliquées")} : ${errorMessage(err)}.`;
+        }
+      }
+
       setStatus(
-        `Table « ${tableId} » créée avec ${columnsPayload.length} ${pluralize(columnsPayload.length, "colonne")}.`,
+        `Table « ${tableId} » créée avec ${columnsPayload.length} ${pluralize(columnsPayload.length, "colonne")}.` +
+          visibleColNote,
         "success"
       );
     } catch (err) {
@@ -334,6 +402,17 @@ export function initImportTab(grist, gristAvailable) {
       const actions = newColumns.map((col) => ["AddColumn", target.tableId, col.id, buildColumnPayload(col)]);
       await grist.docApi.applyUserActions(actions);
 
+      let visibleColNote = "";
+      const visibleColActions = buildVisibleColActions(target.tableId, newColumns);
+      if (visibleColActions.length > 0) {
+        try {
+          await grist.docApi.applyUserActions(visibleColActions);
+        } catch (err) {
+          const n = visibleColActions.length / 2;
+          visibleColNote = ` ${pluralize(n, "Colonne", "Colonnes")} d'affichage (visible_col) ${pluralize(n, "non appliquée", "non appliquées")} : ${errorMessage(err)}.`;
+        }
+      }
+
       docSchema = freshSchema;
       for (const col of newColumns) {
         docSchema.allColumns.push({
@@ -347,7 +426,8 @@ export function initImportTab(grist, gristAvailable) {
       }
       setStatus(
         `${newColumns.length} ${pluralize(newColumns.length, "colonne")} ` +
-          `${pluralize(newColumns.length, "ajoutée", "ajoutées")} à « ${target.tableId} ».`,
+          `${pluralize(newColumns.length, "ajoutée", "ajoutées")} à « ${target.tableId} ».` +
+          visibleColNote,
         "success"
       );
     } catch (err) {
@@ -361,10 +441,32 @@ export function initImportTab(grist, gristAvailable) {
       type: col.resolved.type,
       isFormula: false,
       formula: "",
-      label: col.id,
+      label: col.resolved.label || col.id,
     };
+    if (col.resolved.description) payload.description = col.resolved.description;
     if (col.resolved.widgetOptions) payload.widgetOptions = JSON.stringify(col.resolved.widgetOptions);
     return payload;
+  }
+
+  /**
+   * Builds the follow-up actions that set a `visible_col`-resolved display
+   * column on the columns that just got created (see resolveVisibleColRef
+   * above): `ModifyColumn` to store the real row id in `visibleCol`, and
+   * `SetDisplayFormula` so the column also actually *displays* the target's
+   * value instead of the raw reference — reproducing exactly the two
+   * actions Grist's own client sends together when a user picks "SHOW
+   * COLUMN" in the real UI (see README.md's "visible_col" note). Only ever
+   * targets `cols` (columns this same action just added), never touching a
+   * pre-existing column.
+   */
+  function buildVisibleColActions(tableId, cols) {
+    const actions = [];
+    for (const col of cols) {
+      if (!col.resolved.visibleColRef) continue;
+      actions.push(["ModifyColumn", tableId, col.id, { visibleCol: col.resolved.visibleColRef }]);
+      actions.push(["SetDisplayFormula", tableId, null, col.id, `$${col.id}.${col.resolved.visibleColId}`]);
+    }
+    return actions;
   }
 
   function setStatus(message, level) {

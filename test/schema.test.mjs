@@ -6,6 +6,7 @@ import {
   existingColumnIds,
   fetchDocSchema,
   buildExportSchema,
+  findReferencedTables,
 } from "../js/schema.js";
 
 test("zipRows converts column-oriented data into row objects", () => {
@@ -94,4 +95,115 @@ test("buildExportSchema assembles the shape codeGenerator expects, in selection 
     ["Bar", "Foo"]
   );
   assert.deepEqual(schema[1].columns.map((c) => c.colId), ["A", "B"]);
+});
+
+function metadataFixture() {
+  return {
+    tables: [
+      { tableRef: 10, tableId: "Foo" },
+      { tableRef: 20, tableId: "Bar" },
+    ],
+    allColumns: [
+      {
+        id: 1,
+        parentId: 10,
+        colId: "Mood",
+        type: "Choice",
+        isFormula: false,
+        formula: "",
+        parentPos: 1,
+        label: "Humeur",
+        description: "Une note",
+        widgetOptions: JSON.stringify({ choices: ["A", "B"], rulesOptions: [{ fillColor: "#FF0000" }] }),
+        visibleCol: 0,
+      },
+      {
+        id: 2,
+        parentId: 10,
+        colId: "Owner",
+        type: "Ref:Bar",
+        isFormula: false,
+        formula: "",
+        parentPos: 2,
+        label: "Owner",
+        description: "",
+        widgetOptions: "",
+        visibleCol: 3,
+      },
+      {
+        id: 3,
+        parentId: 20,
+        colId: "Name",
+        type: "Text",
+        isFormula: false,
+        formula: "",
+        parentPos: 1,
+        label: "Name",
+        description: "",
+        widgetOptions: "",
+        visibleCol: 0,
+      },
+    ],
+  };
+}
+
+test("buildExportSchema captures label, description, parsed widgetOptions and a resolved visibleColId", () => {
+  const { tables, allColumns } = metadataFixture();
+  const schema = buildExportSchema(tables, allColumns, ["Foo"]);
+  const [mood, owner] = schema[0].columns;
+
+  assert.equal(mood.label, "Humeur");
+  assert.equal(mood.description, "Une note");
+  assert.deepEqual(mood.widgetOptions, { choices: ["A", "B"], rulesOptions: [{ fillColor: "#FF0000" }] });
+  assert.equal(mood.visibleColId, null);
+
+  assert.equal(owner.label, "Owner");
+  assert.equal(owner.description, null);
+  assert.equal(owner.widgetOptions, null);
+  assert.equal(owner.visibleColId, "Name"); // resolved from the raw visibleCol row id (3) to a colId
+});
+
+test("buildExportSchema never throws on an unparseable widgetOptions string", () => {
+  const tables = [{ tableRef: 10, tableId: "Foo" }];
+  const allColumns = [
+    { id: 1, parentId: 10, colId: "A", type: "Text", isFormula: false, formula: "", parentPos: 1, widgetOptions: "{not json" },
+  ];
+  const schema = buildExportSchema(tables, allColumns, ["Foo"]);
+  assert.equal(schema[0].columns[0].widgetOptions, null);
+});
+
+test("findReferencedTables finds a Ref target that isn't itself selected", () => {
+  const { tables, allColumns } = metadataFixture();
+  const referenced = findReferencedTables(tables, allColumns, ["Foo"]);
+  assert.deepEqual(Array.from(referenced.keys()), ["Bar"]);
+  assert.deepEqual(referenced.get("Bar"), ["Foo.Owner"]);
+});
+
+test("findReferencedTables is empty when the referenced table is already selected", () => {
+  const { tables, allColumns } = metadataFixture();
+  const referenced = findReferencedTables(tables, allColumns, ["Foo", "Bar"]);
+  assert.equal(referenced.size, 0);
+});
+
+test("findReferencedTables ignores a reference to a table that doesn't exist among exportable tables", () => {
+  const tables = [{ tableRef: 10, tableId: "Foo" }];
+  const allColumns = [
+    { id: 1, parentId: 10, colId: "Owner", type: "Ref:Deleted_Table", isFormula: false, formula: "", parentPos: 1 },
+  ];
+  const referenced = findReferencedTables(tables, allColumns, ["Foo"]);
+  assert.equal(referenced.size, 0);
+});
+
+test("findReferencedTables handles RefList and groups multiple referencing columns", () => {
+  const tables = [
+    { tableRef: 10, tableId: "Foo" },
+    { tableRef: 20, tableId: "Bar" },
+  ];
+  const allColumns = [
+    { id: 1, parentId: 10, colId: "Owners", type: "RefList:Bar", isFormula: false, formula: "", parentPos: 1 },
+    { id: 2, parentId: 10, colId: "BackupOwner", type: "Ref:Bar", isFormula: false, formula: "", parentPos: 2 },
+    { id: 3, parentId: 20, colId: "Name", type: "Text", isFormula: false, formula: "", parentPos: 1 },
+  ];
+  const referenced = findReferencedTables(tables, allColumns, ["Foo"]);
+  assert.deepEqual(referenced.get("Bar"), ["Foo.Owners", "Foo.BackupOwner"]);
 });

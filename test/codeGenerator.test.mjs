@@ -139,6 +139,66 @@ test("multiple tables are separated the same way as after the header", () => {
   );
 });
 
+test("emits choices= for a Choice column with widgetOptions.choices", () => {
+  const text = generateCode([
+    {
+      tableId: "T",
+      columns: [{ colId: "Mood", type: "Choice", isFormula: false, widgetOptions: { choices: ["Oui (confirmé)", "Non"] } }],
+    },
+  ]);
+  assert.match(text, /Mood = grist\.Choice\(choices=\['Oui \(confirmé\)', 'Non'\]\)\n/);
+});
+
+test("emits label= only when different from the column id", () => {
+  const same = generateCode([{ tableId: "T", columns: [{ colId: "Name", type: "Text", isFormula: false, label: "Name" }] }]);
+  assert.match(same, /Name = grist\.Text\(\)\n/);
+
+  const different = generateCode([{ tableId: "T", columns: [{ colId: "Name", type: "Text", isFormula: false, label: "Full name" }] }]);
+  assert.match(different, /Name = grist\.Text\(label='Full name'\)\n/);
+});
+
+test("emits description= only when non-empty", () => {
+  const text = generateCode([
+    { tableId: "T", columns: [{ colId: "A", type: "Text", isFormula: false, description: "Une note (utile)" }] },
+  ]);
+  assert.match(text, /A = grist\.Text\(description='Une note \(utile\)'\)\n/);
+});
+
+test("emits visible_col= for a Reference column with a resolved visibleColId", () => {
+  const text = generateCode([
+    { tableId: "T", columns: [{ colId: "Owner", type: "Ref:Other", isFormula: false, visibleColId: "Name" }] },
+  ]);
+  assert.match(text, /Owner = grist\.Reference\('Other', visible_col='Name'\)\n/);
+});
+
+test("emits widget_options= for the remaining widgetOptions, excluding choices, filtered of dangerous keys", () => {
+  const text = generateCode([
+    {
+      tableId: "T",
+      columns: [
+        {
+          colId: "Mood",
+          type: "Choice",
+          isFormula: false,
+          widgetOptions: {
+            choices: ["A", "B"],
+            alignment: "center",
+            rulesOptions: [{ fillColor: "#FF0000" }],
+          },
+        },
+      ],
+    },
+  ]);
+  assert.match(text, /choices=\['A', 'B'\]/);
+  assert.match(text, /widget_options='\{"alignment":"center"\}'/);
+  assert.ok(!text.includes("rulesOptions"));
+});
+
+test("a column with no captured metadata generates exactly as before this feature existed", () => {
+  const text = generateCode([{ tableId: "T", columns: [{ colId: "A", type: "Text", isFormula: false }] }]);
+  assert.match(text, /A = grist\.Text\(\)\n/);
+});
+
 test("round-trips through parseGristSchema: same column ids and types come back out", () => {
   const schema = [
     {
@@ -187,4 +247,79 @@ test("round-trips through parseGristSchema: same column ids and types come back 
     ["Untyped", "Any"],
   ]);
   assert.deepEqual(warnings, []);
+});
+
+test("full metadata round-trip: generateCode -> parseGristSchema -> resolveColumnType preserves everything captured at export", () => {
+  const schema = [
+    {
+      tableId: "RoundTrip",
+      columns: [
+        {
+          colId: "Mood",
+          type: "Choice",
+          isFormula: false,
+          label: "Humeur (du jour)",
+          description: "Une note (avec parenthèses) et une apostrophe : l'humeur",
+          widgetOptions: {
+            choices: ["Content (ok)", "Neutre", "Absent"],
+            choiceOptions: {
+              "Content (ok)": { fillColor: "#2A9D53", textColor: "#FFFFFF", fontBold: true },
+            },
+            alignment: "center",
+            rulesOptions: [{ fillColor: "#FF0000" }], // must NOT survive the round trip
+          },
+        },
+        {
+          colId: "Owner",
+          type: "Ref:RoundTrip",
+          isFormula: false,
+          visibleColId: "Mood",
+          widgetOptions: { alignment: "left" },
+        },
+        {
+          colId: "Plain",
+          type: "Text",
+          isFormula: false,
+          // No metadata at all: must round-trip to nothing captured.
+        },
+      ],
+    },
+  ];
+
+  const text = generateCode(schema);
+  const { tables, warnings: parseWarnings } = parseGristSchema(text);
+  assert.equal(tables.length, 1);
+
+  const resolvedById = new Map();
+  const resolutionWarnings = [];
+  for (const col of tables[0].columns) {
+    resolvedById.set(col.id, resolveColumnType(col.dslType, col.argsRaw, col.id, resolutionWarnings));
+  }
+
+  assert.deepEqual(parseWarnings, []);
+  assert.deepEqual(resolutionWarnings, []);
+
+  const mood = resolvedById.get("Mood");
+  assert.equal(mood.type, "Choice");
+  assert.equal(mood.label, "Humeur (du jour)");
+  assert.equal(mood.description, "Une note (avec parenthèses) et une apostrophe : l'humeur");
+  assert.deepEqual(mood.widgetOptions, {
+    choices: ["Content (ok)", "Neutre", "Absent"],
+    choiceOptions: {
+      "Content (ok)": { fillColor: "#2A9D53", textColor: "#FFFFFF", fontBold: true },
+    },
+    alignment: "center",
+  });
+
+  const owner = resolvedById.get("Owner");
+  assert.equal(owner.type, "Ref:RoundTrip");
+  assert.equal(owner.visibleColId, "Mood");
+  assert.deepEqual(owner.widgetOptions, { alignment: "left" });
+
+  const plain = resolvedById.get("Plain");
+  assert.equal(plain.type, "Text");
+  assert.equal(plain.label, null);
+  assert.equal(plain.description, null);
+  assert.equal(plain.widgetOptions, null);
+  assert.equal(plain.visibleColId, null);
 });

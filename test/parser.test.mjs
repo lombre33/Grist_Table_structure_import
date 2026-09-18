@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseGristSchema } from "../js/parser.js";
+import { parseGristSchema, findMatchingClose } from "../js/parser.js";
 
 test("parses a simple table with assignment and formula-style columns", () => {
   const source = `
@@ -118,6 +118,62 @@ class T:
     ["A"]
   );
   assert.ok(warnings.some((w) => /décorateur non reconnu/.test(w)));
+});
+
+test("findMatchingClose skips brackets inside quoted strings", () => {
+  const text = "(choices=['Oui (confirmé)', \"B]\"])";
+  assert.equal(findMatchingClose(text, 0), text.length - 1);
+});
+
+test("findMatchingClose handles escaped quotes inside a string", () => {
+  const text = "('it\\'s (nested)')";
+  assert.equal(findMatchingClose(text, 0), text.length - 1);
+});
+
+test("findMatchingClose returns -1 for an unterminated bracket", () => {
+  assert.equal(findMatchingClose("(abc", 0), -1);
+});
+
+test("a column value containing a literal parenthesis no longer breaks parsing", () => {
+  const source = `
+@grist.UserTable
+class T:
+  Mood = grist.Choice(choices=['Oui (confirmé)', 'Non'], label='Humeur (du jour)', description='Une valeur (test) ici')
+  Next = grist.Text()
+`;
+  const { tables, warnings } = parseGristSchema(source);
+  assert.deepEqual(
+    tables[0].columns.map((c) => c.id),
+    ["Mood", "Next"]
+  );
+  assert.match(tables[0].columns[0].argsRaw, /choices=\['Oui \(confirmé\)', 'Non'\]/);
+  assert.match(tables[0].columns[0].argsRaw, /label='Humeur \(du jour\)'/);
+  assert.deepEqual(warnings, []);
+});
+
+test("a formulaType value containing parentheses is still recognized", () => {
+  const source = `
+@grist.UserTable
+class T:
+  @grist.formulaType(grist.Choice(choices=['A (a)', 'B']))
+  def Status(rec, table):
+    return ''
+`;
+  const { tables, warnings } = parseGristSchema(source);
+  assert.deepEqual(tables[0].columns.map((c) => [c.id, c.dslType]), [["Status", "Choice"]]);
+  assert.match(tables[0].columns[0].argsRaw, /choices=\['A \(a\)', 'B'\]/);
+  assert.deepEqual(warnings, []);
+});
+
+test("an unterminated call (unbalanced parenthesis) is reported, not mis-parsed", () => {
+  const source = `
+@grist.UserTable
+class T:
+  A = grist.Text(label='unterminated
+`;
+  const { tables, warnings } = parseGristSchema(source);
+  assert.deepEqual(tables[0].columns, []);
+  assert.ok(warnings.some((w) => /contenu non reconnu/.test(w)));
 });
 
 test("never throws on arbitrary/malicious-looking input", () => {

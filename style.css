@@ -403,6 +403,32 @@ table#columns-preview {
   border-radius: 4px;
 }
 
+/* Export: referenced-tables information banner */
+
+.refs-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.refs-banner p {
+  margin: 0;
+}
+
+.refs-list {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.refs-list li {
+  font-size: 0.8rem;
+}
+
+.refs-banner .actions {
+  margin-top: 2px;
+}
+
 /* Status messages */
 
 .status {

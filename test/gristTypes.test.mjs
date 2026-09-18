@@ -6,6 +6,7 @@ import {
   TABLE_ID_RE,
   buildTypeExpression,
   defaultLiteralForType,
+  sanitizeWidgetOptions,
 } from "../js/gristTypes.js";
 
 function resolve(dslType, argsRaw) {
@@ -116,6 +117,125 @@ test("defaultLiteralForType matches Grist's _type_defaults", () => {
   assert.equal(defaultLiteralForType("RefList:Foo"), "None");
   assert.equal(defaultLiteralForType("Any"), "None");
   assert.equal(defaultLiteralForType("SomethingUnknown"), "None");
+});
+
+test("choices= extracts a list containing literal parentheses", () => {
+  const { widgetOptions } = resolve("Choice", "choices=['Oui (confirmé)', 'Non']");
+  assert.deepEqual(widgetOptions, { choices: ["Oui (confirmé)", "Non"] });
+});
+
+test("choices= unescapes escaped quotes inside a choice value", () => {
+  const { widgetOptions } = resolve("Choice", "choices=['it\\'s ok', 'B']");
+  assert.deepEqual(widgetOptions, { choices: ["it's ok", "B"] });
+});
+
+test("label= is captured only when present", () => {
+  const withLabel = resolve("Text", "label='Full name'");
+  assert.equal(withLabel.label, "Full name");
+  const without = resolve("Text", "");
+  assert.equal(without.label, null);
+});
+
+test("description= is captured, with escaped quotes and parentheses", () => {
+  const { description } = resolve("Text", "description='A note (important) with a \\'quote\\''");
+  assert.equal(description, "A note (important) with a 'quote'");
+});
+
+test("visible_col= is captured as a plain column id string", () => {
+  const { visibleColId } = resolve("Reference", "'Other_Table', visible_col='DisplayName'");
+  assert.equal(visibleColId, "DisplayName");
+});
+
+test("widget_options= is JSON-parsed (never evaluated) and merged into widgetOptions", () => {
+  const { widgetOptions } = resolve("Numeric", "widget_options='{\"numMode\":\"currency\",\"currency\":\"EUR\"}'");
+  assert.deepEqual(widgetOptions, { numMode: "currency", currency: "EUR" });
+});
+
+test("widget_options= merged with choices=, choices always wins over a conflicting key", () => {
+  const { widgetOptions } = resolve(
+    "Choice",
+    "choices=['A', 'B'], widget_options='{\"alignment\":\"center\",\"choices\":[\"ignored\"]}'"
+  );
+  assert.deepEqual(widgetOptions, { choices: ["A", "B"], alignment: "center" });
+});
+
+test("a malformed widget_options= JSON payload is ignored (with a warning), not evaluated or thrown", () => {
+  const { widgetOptions, warnings } = resolve("Text", "widget_options='{not valid json'");
+  assert.equal(widgetOptions, null);
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /widget_options/);
+});
+
+test("all extended kwargs together on a Reference column", () => {
+  const result = resolve(
+    "Reference",
+    "'Other_Table', label='Propriétaire', description='Qui possède cet enregistrement', " +
+      "visible_col='Name', widget_options='{\"alignment\":\"left\"}'"
+  );
+  assert.equal(result.type, "Ref:Other_Table");
+  assert.equal(result.label, "Propriétaire");
+  assert.equal(result.description, "Qui possède cet enregistrement");
+  assert.equal(result.visibleColId, "Name");
+  assert.deepEqual(result.widgetOptions, { alignment: "left" });
+});
+
+test("sanitizeWidgetOptions drops rulesOptions entirely", () => {
+  const out = sanitizeWidgetOptions({ alignment: "left", rulesOptions: [{ fillColor: "#FF0000" }] });
+  assert.deepEqual(out, { alignment: "left" });
+});
+
+test("sanitizeWidgetOptions narrows dropdownCondition to its text only", () => {
+  const out = sanitizeWidgetOptions({ dropdownCondition: { text: "$Active", parsed: "[SOME, AST]" } });
+  assert.deepEqual(out, { dropdownCondition: { text: "$Active" } });
+});
+
+test("sanitizeWidgetOptions drops a dropdownCondition with no text", () => {
+  const out = sanitizeWidgetOptions({ dropdownCondition: { parsed: "x" }, alignment: "left" });
+  assert.deepEqual(out, { alignment: "left" });
+});
+
+test("sanitizeWidgetOptions validates root color keys (valid hex kept, invalid dropped)", () => {
+  const out = sanitizeWidgetOptions({ textColor: "#112233", fillColor: "not-a-color" });
+  assert.deepEqual(out, { textColor: "#112233" });
+});
+
+test("sanitizeWidgetOptions validates root boolean keys (non-boolean dropped)", () => {
+  const out = sanitizeWidgetOptions({ fontBold: true, wrap: "yes" });
+  assert.deepEqual(out, { fontBold: true });
+});
+
+test("sanitizeWidgetOptions keeps only the known choiceOptions style keys, valid colors only", () => {
+  const out = sanitizeWidgetOptions({
+    choiceOptions: {
+      A: { fillColor: "#FF0000", textColor: "bogus", fontBold: true, someUnknownKey: 1 },
+      B: { fontItalic: "not-a-bool" },
+    },
+  });
+  assert.deepEqual(out, { choiceOptions: { A: { fillColor: "#FF0000", fontBold: true } } });
+});
+
+test("sanitizeWidgetOptions passes unknown generic keys through untouched", () => {
+  const out = sanitizeWidgetOptions({ numMode: "currency", question: "How many?", widget: "TextBox" });
+  assert.deepEqual(out, { numMode: "currency", question: "How many?", widget: "TextBox" });
+});
+
+test("sanitizeWidgetOptions always excludes choices (represented separately)", () => {
+  const out = sanitizeWidgetOptions({ choices: ["A", "B"], alignment: "left" });
+  assert.deepEqual(out, { alignment: "left" });
+});
+
+test("sanitizeWidgetOptions returns null for nothing left / non-object input", () => {
+  assert.equal(sanitizeWidgetOptions(null), null);
+  assert.equal(sanitizeWidgetOptions({ rulesOptions: [] }), null);
+});
+
+test("buildTypeExpression appends extra kwargs in insertion order after the positional argument", () => {
+  assert.equal(
+    buildTypeExpression("Ref:Other", { visible_col: "'Name'", label: "'Owner'" }),
+    "grist.Reference('Other', visible_col='Name', label='Owner')"
+  );
+  assert.equal(buildTypeExpression("Text", { label: "'Full name'" }), "grist.Text(label='Full name')");
+  assert.equal(buildTypeExpression("Text"), "grist.Text()");
 });
 
 test("TABLE_ID_RE matches valid Grist/Python identifiers only", () => {

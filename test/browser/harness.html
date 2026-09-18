@@ -8,20 +8,47 @@
   // Stub of the real grist-plugin-api.js, for local/manual testing only.
   // This file is never part of the published widget (see .github/workflows/pages.yml,
   // which only ever copies index.html, style.css, favicon.svg and js/*.js).
+  // Existing_Table references Other_Table (Owner -> Other_Table, with a
+  // visible column) so the Export tab's "referenced tables" banner
+  // (requirement 2: detect Ref/RefList columns pointing at a table that
+  // isn't itself checked) has something realistic to detect. Mood exercises
+  // the extended metadata capture (requirement 1): a label different from
+  // its column id, a description, and widgetOptions with both `choices` and
+  // per-choice `choiceOptions` styling (one choice's text deliberately
+  // contains parentheses, to exercise the parser's bracket-depth scanner on
+  // the round trip through Export -> Import).
   const TABLES = {
-    id: [1, 2, 3],
-    tableId: ["Existing_Table", "Other_Table", "Existing_Table_summary_Age"],
-    summarySourceTable: [0, 0, 1],
+    id: [1, 2, 3, 4],
+    tableId: ["Existing_Table", "Other_Table", "Existing_Table_summary_Age", "Standalone_Table"],
+    summarySourceTable: [0, 0, 1, 0],
   };
   const COLUMNS = {
-    id: [1, 2, 3, 4, 5],
-    parentId: [1, 1, 1, 1, 2],
-    colId: ["manualSort", "Name", "Age", "Computed", "Label"],
-    type: ["ManualSortPos", "Text", "Int", "Numeric", "Text"],
-    isFormula: [false, false, false, true, false],
-    formula: ["", "", "", "$Age * 2", ""],
-    parentPos: [1, 2, 3, 4, 1],
-    label: ["manualSort", "Name", "Age", "Computed", "Label"],
+    id: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+    parentId: [1, 1, 1, 1, 1, 1, 2, 2, 4, 4],
+    colId: ["manualSort", "Name", "Age", "Computed", "Mood", "Owner", "manualSort", "Label", "manualSort", "Info"],
+    type: ["ManualSortPos", "Text", "Int", "Numeric", "Choice", "Ref:Other_Table", "ManualSortPos", "Text", "ManualSortPos", "Text"],
+    isFormula: [false, false, false, true, false, false, false, false, false, false],
+    formula: ["", "", "", "$Age * 2", "", "", "", "", "", ""],
+    parentPos: [1, 2, 3, 4, 5, 6, 1, 2, 1, 2],
+    label: ["manualSort", "Name", "Age", "Computed", "Humeur", "Owner", "manualSort", "Label", "manualSort", "Info"],
+    description: [
+      "", "", "", "",
+      "Humeur du bénévole ce jour (capturée à l'export, restaurée à l'import).",
+      "", "", "", "", "",
+    ],
+    widgetOptions: [
+      "", "", "", "",
+      JSON.stringify({
+        choices: ["Content (ok)", "Neutre", "Absent"],
+        choiceOptions: {
+          "Content (ok)": { fillColor: "#2A9D53", textColor: "#FFFFFF", fontBold: true },
+          "Absent": { fillColor: "#C0392B", textColor: "#FFFFFF" },
+        },
+        alignment: "center",
+      }),
+      "", "", "", "", "",
+    ],
+    visibleCol: [0, 0, 0, 0, 0, 8, 0, 0, 0, 0],
   };
 
   window.__harness = { actionCalls: [] };
@@ -135,6 +162,16 @@
       <p class="eyebrow">1. Tables à exporter</p>
       <ul id="export-table-list" class="checklist"></ul>
       <p id="export-tables-empty" class="hint" hidden>Aucune table exportable trouvée dans ce document.</p>
+
+      <div id="export-refs-banner" class="status status-info refs-banner" hidden>
+        <p id="export-refs-banner-intro"></p>
+        <ul id="export-refs-list" class="refs-list"></ul>
+        <div class="actions">
+          <button id="refs-include-btn" type="button" class="btn btn-primary">Inclure ces tables</button>
+          <button id="refs-dismiss-btn" type="button" class="btn btn-ghost">Continuer sans elles</button>
+        </div>
+      </div>
+
       <div class="actions">
         <button id="refresh-tables-btn" type="button" class="btn btn-ghost">Actualiser la liste</button>
         <button id="generate-btn" type="button" class="btn btn-primary" disabled>Générer le code</button>
