@@ -1,5 +1,8 @@
 import { initImportTab } from "./importTab.js";
 import { initExportTab } from "./exportTab.js";
+import { initSettings } from "./settings.js";
+
+initSettings();
 
 const gristAvailable = typeof window.grist !== "undefined";
 if (gristAvailable) {

@@ -36,9 +36,10 @@ jobs:
       - name: Assemble the published site (widget runtime files only)
         run: |
           set -euo pipefail
-          mkdir -p _site/js
+          mkdir -p _site/js _site/fonts/manrope
           cp index.html style.css favicon.svg _site/
           cp js/*.js _site/js/
+          cp fonts/manrope/Manrope-Variable.ttf fonts/manrope/OFL.txt _site/fonts/manrope/
 
       - name: Upload static site
         uses: actions/upload-pages-artifact@v3

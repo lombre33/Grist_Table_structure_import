@@ -1,42 +1,100 @@
+@font-face {
+  font-family: "Manrope";
+  src: url("fonts/manrope/Manrope-Variable.ttf");
+  font-weight: 200 800;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
-  --bg: #f7f6f2;
+  /* Lets the browser render native form controls (radio/checkbox rings,
+     scrollbars...) consistently with the active theme instead of guessing
+     from the OS setting alone — without this, a checked .mode-radio was
+     nearly invisible in dark mode (browser-drawn control still assuming a
+     light background). Each theme block below sets its own value. */
+  color-scheme: light;
+  --bg: #f4f6fa;
   --surface: #ffffff;
-  --ink: #14140f;
-  --muted: #58564c;
-  --border: #14140f;
-  --accent: #1a6b34;
+  --surface-sunken: #eef1f6;
+  --border: #dde2ea;
+  --border-strong: #c3cad6;
+  --ink: #1b2430;
+  --muted: #667085;
+  --faint: #98a2b3;
+  --accent: #2f6fed;
+  --accent-hover: #2558c4;
+  --accent-soft: #e8f0fe;
   --accent-ink: #ffffff;
-  --accent-soft: #e4f0e6;
-  --error-bg: #fdecea;
-  --error-ink: #8a1f1f;
-  --success-bg: #e6f4ea;
-  --success-ink: #175c2c;
-  --info-bg: #eef1f4;
-  --info-ink: #2b3947;
-  --shadow-offset: 4px;
-  --radius: 12px;
-  --radius-sm: 8px;
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --danger: #d84343;
+  --danger-soft: #fbe9e9;
+  --warning: #b45309;
+  --warning-soft: #fffbeb;
+  --success: #1a7f45;
+  --success-soft: #e6f4ea;
+  --info: #2b3947;
+  --info-soft: #eef1f4;
+  --radius-sm: 7px;
+  --radius: 11px;
+  --shadow-card: 0 1px 3px rgba(27, 36, 48, 0.08);
+  --shadow-float: 0 12px 32px rgba(27, 36, 48, 0.18), 0 2px 8px rgba(27, 36, 48, 0.08);
+  --font-chrome: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
+/* Dark theme: system preference only takes effect when the user hasn't made
+   an explicit choice (no data-theme attribute) — see js/theme.js. */
 @media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #16160f;
-    --surface: #201f18;
-    --ink: #f3f1e9;
-    --muted: #b2ae9f;
-    --border: #f3f1e9;
-    --accent: #4bbf74;
-    --accent-ink: #0c1f10;
-    --accent-soft: #1c3324;
-    --error-bg: #3a1d1d;
-    --error-ink: #f3b8b8;
-    --success-bg: #16341f;
-    --success-ink: #a9e8bb;
-    --info-bg: #22282e;
-    --info-ink: #d6dee5;
+  :root:not([data-theme]) {
+    color-scheme: dark;
+    --bg: #141824;
+    --surface: #1c2130;
+    --surface-sunken: #10131c;
+    --border: #2b3040;
+    --border-strong: #3a4054;
+    --ink: #eef1f6;
+    --muted: #9aa3b2;
+    --faint: #6b7383;
+    --accent: #5b8def;
+    --accent-hover: #7ca2f2;
+    --accent-soft: #1d2c4d;
+    --accent-ink: #0b1220;
+    --danger: #ef6a6a;
+    --danger-soft: #3a1e22;
+    --warning: #e3a53d;
+    --warning-soft: #3a2c14;
+    --success: #4bbf74;
+    --success-soft: #16341f;
+    --info: #d6dee5;
+    --info-soft: #22282e;
+    --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.4);
+    --shadow-float: 0 16px 40px rgba(0, 0, 0, 0.55), 0 2px 10px rgba(0, 0, 0, 0.35);
   }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #141824;
+  --surface: #1c2130;
+  --surface-sunken: #10131c;
+  --border: #2b3040;
+  --border-strong: #3a4054;
+  --ink: #eef1f6;
+  --muted: #9aa3b2;
+  --faint: #6b7383;
+  --accent: #5b8def;
+  --accent-hover: #7ca2f2;
+  --accent-soft: #1d2c4d;
+  --accent-ink: #0b1220;
+  --danger: #ef6a6a;
+  --danger-soft: #3a1e22;
+  --warning: #e3a53d;
+  --warning-soft: #3a2c14;
+  --success: #4bbf74;
+  --success-soft: #16341f;
+  --info: #d6dee5;
+  --info-soft: #22282e;
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-float: 0 16px 40px rgba(0, 0, 0, 0.55), 0 2px 10px rgba(0, 0, 0, 0.35);
 }
 
 * {
@@ -55,7 +113,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
-  font-family: var(--font-sans);
+  font-family: var(--font-chrome);
   font-size: 15px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
@@ -68,7 +126,25 @@ body {
 }
 
 .masthead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
   margin-bottom: 20px;
+}
+
+.masthead-text {
+  min-width: 0;
+}
+
+/* Fixed chrome anchor: the Réglages button sits here, with the Grist
+   Factory logo placed immediately to its right once that asset is
+   available (not guessed/recreated — see README.md). */
+.masthead-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .eyebrow {
@@ -95,12 +171,39 @@ h1 {
   max-width: 46ch;
 }
 
+/* Icon buttons (Réglages, fermer...): plain ghost square buttons housing one
+   inline stroke SVG icon each (see index.html) — no icon font, no emoji.
+   `currentColor` on the icon means it adapts to hover/theme automatically. */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0;
+}
+
+.icon-btn:hover {
+  color: var(--ink);
+  border-color: var(--border-strong);
+}
+
+.icon-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
 /* Tabs */
 
 .tabs {
   display: flex;
   gap: 0;
-  border: 2px solid var(--border);
+  border: 1.5px solid var(--border);
   border-radius: var(--radius);
   padding: 4px;
   background: var(--surface);
@@ -121,8 +224,8 @@ h1 {
 }
 
 .tab[aria-selected="true"] {
-  background: var(--ink);
-  color: var(--bg);
+  background: var(--accent);
+  color: var(--accent-ink);
 }
 
 .panel {
@@ -133,10 +236,10 @@ h1 {
 
 .block {
   background: var(--surface);
-  border: 2px solid var(--border);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 18px;
-  box-shadow: var(--shadow-offset) var(--shadow-offset) 0 0 var(--border);
+  box-shadow: var(--shadow-card);
 }
 
 .field {
@@ -158,9 +261,9 @@ textarea,
 input[type="text"],
 select {
   width: 100%;
-  border: 2px solid var(--border);
+  border: 1.5px solid var(--border);
   border-radius: var(--radius-sm);
-  background: var(--bg);
+  background: var(--surface-sunken);
   color: var(--ink);
   padding: 10px;
   font-size: 0.85rem;
@@ -174,13 +277,13 @@ textarea,
 
 select,
 input[type="text"] {
-  font-family: var(--font-sans);
+  font-family: var(--font-chrome);
 }
 
 textarea:focus,
 input[type="text"]:focus,
 select:focus {
-  outline: 3px solid var(--accent);
+  outline: 2.5px solid var(--accent);
   outline-offset: 1px;
 }
 
@@ -200,36 +303,36 @@ button.btn {
   font-family: inherit;
   font-size: 0.88rem;
   font-weight: 700;
-  padding: 11px 18px;
+  padding: 10px 18px;
   border-radius: var(--radius-sm);
-  border: 2px solid var(--border);
+  border: 1.5px solid var(--border);
   background: var(--surface);
   color: var(--ink);
   cursor: pointer;
-  box-shadow: 3px 3px 0 0 var(--border);
-  transition: transform 0.05s ease, box-shadow 0.05s ease;
 }
 
-button.btn:active:not(:disabled) {
-  transform: translate(3px, 3px);
-  box-shadow: 0 0 0 0 var(--border);
+button.btn:hover:not(:disabled) {
+  border-color: var(--border-strong);
 }
 
 button.btn-primary {
   background: var(--accent);
   color: var(--accent-ink);
-  border-color: var(--border);
+  border-color: var(--accent);
+}
+
+button.btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
 }
 
 button.btn-ghost {
   background: transparent;
-  box-shadow: none;
 }
 
 button.btn:disabled {
-  opacity: 0.4;
+  opacity: 0.45;
   cursor: not-allowed;
-  box-shadow: none;
 }
 
 /* Import mode picker */
@@ -248,7 +351,7 @@ button.btn:disabled {
 
 .mode-card {
   display: block;
-  border: 2px solid var(--border);
+  border: 1.5px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 12px;
   cursor: pointer;
@@ -256,8 +359,8 @@ button.btn:disabled {
 }
 
 .mode-card:has(.mode-radio:checked) {
+  border-color: var(--accent);
   background: var(--accent-soft);
-  box-shadow: 3px 3px 0 0 var(--accent);
 }
 
 .mode-radio {
@@ -314,13 +417,11 @@ table#columns-preview {
   font-weight: 700;
   padding: 2px 8px;
   border-radius: 999px;
-  border: 1.5px solid var(--border);
 }
 
 .status-pill-new {
   background: var(--accent-soft);
   color: var(--accent);
-  border-color: var(--accent);
 }
 
 /* Discreet per-table separator row, shown in the columns preview only when
@@ -333,7 +434,7 @@ table#columns-preview {
   letter-spacing: 0.05em;
   color: var(--muted);
   border-bottom: 1px solid var(--border);
-  background: var(--bg);
+  background: var(--surface-sunken);
 }
 
 /* One destination-id field per table to create, in "Nouvelle table" mode. */
@@ -351,11 +452,12 @@ table#columns-preview {
 }
 
 .status-pill-skip {
+  background: var(--surface-sunken);
   color: var(--muted);
 }
 
 .field-error {
-  color: var(--error-ink);
+  color: var(--danger);
   font-size: 0.8rem;
   margin: 6px 0 0;
   font-weight: 600;
@@ -376,7 +478,7 @@ table#columns-preview {
   margin-bottom: 3px;
 }
 
-/* Export checklist */
+/* Export checklist (also reused by the Import tab's multi-table picker) */
 
 .checklist {
   list-style: none;
@@ -390,7 +492,7 @@ table#columns-preview {
 }
 
 .checklist li {
-  border: 2px solid var(--border);
+  border: 1.5px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 9px 11px;
 }
@@ -425,7 +527,7 @@ table#columns-preview {
 
 .hint code {
   font-family: var(--font-mono);
-  background: var(--info-bg);
+  background: var(--info-soft);
   padding: 1px 4px;
   border-radius: 4px;
 }
@@ -459,7 +561,7 @@ table#columns-preview {
 /* Status messages */
 
 .status {
-  border: 2px solid var(--border);
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
   padding: 10px 12px;
   font-size: 0.85rem;
@@ -468,16 +570,128 @@ table#columns-preview {
 }
 
 .status-info {
-  background: var(--info-bg);
-  color: var(--info-ink);
+  background: var(--info-soft);
+  color: var(--info);
 }
 
 .status-success {
-  background: var(--success-bg);
-  color: var(--success-ink);
+  background: var(--success-soft);
+  color: var(--success);
 }
 
 .status-error {
-  background: var(--error-bg);
-  color: var(--error-ink);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+/* Réglages (settings) dialog */
+
+dialog#settings-dialog {
+  border: none;
+  border-radius: var(--radius);
+  padding: 0;
+  width: min(420px, calc(100vw - 32px));
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-float);
+}
+
+dialog#settings-dialog::backdrop {
+  background: rgba(20, 24, 36, 0.45);
+}
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-header h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.settings-body {
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.settings-section p.eyebrow {
+  margin-bottom: 8px;
+}
+
+/* Segmented control: theme (Système/Clair/Sombre) and language (FR/EN)
+   choices. Reuses the codebase's existing pattern of a hidden native input
+   inside its own visible label, toggled via :has() — see .mode-card. */
+.segmented {
+  display: flex;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 3px;
+  gap: 3px;
+}
+
+.segmented-option {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 8px;
+  border-radius: calc(var(--radius-sm) - 3px);
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--muted);
+  cursor: pointer;
+  text-align: center;
+}
+
+.segmented-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.segmented-option:has(input:checked) {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.credits-list {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.credits-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.82rem;
+}
+
+.credits-row dt {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.credits-row dd {
+  margin: 0;
+  font-weight: 600;
+  text-align: right;
+}
+
+.credits-row dd a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.credits-row dd a:hover {
+  text-decoration: underline;
 }

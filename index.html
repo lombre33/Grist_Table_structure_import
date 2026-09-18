@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' https://docs.getgrist.com 'unsafe-eval'; style-src 'self'; img-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' https://docs.getgrist.com 'unsafe-eval'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none';">
 <title>Structure de table Grist</title>
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="stylesheet" href="style.css">
@@ -14,64 +14,145 @@
 <div class="shell">
 
   <header class="masthead">
-    <p class="eyebrow">Widget Grist</p>
-    <h1>Structure de table</h1>
-    <p class="lede">Importez la structure d'une table depuis un autre document, ou exportez celle d'une table de ce document.</p>
+    <div class="masthead-text">
+      <p class="eyebrow" data-i18n="app.eyebrow">Widget Grist</p>
+      <h1 data-i18n="app.title">Structure de table</h1>
+      <p class="lede" data-i18n="app.lede">Importez la structure d'une table depuis un autre document, ou exportez celle d'une table de ce document.</p>
+    </div>
+    <!-- Fixed chrome anchor (Grist Factory identity): the Grist Factory logo
+         belongs immediately to the right of this button, once that asset is
+         supplied — see README.md, it is deliberately not guessed here. -->
+    <div class="masthead-controls">
+      <button id="settings-btn" type="button" class="icon-btn" data-i18n-aria-label="settings.open" aria-label="Réglages" aria-haspopup="dialog">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <line x1="4" y1="6" x2="20" y2="6"></line>
+          <circle cx="9" cy="6" r="2"></circle>
+          <line x1="4" y1="12" x2="20" y2="12"></line>
+          <circle cx="15" cy="12" r="2"></circle>
+          <line x1="4" y1="18" x2="20" y2="18"></line>
+          <circle cx="9" cy="18" r="2"></circle>
+        </svg>
+      </button>
+    </div>
   </header>
 
+  <dialog id="settings-dialog">
+    <div class="settings-header">
+      <h2 data-i18n="settings.title">Réglages</h2>
+      <button id="settings-close-btn" type="button" class="icon-btn" data-i18n-aria-label="settings.close" aria-label="Fermer">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+    <div class="settings-body">
+      <section class="settings-section">
+        <p class="eyebrow" data-i18n="settings.appearance">Apparence</p>
+        <div class="segmented" role="radiogroup" aria-label="Thème">
+          <label class="segmented-option">
+            <input type="radio" name="theme-choice" value="system" checked>
+            <span data-i18n="settings.theme.system">Système</span>
+          </label>
+          <label class="segmented-option">
+            <input type="radio" name="theme-choice" value="light">
+            <span data-i18n="settings.theme.light">Clair</span>
+          </label>
+          <label class="segmented-option">
+            <input type="radio" name="theme-choice" value="dark">
+            <span data-i18n="settings.theme.dark">Sombre</span>
+          </label>
+        </div>
+      </section>
+
+      <section class="settings-section">
+        <p class="eyebrow" data-i18n="settings.language">Langue</p>
+        <div class="segmented" role="radiogroup" aria-label="Langue">
+          <label class="segmented-option">
+            <input type="radio" name="locale-choice" value="fr" checked>
+            <span>Français</span>
+          </label>
+          <label class="segmented-option">
+            <input type="radio" name="locale-choice" value="en">
+            <span>English</span>
+          </label>
+        </div>
+      </section>
+
+      <section class="settings-section">
+        <p class="eyebrow" data-i18n="settings.credits">Crédits</p>
+        <dl class="credits-list">
+          <div class="credits-row">
+            <dt data-i18n="settings.credits.author">Auteur</dt>
+            <dd>Antoine</dd>
+          </div>
+          <div class="credits-row">
+            <dt data-i18n="settings.credits.site">Site</dt>
+            <dd><a href="https://grist-factory.fr" target="_blank" rel="noopener">grist-factory.fr</a></dd>
+          </div>
+          <div class="credits-row">
+            <dt data-i18n="settings.credits.license">Licence</dt>
+            <dd><a href="https://github.com/lombre33/grist_table_structure_import/blob/main/LICENSE" target="_blank" rel="noopener">MIT</a></dd>
+          </div>
+        </dl>
+      </section>
+    </div>
+  </dialog>
+
   <div class="tabs" role="tablist" aria-label="Mode">
-    <button id="tab-import" class="tab" role="tab" type="button" aria-selected="true" aria-controls="panel-import">Import</button>
-    <button id="tab-export" class="tab" role="tab" type="button" aria-selected="false" aria-controls="panel-export" tabindex="-1">Export</button>
+    <button id="tab-import" class="tab" role="tab" type="button" aria-selected="true" aria-controls="panel-import" data-i18n="tabs.import">Import</button>
+    <button id="tab-export" class="tab" role="tab" type="button" aria-selected="false" aria-controls="panel-export" tabindex="-1" data-i18n="tabs.export">Export</button>
   </div>
 
   <section id="panel-import" class="panel" role="tabpanel" aria-labelledby="tab-import">
 
     <div class="block">
-      <p class="eyebrow">1. Code source</p>
-      <label for="source-input">Code Python d'une table (menu de la table &laquo;&nbsp;Code View&nbsp;&raquo;, dans le document d'origine)</label>
+      <p class="eyebrow" data-i18n="import.step1.eyebrow">1. Code source</p>
+      <label for="source-input" data-i18n="import.step1.label">Code Python d'une table (menu de la table &laquo;&nbsp;Code View&nbsp;&raquo;, dans le document d'origine)</label>
       <textarea id="source-input" rows="12" spellcheck="false"
+        data-i18n-placeholder="import.step1.placeholder"
         placeholder="@grist.UserTable&#10;class MaTable:&#10;  MaColonne = grist.Text()"></textarea>
       <div class="actions">
-        <button id="analyze-btn" type="button" class="btn btn-primary">Analyser</button>
+        <button id="analyze-btn" type="button" class="btn btn-primary" data-i18n="import.analyze">Analyser</button>
       </div>
     </div>
 
     <div id="mode-block" class="block" hidden>
-      <p class="eyebrow">2. Que faire de ce code ?</p>
+      <p class="eyebrow" data-i18n="import.step2.eyebrow">2. Que faire de ce code ?</p>
       <div class="mode-picker">
         <label class="mode-card">
           <input type="radio" name="import-mode" value="create" class="mode-radio" checked>
-          <span class="mode-card-title">Nouvelle table</span>
-          <span class="mode-card-desc">Crée une table dédiée avec toutes les colonnes détectées. Recommandé.</span>
+          <span class="mode-card-title" data-i18n="import.mode.create.title">Nouvelle table</span>
+          <span class="mode-card-desc" data-i18n="import.mode.create.desc">Crée une table dédiée avec toutes les colonnes détectées. Recommandé.</span>
         </label>
         <label class="mode-card">
           <input type="radio" name="import-mode" value="existing" class="mode-radio">
-          <span class="mode-card-title">Table existante</span>
-          <span class="mode-card-desc">Ajoute uniquement les colonnes qui manquent à une table déjà présente ici.</span>
+          <span class="mode-card-title" data-i18n="import.mode.existing.title">Table existante</span>
+          <span class="mode-card-desc" data-i18n="import.mode.existing.desc">Ajoute uniquement les colonnes qui manquent à une table déjà présente ici.</span>
         </label>
       </div>
     </div>
 
     <section id="preview-section" class="block" hidden aria-labelledby="preview-heading">
-      <p class="eyebrow" id="preview-heading">3. Vérification avant application</p>
+      <p class="eyebrow" id="preview-heading" data-i18n="import.step3.eyebrow">3. Vérification avant application</p>
 
       <div id="table-picker-row" class="field" hidden>
-        <label for="table-select">Table à importer (plusieurs trouvées)</label>
+        <label for="table-select" data-i18n="import.tablePicker.label">Table à importer (plusieurs trouvées)</label>
         <select id="table-select"></select>
       </div>
 
       <div id="table-multi-picker-row" class="field" hidden>
-        <label>Tables à créer (plusieurs trouvées)</label>
+        <label data-i18n="import.tableMultiPicker.label">Tables à créer (plusieurs trouvées)</label>
         <ul id="table-multi-select" class="checklist"></ul>
       </div>
 
       <div id="table-id-row" class="field">
-        <label>Identifiant(s) de la nouvelle table</label>
+        <label data-i18n="import.tableId.label">Identifiant(s) de la nouvelle table</label>
         <div id="table-ids-list"></div>
       </div>
 
       <div id="target-table-row" class="field" hidden>
-        <label for="target-table-select">Table à compléter</label>
+        <label for="target-table-select" data-i18n="import.targetTable.label">Table à compléter</label>
         <select id="target-table-select"></select>
         <p id="target-table-error" class="field-error" hidden></p>
       </div>
@@ -79,21 +160,21 @@
       <table id="columns-preview">
         <thead>
           <tr>
-            <th scope="col">Colonne</th>
-            <th scope="col">Type Grist</th>
-            <th id="status-column-header" scope="col" hidden>Statut</th>
+            <th scope="col" data-i18n="import.preview.column">Colonne</th>
+            <th scope="col" data-i18n="import.preview.type">Type Grist</th>
+            <th id="status-column-header" scope="col" hidden data-i18n="import.preview.status">Statut</th>
           </tr>
         </thead>
         <tbody id="columns-preview-body"></tbody>
       </table>
 
       <div id="warnings-block" hidden>
-        <p class="eyebrow">Remarques</p>
+        <p class="eyebrow" data-i18n="import.warnings.eyebrow">Remarques</p>
         <ul id="warnings-list"></ul>
       </div>
 
       <div id="create-actions" class="actions">
-        <button id="action-btn" type="button" class="btn btn-primary" disabled>Créer la table dans ce document</button>
+        <button id="action-btn" type="button" class="btn btn-primary" disabled data-i18n="import.action.create">Créer la table dans ce document</button>
       </div>
     </section>
 
@@ -103,33 +184,33 @@
   <section id="panel-export" class="panel" role="tabpanel" aria-labelledby="tab-export" hidden>
 
     <div class="block">
-      <p class="eyebrow">1. Tables à exporter</p>
+      <p class="eyebrow" data-i18n="export.step1.eyebrow">1. Tables à exporter</p>
       <ul id="export-table-list" class="checklist"></ul>
-      <p id="export-tables-empty" class="hint" hidden>Aucune table exportable trouvée dans ce document.</p>
+      <p id="export-tables-empty" class="hint" hidden data-i18n="export.tables.empty">Aucune table exportable trouvée dans ce document.</p>
 
       <div id="export-refs-banner" class="status status-info refs-banner" hidden>
         <p id="export-refs-banner-intro"></p>
         <ul id="export-refs-list" class="refs-list"></ul>
         <div class="actions">
-          <button id="refs-include-btn" type="button" class="btn btn-primary">Inclure ces tables</button>
-          <button id="refs-dismiss-btn" type="button" class="btn btn-ghost">Continuer sans elles</button>
+          <button id="refs-include-btn" type="button" class="btn btn-primary" data-i18n="export.refs.include">Inclure ces tables</button>
+          <button id="refs-dismiss-btn" type="button" class="btn btn-ghost" data-i18n="export.refs.dismiss">Continuer sans elles</button>
         </div>
       </div>
 
       <div class="actions">
-        <button id="refresh-tables-btn" type="button" class="btn btn-ghost">Actualiser la liste</button>
-        <button id="generate-btn" type="button" class="btn btn-primary" disabled>Générer le code</button>
+        <button id="refresh-tables-btn" type="button" class="btn btn-ghost" data-i18n="export.refresh">Actualiser la liste</button>
+        <button id="generate-btn" type="button" class="btn btn-primary" disabled data-i18n="export.generate">Générer le code</button>
       </div>
     </div>
 
     <div id="export-output-block" class="block" hidden>
-      <p class="eyebrow">2. Code généré</p>
+      <p class="eyebrow" data-i18n="export.step2.eyebrow">2. Code généré</p>
       <textarea id="export-output" rows="16" readonly spellcheck="false"></textarea>
       <div class="actions">
-        <button id="copy-btn" type="button" class="btn">Copier</button>
+        <button id="copy-btn" type="button" class="btn" data-i18n="export.copy">Copier</button>
         <span id="copy-status" class="hint" aria-live="polite"></span>
       </div>
-      <p class="hint">
+      <p class="hint" data-i18n="export.formulaHint" data-i18n-code="$Colonne">
         Seule la structure (types de colonnes) est garantie fidèle. Pour une colonne de formule,
         la formule d'origine est recopiée telle que stockée (syntaxe <code>$Colonne</code> de
         Grist) quand elle existe, sinon remplacée par la valeur par défaut du type — comme le

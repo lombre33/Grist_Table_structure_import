@@ -208,6 +208,46 @@ destination si la table cible n'y existe pas non plus, avec un avertissement aff
 dans l'aperçu de l'onglet **Import** (voir « Limites connues » ci-dessus) — exactement
 comme pour toute référence vers une table absente.
 
+## Identité visuelle (Grist Factory)
+
+L'interface suit l'identité UI/UX commune aux widgets **Grist Factory** (grist-factory.fr) :
+
+- **Palette** : une base neutre (fond/surface/bordures/texte en plusieurs intensités) et
+  un seul bleu d'accent (`#2f6fed`) pour les actions et états actifs ; rouge pour les
+  erreurs, ambre pour les avertissements, vert pour les confirmations — jamais de
+  couleur sans rôle sémantique. Coins arrondis partout (7 px / 11 px), ombres douces
+  réservées aux éléments flottants (le panneau Réglages) et très légères sur les cartes.
+- **Typographie** : **Manrope** (poids 500 à 800) pour toute l'interface, vendorisée
+  dans `fonts/manrope/` (police variable, licence SIL Open Font License jointe) plutôt
+  que chargée depuis une CDN — voir SECURITY.md. Le code Python (collé ou généré) reste
+  en police à chasse fixe, monospace, inchangé.
+- **Thème système / clair / sombre** : réglable dans le panneau Réglages (icône en haut
+  à droite), mémorisé sur cet appareil. « Système » (par défaut) suit le thème du
+  système d'exploitation.
+- **Icônes** : deux SVG en contour, en ligne dans `index.html`, aucune police d'icônes
+  ni emoji (voir SECURITY.md).
+- **Bilingue français / anglais** : réglable dans le même panneau. Les libellés fixes de
+  l'interface (titres, boutons, en-têtes, aide) sont traduits (`js/i18n.js`). **Limite
+  connue, assumée** : les messages générés dynamiquement pendant l'usage (statuts de
+  création/ajout, avertissements d'analyse — ex. « Table « X » créée avec 3 colonnes »)
+  restent en français dans cette version ; les traduire suppose de restructurer ces
+  phrases paramétrées (accords grammaticaux compris) sans risquer de régression sur leur
+  contenu fonctionnel, ce qui a été volontairement laissé hors de ce chantier de refonte
+  visuelle plutôt que fait à moitié.
+- **Crédits** (panneau Réglages) : auteur, site, licence.
+
+Deux points de cette identité commune sont **volontairement laissés en l'état, en
+attente d'une décision côté auteur** plutôt que devinés :
+
+- **Logo Grist Factory** : l'identité commune prévoit son affichage discret juste à
+  droite du bouton Réglages. L'asset (avatar du Grist « Grist Factory ») n'est pas un
+  élément à recréer ou approximer ; l'emplacement est prêt (`.masthead-controls` dans
+  `index.html`), il suffira d'y ajouter l'image une fois le fichier fourni.
+- **Licence** : l'identité commune des widgets Grist Factory utilise la GNU GPL v3.0 ;
+  ce dépôt reste en **MIT** (licence d'origine de ce widget, voir `LICENSE`) tant qu'un
+  changement de licence n'est pas explicitement décidé — le panneau Crédits affiche donc
+  fidèlement MIT.
+
 ## Installation (hébergement GitHub Pages)
 
 1. Dans les paramètres du dépôt, activez **Pages** en choisissant la source
@@ -248,8 +288,9 @@ publié (voir `.github/workflows/pages.yml`, qui ne copie que `index.html`, `sty
 Structure :
 
 ```
-index.html            page du widget (onglets Import / Export)
-style.css              mise en forme
+index.html            page du widget (en-tête, panneau Réglages, onglets Import / Export)
+style.css              mise en forme (identité visuelle Grist Factory, thème clair/sombre)
+fonts/manrope/          police Manrope vendorisée (voir SECURITY.md)
 js/parser.js           lecture du code source (regex + scanner de parenthèses/crochets,
                         jamais exécuté)
 js/gristTypes.js       types Python <-> types de colonne Grist, métadonnées étendues
@@ -260,6 +301,9 @@ js/codeGenerator.js    génère le code Python (types + métadonnées) à partir
                         structure de table
 js/dom.js              construction du DOM sans innerHTML
 js/util.js             petits utilitaires partagés (délai, pluriel, messages d'erreur)
+js/theme.js            réglage thème système/clair/sombre (localStorage best-effort)
+js/i18n.js             dictionnaire fr/en + liaison data-i18n (chaînes fixes de l'interface)
+js/settings.js         panneau Réglages (thème, langue, crédits)
 js/importTab.js        logique de l'onglet Import (nouvelle table / table existante)
 js/exportTab.js        logique de l'onglet Export
 js/app.js              point d'entrée : bascule d'onglet, initialisation

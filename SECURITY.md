@@ -141,7 +141,28 @@ Toute valeur dérivée du texte collé par l'utilisateur (nom de table, nom de c
 avertissements) est insérée dans la page via `textContent` / création de nœuds DOM
 (`js/dom.js`), jamais via `innerHTML`. Cela élimine par construction tout risque
 d'injection HTML/JS à partir du texte collé, y compris si celui-ci contient des
-caractères `<`, `>` ou des apostrophes.
+caractères `<`, `>` ou des apostrophes. `js/i18n.js` (interface bilingue, voir
+README.md) suit la même règle : la seule chaîne d'interface qui inclut un élément
+(`<code>$Colonne</code>`, dans l'astuce sur les formules de l'onglet Export) est
+reconstruite via un simple marqueur `{code}` scindé en deux nœuds texte plus un nœud
+`<code>` créé par `js/dom.js` — jamais par analyse HTML.
+
+## Réglages (thème, langue) : `localStorage`, sur une base best-effort
+
+Le panneau « Réglages » (`js/settings.js`, `js/theme.js`, `js/i18n.js`) mémorise deux
+préférences d'affichage — thème (système/clair/sombre) et langue (fr/en) — dans le
+`localStorage` de l'origine du widget (deux clés, `gristFactory.theme` et
+`gristFactory.locale`, aucune autre donnée). Ce n'est ni une donnée du document, ni une
+donnée envoyée où que ce soit : elle ne sert qu'à réafficher le même réglage au prochain
+chargement, dans ce même navigateur. Le widget s'exécutant dans un `<iframe>`
+intégré par Grist, l'accès au stockage peut être partitionné ou bloqué par le
+navigateur (protections anti-tracking tierces) : chaque lecture/écriture est entourée
+d'un `try/catch` et une indisponibilité ne casse rien, elle fait simplement revenir le
+réglage à sa valeur par défaut (thème système, français) au chargement suivant.
+
+Le panneau lui-même utilise l'élément natif `<dialog>` (`showModal()`/`close()`) : pas
+de gestion maison du focus ni de la touche Échap, ce sont des comportements standard du
+navigateur, pas du code spécifique à ce widget.
 
 ## Vérification automatisée (CI)
 
@@ -156,12 +177,28 @@ Le workflow `.github/workflows/ci.yml` exécute, à chaque modification :
 
 ## Dépendances
 
-Aucune dépendance d'exécution : ni framework, ni bibliothèque tierce embarquée, pas de
-`node_modules` livré au navigateur. Le seul script chargé en plus du code du widget est
-`https://docs.getgrist.com/grist-plugin-api.js`, la bibliothèque officielle publiée par
-Grist Labs, nécessaire pour dialoguer avec le document hôte (créer la table, lister les
-tables existantes). Voir « Pourquoi charger un script externe » ci-dessous pour la
-justification de ce choix plutôt qu'un renvoi local.
+Aucune dépendance d'exécution (code) : ni framework, ni bibliothèque tierce embarquée,
+pas de `node_modules` livré au navigateur. Le seul script chargé en plus du code du
+widget est `https://docs.getgrist.com/grist-plugin-api.js`, la bibliothèque officielle
+publiée par Grist Labs, nécessaire pour dialoguer avec le document hôte (créer la table,
+lister les tables existantes). Voir « Pourquoi charger un script externe » ci-dessous
+pour la justification de ce choix plutôt qu'un renvoi local.
+
+Une seule ressource statique (pas de code) est vendorisée : la police **Manrope**
+(`fonts/manrope/Manrope-Variable.ttf`, licence SIL Open Font License jointe dans le même
+dossier), utilisée pour l'interface (voir README.md, identité visuelle). Elle est servie
+depuis ce même dépôt plutôt que depuis une CDN (ex. Google Fonts) : aucun appel réseau
+supplémentaire au chargement, aucun tiers à ajouter à la CSP (`font-src 'self'`
+suffit), fichier entièrement auditable dans le dépôt au même titre que le reste du code.
+
+## Icônes : SVG en ligne, jamais de police d'icônes
+
+Les deux icônes de l'interface (Réglages, fermer) sont des `<svg>` écrits directement
+dans `index.html`, en contour (`stroke="currentColor"`, sans `fill`) : elles héritent
+la couleur du texte du bouton qui les contient, s'adaptent donc automatiquement au thème
+clair/sombre sans code ni fichier supplémentaire. Aucune police d'icônes, aucun emoji,
+aucune image externe (`<img>`) : rien de plus que les deux balises `<svg>` déjà présentes
+dans le HTML.
 
 `package.json` ne sert qu'au développement (lancement des tests avec le module natif
 `node:test`) ; il ne déclare aucune dépendance (`dependencies` et `devDependencies`
@@ -177,6 +214,7 @@ default-src 'none';
 script-src 'self' https://docs.getgrist.com 'unsafe-eval';
 style-src 'self';
 img-src 'self';
+font-src 'self';
 connect-src 'none';
 base-uri 'none';
 form-action 'none';
@@ -189,6 +227,11 @@ Points notables :
   ci-dessous ouvrent explicitement ce qui est nécessaire.
 - `script-src` n'autorise que le code du widget lui-même et le script officiel Grist ;
   aucun autre domaine, aucune CDN.
+- `font-src 'self'` : nécessaire pour que la police Manrope vendorisée
+  (`fonts/manrope/`, voir « Dépendances » ci-dessus) se charge — sans `font-src`
+  explicite, cette directive retomberait sur `default-src 'none'` et bloquerait même ce
+  fichier pourtant local. Limité à `'self'` : aucune police tierce (Google Fonts ou
+  autre CDN) ne peut se charger.
 - `'unsafe-eval'` est **imposé par le script officiel `grist-plugin-api.js`**, pas par ce
   widget : ce fichier, tel que publié par Grist Labs, est un empaquetage webpack construit
   avec l'option de développement `devtool: eval`, qui encapsule chaque module dans un
