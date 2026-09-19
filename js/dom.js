@@ -26,3 +26,19 @@ export function el(tag, attrs = {}, children = []) {
 export function clear(node) {
   while (node.firstChild) node.removeChild(node.firstChild);
 }
+
+/**
+ * Keeps a boolean CSS class in sync with a radio group's checked state, as a
+ * JS-driven fallback for the `:has()` selector used in style.css for the
+ * same visual feedback (mode cards, segmented controls): `:has()` needs a
+ * fairly recent browser (2023+), so this makes the selected look correct
+ * even without it, at the cost of one small always-on listener per group.
+ * Call once on init (nothing has fired a "change" event yet) and again on
+ * every "change".
+ */
+export function syncCheckedClass(radios, className, wrapperSelector) {
+  for (const radio of radios) {
+    const wrapper = radio.closest(wrapperSelector);
+    if (wrapper) wrapper.classList.toggle(className, radio.checked);
+  }
+}

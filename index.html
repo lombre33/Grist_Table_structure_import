@@ -112,6 +112,7 @@
         placeholder="@grist.UserTable&#10;class MaTable:&#10;  MaColonne = grist.Text()"></textarea>
       <div class="actions">
         <button id="analyze-btn" type="button" class="btn btn-primary" data-i18n="import.analyze">Analyser</button>
+        <button id="clear-btn" type="button" class="btn btn-ghost" data-i18n="import.clear">Effacer</button>
       </div>
     </div>
 
@@ -158,6 +159,7 @@
       <table id="columns-preview">
         <thead>
           <tr>
+            <th scope="col" class="col-checkbox"><span class="sr-only" data-i18n="import.preview.include">Inclure</span></th>
             <th scope="col" data-i18n="import.preview.column">Colonne</th>
             <th scope="col" data-i18n="import.preview.type">Type Grist</th>
             <th id="status-column-header" scope="col" hidden data-i18n="import.preview.status">Statut</th>

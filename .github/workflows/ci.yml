@@ -41,3 +41,16 @@ jobs:
             exit 1
           fi
           echo "Only the expected scripts are referenced."
+
+      # From here on: Playwright, a devDependency used only for this browser
+      # regression suite (never shipped — see .github/workflows/pages.yml's
+      # file list and SECURITY.md's "Dépendances"). The two npm-test-only
+      # steps above stay install-free.
+      - name: Install devDependencies (Playwright, for the browser test below)
+        run: npm ci
+
+      - name: Install Playwright's Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run browser regression tests (index.html/harness.html actually rendered in a browser)
+        run: npm run test:browser

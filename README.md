@@ -35,13 +35,25 @@ l'ajout de colonnes dans le document Grist courant, via l'API officielle du widg
      l'aperçu et ignorées — leur type n'est jamais modifié. Les colonnes ajoutées
      apparaissent immédiatement dans les grilles déjà existantes de cette table, pas
      seulement dans « Données sources ».
-4. Vérifiez l'aperçu (types détectés, colonnes ignorées, remarques éventuelles), puis
-   cliquez sur le bouton d'action.
+4. Vérifiez l'aperçu (types détectés, colonnes ignorées, remarques éventuelles) — chaque
+   colonne a sa propre case à cocher (cochée par défaut) pour l'exclure individuellement
+   de l'action, en plus de la sélection par table — puis cliquez sur le bouton d'action.
+   Le bouton **Effacer**, à côté d'Analyser, réinitialise entièrement l'onglet pour
+   recommencer avec un autre texte.
 
 Le widget ne modifie ni ne supprime jamais une colonne ou une table existante : en mode
 « Nouvelle table », un identifiant déjà pris (y compris en double entre deux tables de la
 même sélection) est refusé (choisissez-en un autre) ; en mode « Table existante », seules
 les colonnes absentes sont ajoutées.
+
+Aucune confirmation n'est demandée avant de cliquer sur le bouton d'action : c'est un
+choix délibéré, pas un oubli. Les actions de ce widget sont strictement additives (jamais
+de suppression ni de modification d'une colonne ou table existante, voir ci-dessus), et le
+bouton lui-même annonce déjà précisément la portée de l'action (« Créer 2 tables dans ce
+document », « Ajouter 3 colonnes à cette table »...) au moment de cliquer — une boîte de
+dialogue de confirmation ajouterait une étape sans réduire aucun risque réel ici. Le
+filet de sécurité reste, comme pour toute action dans Grist, l'annulation native du
+document (Ctrl+Z / Cmd+Z).
 
 ### Exemple de code accepté
 
@@ -261,8 +273,8 @@ de publier ce dépôt sur votre propre hébergement statique.
 
 ## Développement
 
-Le widget est du HTML/CSS/JS statique sans dépendance (modules ES natifs, aucun paquet
-npm requis pour l'exécution). `package.json` ne sert qu'au lancement des tests :
+Le widget est du HTML/CSS/JS statique sans dépendance d'exécution (modules ES natifs,
+aucun paquet npm requis pour faire tourner le widget lui-même) :
 
 ```sh
 npm test   # node --test — aucune installation nécessaire
@@ -274,6 +286,22 @@ une API Grist minimale simulée (aucune dépendance, un simple `<script>` inline
 fichier de test) : ouvrez-le directement dans un navigateur. Ce fichier n'est jamais
 publié (voir `.github/workflows/pages.yml`, qui ne copie que `index.html`, `style.css`,
 `favicon.svg`, `fonts/`, `assets/` et `js/*.js`).
+
+Ce même harnais est aussi piloté automatiquement en CI (`.github/workflows/ci.yml` et
+`pages.yml`, avant chaque déploiement) via **Playwright**, seule dépendance du dépôt —
+uniquement dans `devDependencies`, jamais publiée avec le widget :
+
+```sh
+npm ci                              # installe Playwright (une fois)
+npx playwright install chromium     # télécharge Chromium pour Playwright
+npm run test:browser                # test/browser/run.mjs
+```
+
+Existe parce qu'`index.html` et `harness.html` dupliquent leur balisage à la main (pas
+d'étape de build, voir ci-dessus) et ont déjà divergé silencieusement en cours de
+développement, cassant l'onglet Import d'une façon que `npm test` seul (logique pure,
+sans navigateur) ne pouvait pas détecter — ce script est le filet de sécurité
+automatisé pour cette classe de régression.
 
 Structure :
 
@@ -299,6 +327,7 @@ js/importTab.js        logique de l'onglet Import (nouvelle table / table exista
 js/exportTab.js        logique de l'onglet Export
 js/app.js              point d'entrée : bascule d'onglet, initialisation
 test/                  tests unitaires (node --test, aucune dépendance)
+test/browser/run.mjs   tests navigateur automatisés (Playwright, devDependency)
 ```
 
 ## Sécurité

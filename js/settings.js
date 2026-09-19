@@ -1,5 +1,6 @@
 import { initTheme, setTheme } from "./theme.js";
 import { initLocale, setLocale } from "./i18n.js";
+import { syncCheckedClass } from "./dom.js";
 
 /**
  * Wires the Réglages dialog: appearance (theme) and language choices, plus
@@ -17,14 +18,26 @@ export function initSettings() {
 
   setChecked(themeRadios, initTheme());
   setChecked(localeRadios, initLocale());
+  syncCheckedClass(themeRadios, "is-checked", ".segmented-option");
+  syncCheckedClass(localeRadios, "is-checked", ".segmented-option");
 
   openBtn.addEventListener("click", () => dialog.showModal());
   closeBtn.addEventListener("click", () => dialog.close());
   dialog.addEventListener("click", (event) => {
     if (event.target === dialog) dialog.close();
   });
-  for (const radio of themeRadios) radio.addEventListener("change", () => setTheme(radio.value));
-  for (const radio of localeRadios) radio.addEventListener("change", () => setLocale(radio.value));
+  for (const radio of themeRadios) {
+    radio.addEventListener("change", () => {
+      setTheme(radio.value);
+      syncCheckedClass(themeRadios, "is-checked", ".segmented-option");
+    });
+  }
+  for (const radio of localeRadios) {
+    radio.addEventListener("change", () => {
+      setLocale(radio.value);
+      syncCheckedClass(localeRadios, "is-checked", ".segmented-option");
+    });
+  }
 }
 
 function setChecked(radios, value) {

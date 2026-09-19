@@ -191,6 +191,14 @@ depuis ce même dépôt plutôt que depuis une CDN (ex. Google Fonts) : aucun ap
 supplémentaire au chargement, aucun tiers à ajouter à la CSP (`font-src 'self'`
 suffit), fichier entièrement auditable dans le dépôt au même titre que le reste du code.
 
+**Playwright** (`devDependencies`) est la seule vraie dépendance npm du dépôt : elle pilote
+un navigateur pour `test/browser/run.mjs` (voir README.md, « Développement »), en local et
+en CI, et n'est déclarée que là. Elle n'apparaît dans aucun fichier publié (voir
+`.github/workflows/pages.yml`, dont la liste de copie n'a jamais inclus `node_modules/`
+ni `package.json`) et n'est jamais chargée par le widget lui-même : l'affirmation « aucune
+dépendance d'exécution » ci-dessus reste exacte, cette dépendance-ci ne concerne que le
+développement et l'intégration continue.
+
 ## Logo Grist Factory
 
 `assets/grist-factory-logo.jpg` est une image statique fournie par l'auteur (Grist
