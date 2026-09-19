@@ -191,6 +191,13 @@ depuis ce même dépôt plutôt que depuis une CDN (ex. Google Fonts) : aucun ap
 supplémentaire au chargement, aucun tiers à ajouter à la CSP (`font-src 'self'`
 suffit), fichier entièrement auditable dans le dépôt au même titre que le reste du code.
 
+## Logo Grist Factory
+
+`assets/grist-factory-logo.jpg` est une image statique fournie par l'auteur (Grist
+Factory), affichée telle quelle dans l'en-tête (`<img>`, jamais de fond dynamique ni de
+donnée utilisateur) ; `img-src 'self'` (déjà en place pour `favicon.svg`) couvre ce
+fichier sans modification de la CSP.
+
 ## Icônes : SVG en ligne, jamais de police d'icônes
 
 Les deux icônes de l'interface (Réglages, fermer) sont des `<svg>` écrits directement

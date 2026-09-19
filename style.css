@@ -198,6 +198,14 @@ h1 {
   height: 18px;
 }
 
+.brand-logo {
+  display: block;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  object-fit: contain;
+}
+
 /* Tabs */
 
 .tabs {

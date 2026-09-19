@@ -234,19 +234,9 @@ L'interface suit l'identité UI/UX commune aux widgets **Grist Factory** (grist-
   phrases paramétrées (accords grammaticaux compris) sans risquer de régression sur leur
   contenu fonctionnel, ce qui a été volontairement laissé hors de ce chantier de refonte
   visuelle plutôt que fait à moitié.
-- **Crédits** (panneau Réglages) : auteur, site, licence.
-
-Deux points de cette identité commune sont **volontairement laissés en l'état, en
-attente d'une décision côté auteur** plutôt que devinés :
-
-- **Logo Grist Factory** : l'identité commune prévoit son affichage discret juste à
-  droite du bouton Réglages. L'asset (avatar du Grist « Grist Factory ») n'est pas un
-  élément à recréer ou approximer ; l'emplacement est prêt (`.masthead-controls` dans
-  `index.html`), il suffira d'y ajouter l'image une fois le fichier fourni.
-- **Licence** : l'identité commune des widgets Grist Factory utilise la GNU GPL v3.0 ;
-  ce dépôt reste en **MIT** (licence d'origine de ce widget, voir `LICENSE`) tant qu'un
-  changement de licence n'est pas explicitement décidé — le panneau Crédits affiche donc
-  fidèlement MIT.
+- **Logo** : celui de Grist Factory, affiché discrètement juste à droite du bouton
+  Réglages (`assets/grist-factory-logo.jpg`).
+- **Crédits** (panneau Réglages) : Grist Factory, site, licence.
 
 ## Installation (hébergement GitHub Pages)
 
@@ -283,7 +273,7 @@ Pour tester l'interface dans un vrai navigateur sans document Grist sous la main
 une API Grist minimale simulée (aucune dépendance, un simple `<script>` inline dans ce
 fichier de test) : ouvrez-le directement dans un navigateur. Ce fichier n'est jamais
 publié (voir `.github/workflows/pages.yml`, qui ne copie que `index.html`, `style.css`,
-`favicon.svg` et `js/*.js`).
+`favicon.svg`, `fonts/`, `assets/` et `js/*.js`).
 
 Structure :
 
@@ -291,6 +281,7 @@ Structure :
 index.html            page du widget (en-tête, panneau Réglages, onglets Import / Export)
 style.css              mise en forme (identité visuelle Grist Factory, thème clair/sombre)
 fonts/manrope/          police Manrope vendorisée (voir SECURITY.md)
+assets/                 logo Grist Factory (voir SECURITY.md)
 js/parser.js           lecture du code source (regex + scanner de parenthèses/crochets,
                         jamais exécuté)
 js/gristTypes.js       types Python <-> types de colonne Grist, métadonnées étendues
@@ -318,4 +309,4 @@ la Content-Security-Policy appliquée et la manière de vérifier vous-même ces
 
 ## Licence
 
-[MIT](./LICENSE).
+[GNU GPL v3.0](./LICENSE).
