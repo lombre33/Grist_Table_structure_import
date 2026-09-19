@@ -669,6 +669,15 @@ dialog#settings-dialog::backdrop {
   color: var(--accent-ink);
 }
 
+/* The native input is visually hidden (opacity: 0 above) for the custom pill
+   look, which would otherwise also hide the browser's default focus ring
+   when a keyboard user tabs to it — restore a visible indicator on the
+   label itself instead. */
+.segmented-option:has(input:focus-visible) {
+  outline: 2.5px solid var(--accent);
+  outline-offset: 1px;
+}
+
 .credits-list {
   margin: 0;
   display: flex;

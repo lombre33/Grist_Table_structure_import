@@ -146,6 +146,17 @@ test("visible_col= is captured as a plain column id string", () => {
   assert.equal(visibleColId, "DisplayName");
 });
 
+test("extended kwargs also accept double-quoted values, not just single-quoted", () => {
+  const result = resolve("Text", 'label="Full name", description="A note"');
+  assert.equal(result.label, "Full name");
+  assert.equal(result.description, "A note");
+});
+
+test("double-quoted kwarg values support escaped quotes the same way as single-quoted ones", () => {
+  const { label } = resolve("Text", 'label="Say \\"hi\\""');
+  assert.equal(label, 'Say "hi"');
+});
+
 test("widget_options= is JSON-parsed (never evaluated) and merged into widgetOptions", () => {
   const { widgetOptions } = resolve("Numeric", "widget_options='{\"numMode\":\"currency\",\"currency\":\"EUR\"}'");
   assert.deepEqual(widgetOptions, { numMode: "currency", currency: "EUR" });

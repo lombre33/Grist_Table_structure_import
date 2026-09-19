@@ -172,10 +172,18 @@ function unescapePythonQuoted(text) {
   return text.replace(/\\(.)/g, "$1");
 }
 
+/**
+ * Matches `name='...'` or `name="..."` — both quote styles, like
+ * QUOTED_ITEM_RE below for `choices=[...]` items, so a hand-edited or
+ * foreign paste using double quotes for these kwargs isn't silently
+ * ignored just because this widget's own Export always writes single
+ * quotes (see js/codeGenerator.js's pyStringLiteral).
+ */
 function extractQuotedKwarg(argsRaw, name) {
-  const re = new RegExp(`${name}\\s*=\\s*'((?:\\\\.|[^'\\\\])*)'`);
+  const re = new RegExp(`${name}\\s*=\\s*(?:'((?:\\\\.|[^'\\\\])*)'|"((?:\\\\.|[^"\\\\])*)")`);
   const match = argsRaw.match(re);
-  return match ? unescapePythonQuoted(match[1]) : null;
+  if (!match) return null;
+  return unescapePythonQuoted(match[1] !== undefined ? match[1] : match[2]);
 }
 
 function extractChoicesKwarg(argsRaw) {
@@ -292,6 +300,13 @@ function resolveBareType(dslType, argsRaw, columnId, warnings) {
     case "Attachments":
       return { type: "Attachments", widgetOptions: null, refTarget: null };
 
+    // Real but internal/legacy Grist type (see TYPE_DEFAULT_LITERALS above,
+    // taken from the same usertypes.py `_type_defaults`): not offered by
+    // Grist's own column-type picker, so unlikely in a real paste, but
+    // handled explicitly rather than silently downgraded to Any.
+    case "Blob":
+      return { type: "Blob", widgetOptions: null, refTarget: null };
+
     default:
       warnings.push(
         `Colonne « ${columnId} » : type « ${dslType} » non reconnu, importée en tant que « Any ».`
@@ -328,6 +343,7 @@ export function describeType(type) {
     case "Choice": return "Choix (liste déroulante)";
     case "ChoiceList": return "Choix multiples (liste déroulante)";
     case "Attachments": return "Pièces jointes";
+    case "Blob": return "Binaire (Blob)";
     case "Any": return "Quelconque (Any)";
     default: return type;
   }

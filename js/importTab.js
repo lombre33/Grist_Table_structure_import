@@ -96,14 +96,17 @@ export function initImportTab(grist, gristAvailable) {
     }
 
     analyzeBtn.disabled = true;
+    setStatus("Analyse du document en cours…", "info");
     try {
       existingTableIds = await withTimeout(grist.docApi.listTables(), GRIST_CALL_TIMEOUT_MS, TIMEOUT_MESSAGE);
       await ensureDocSchema();
+      setStatus(null);
     } catch (err) {
       baseWarnings = [
         ...baseWarnings,
         `Impossible de récupérer les informations de ce document : ${errorMessage(err)}.`,
       ];
+      setStatus(null);
     } finally {
       analyzeBtn.disabled = false;
     }
