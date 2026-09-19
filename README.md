@@ -238,14 +238,11 @@ L'interface suit l'identité UI/UX commune aux widgets **Grist Factory** (grist-
   système d'exploitation.
 - **Icônes** : deux SVG en contour, en ligne dans `index.html`, aucune police d'icônes
   ni emoji (voir SECURITY.md).
-- **Bilingue français / anglais** : réglable dans le même panneau. Les libellés fixes de
-  l'interface (titres, boutons, en-têtes, aide) sont traduits (`js/i18n.js`). **Limite
-  connue, assumée** : les messages générés dynamiquement pendant l'usage (statuts de
-  création/ajout, avertissements d'analyse — ex. « Table « X » créée avec 3 colonnes »)
-  restent en français dans cette version ; les traduire suppose de restructurer ces
-  phrases paramétrées (accords grammaticaux compris) sans risquer de régression sur leur
-  contenu fonctionnel, ce qui a été volontairement laissé hors de ce chantier de refonte
-  visuelle plutôt que fait à moitié.
+- **Bilingue français / anglais** : réglable dans le même panneau. Toute chaîne visible
+  de l'interface est traduite (`js/i18n.js`) — aussi bien les libellés fixes (titres,
+  boutons, en-têtes, aide) que les messages générés dynamiquement pendant l'usage
+  (statuts de création/ajout, avertissements d'analyse), accords singulier/pluriel
+  compris (ex. « Table « X » créée avec 1 colonne. » / « ... avec 3 colonnes. »).
 - **Logo** : celui de Grist Factory, affiché discrètement juste à droite du bouton
   Réglages (`assets/grist-factory-logo.jpg`).
 - **Crédits** (panneau Réglages) : Grist Factory, site, licence.

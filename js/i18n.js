@@ -1,14 +1,17 @@
 /**
- * Minimal fr/en dictionary + DOM binding for this widget's static chrome
- * strings (labels, headings, buttons, hints) — see the Grist Factory UI/UX
- * identity's "Bilingue fr/en systématique" rule.
+ * fr/en dictionary + DOM binding for this widget's interface — see the
+ * Grist Factory UI/UX identity's "Bilingue fr/en systématique" rule.
  *
- * Scope: this covers every *static* string in index.html (present in the
- * markup before any JS runs). The dynamic, parameterized status/warning
- * messages built at runtime in js/importTab.js and js/exportTab.js (e.g.
- * "Table « X » créée avec 3 colonnes.") are intentionally NOT covered yet —
- * see README.md's "Bilingue" section for why this was scoped out of this
- * pass rather than half-translated.
+ * Two kinds of entries:
+ * - Static chrome strings (labels, headings, buttons, hints), bound via
+ *   data-i18n/-placeholder/-aria-label attributes in index.html and applied
+ *   by applyI18n() below — t(key) with no params.
+ * - Dynamic status/warning messages built at runtime in js/importTab.js,
+ *   js/exportTab.js, js/gristTypes.js and js/parser.js (e.g.
+ *   "Table « X » créée avec 3 colonnes.") — t(key, params) for a plain
+ *   parameterized string, tn(key, count, params) for one that also needs
+ *   singular/plural agreement (a {one, other} dictionary entry instead of a
+ *   plain string).
  *
  * No innerHTML anywhere (see SECURITY.md): the one string that embeds an
  * inline <code> element (export.formulaHint) is rebuilt from a "{code}"
@@ -71,6 +74,94 @@ const STRINGS = {
       "la formule d'origine est recopiée telle que stockée (syntaxe {code} de Grist) quand elle " +
       "existe, sinon remplacée par la valeur par défaut du type — comme le fait Grist lui-même " +
       "pour une formule vide.",
+
+    // --- Dynamic status/warning messages (js/importTab.js, js/exportTab.js,
+    // js/gristTypes.js, js/parser.js) — see t()/tn() in this module. A
+    // {one, other} value is a pluralized entry, read via tn(key, count, ...).
+    "error.noGristApi":
+      "Impossible de trouver l'API Grist. Ouvrez cette page en tant que widget personnalisé " +
+      "dans un document Grist (elle ne fonctionne pas seule, hors d'un document).",
+    "error.timeout": "Délai dépassé en attendant la réponse du document Grist.",
+    "common.tablesCount": { one: "{n} table", other: "{n} tables" },
+    "common.columnsCount": { one: "{n} colonne", other: "{n} colonnes" },
+
+    "warn.invalidWidgetOptions": "Colonne « {columnId} » : widget_options n'est pas un JSON valide, ignoré.",
+    "warn.dateTimeNoTimezone":
+      "Colonne « {columnId} » : fuseau horaire non précisé pour DateTime, « {timezone} » utilisé par défaut (à vérifier).",
+    "warn.refTargetMissingSyntax": "Colonne « {columnId} » : table cible introuvable pour {dslType}, importée en tant que « Any ».",
+    "warn.unknownType": "Colonne « {columnId} » : type « {dslType} » non reconnu, importée en tant que « Any ».",
+
+    "warn.decoratorNoClass":
+      'Ligne {line} : "@grist.UserTable" n\'est pas suivi d\'une classe valide ("class NomTable:"), ignoré.',
+    "warn.noTableFound": 'Aucune table trouvée : le texte doit contenir un bloc "@grist.UserTable" suivi de "class NomTable:".',
+    "warn.formulaTypeNoFunction": "Ligne {line} : décorateur formulaType non suivi d'une fonction, ignoré.",
+    "warn.formulaTypeDuplicate": "Ligne {line} : décorateur formulaType en double, le précédent est ignoré.",
+    "warn.unknownDecorator": "Ligne {line} : décorateur non reconnu ignoré ({snippet}).",
+    "warn.unrecognizedContent": "Ligne {line} : contenu non reconnu ignoré ({snippet}).",
+    "warn.reservedColumnId": "Ligne {line} : colonne « {id} » ignorée (identifiant réservé, déjà géré par Grist).",
+    "warn.duplicateColumnId": "Ligne {line} : colonne « {id} » en double, Grist ajoutera un suffixe automatiquement.",
+    "warn.tablePrefix": "Table « {tableId} » — {message}",
+
+    "import.error.fetchDocInfo": "Impossible de récupérer les informations de ce document : {error}.",
+    "import.error.fetchExistingTables": "Impossible de lire les tables existantes de ce document : {error}.",
+    "warn.refTargetMissingInDoc":
+      "Colonne « {colId} » : la table cible « {target} » n'existe pas dans ce document, importée en tant que « Any » " +
+      "(vous pourrez la reconfigurer en Référence une fois la table cible créée).",
+    "warn.visibleColMissing":
+      "Colonne « {colId} » : colonne d'affichage « {visibleColId} » introuvable dans la table « {target} » de ce " +
+      "document, ignorée (visible_col).",
+    "import.status.analyzing": "Analyse du document en cours…",
+    "import.error.noTableList": "Impossible de charger la liste des tables de ce document.",
+    "import.error.noTablesToComplete": "Ce document ne contient aucune table à compléter.",
+    "import.validation.emptyId": "L'identifiant ne peut pas être vide.",
+    "import.validation.invalidId":
+      "L'identifiant doit commencer par une lettre ou « _ » et ne contenir que des lettres, chiffres et « _ » " +
+      "(pas d'espace ni d'accent).",
+    "import.validation.duplicateId": "Identifiant utilisé plusieurs fois dans cette sélection.",
+    "import.validation.tableExists": "Une table « {id} » existe déjà dans ce document ; choisissez un autre identifiant.",
+    "import.action.chooseTarget": "Choisissez une table à compléter",
+    "import.action.noNewColumns": "Aucune nouvelle colonne à ajouter",
+    "import.action.addColumns": { one: "Ajouter {n} colonne à cette table", other: "Ajouter {n} colonnes à cette table" },
+    "import.status.new": "Nouvelle",
+    "import.status.existing": "Déjà présente",
+    "import.action.createTables": { one: "Créer {n} table dans ce document", other: "Créer {n} tables dans ce document" },
+    "import.status.creating": { one: "Création de la table en cours…", other: "Création des tables en cours…" },
+    "import.error.tableCollision": {
+      one: "Cette table existe déjà dans ce document : {ids}. Choisissez un autre identifiant.",
+      other: "Ces tables existent déjà dans ce document : {ids}. Choisissez d'autres identifiants.",
+    },
+    "import.note.visibleColFailed": {
+      one: " Colonne d'affichage (visible_col) non appliquée : {error}.",
+      other: " Colonnes d'affichage (visible_col) non appliquées : {error}.",
+    },
+    "import.success.createdMulti": "{count} tables créées ({ids}), {columnsPhrase} au total.",
+    "import.success.createdSingle": "Table « {id} » créée avec {columnsPhrase}.",
+    "import.error.createFailed": "Échec de la création : {error}",
+    "import.status.addingColumns": "Ajout des colonnes à « {table} » en cours…",
+    "import.info.noNewColumns": "Aucune nouvelle colonne : toutes existent déjà dans « {table} » ou ont été décochées.",
+    "import.success.columnsAdded": {
+      one: "{n} colonne ajoutée à « {table} ».",
+      other: "{n} colonnes ajoutées à « {table} ».",
+    },
+    "import.error.addColumnsFailed": "Échec de l'ajout des colonnes : {error}",
+    "import.preview.includeColumn": "Inclure la colonne « {colId} »",
+
+    "export.error.fetchTables": "Impossible de lire les tables de ce document : {error}.",
+    "export.refs.intro": {
+      one:
+        "Les tables cochées font référence à {n} autre table non cochée de ce document. " +
+        "L'inclure dans l'export, ou continuer sans elle ?",
+      other:
+        "Les tables cochées font référence à {n} autres tables non cochées de ce document. " +
+        "Les inclure dans l'export, ou continuer sans elles ?",
+    },
+    "export.refs.item": "{tableId} — référencée par : {columns}",
+    "export.status.generating": "Génération du code en cours…",
+    "export.success.generated": "Code généré pour {tablesPhrase}, {columnsPhrase} au total.",
+    "export.error.generateFailed": "Échec de la génération : {error}.",
+    "export.copy.done": "Copié.",
+    "export.copy.fallback":
+      "Copie automatique indisponible ici : le texte est sélectionné, utilisez Ctrl+C (Cmd+C sur Mac).",
   },
   en: {
     "settings.open": "Settings",
@@ -125,6 +216,88 @@ const STRINGS = {
       "original formula is copied back exactly as stored (Grist's {code} syntax) when it exists, " +
       "otherwise replaced with the type's default value — just as Grist itself does for an empty " +
       "formula.",
+
+    // --- Dynamic status/warning messages — see the matching fr. block above.
+    "error.noGristApi":
+      "Could not find the Grist API. Open this page as a custom widget inside a Grist document " +
+      "(it does not work standalone, outside of a document).",
+    "error.timeout": "Timed out waiting for a response from the Grist document.",
+    "common.tablesCount": { one: "{n} table", other: "{n} tables" },
+    "common.columnsCount": { one: "{n} column", other: "{n} columns" },
+
+    "warn.invalidWidgetOptions": "Column “{columnId}”: widget_options is not valid JSON, ignored.",
+    "warn.dateTimeNoTimezone": "Column “{columnId}”: no timezone given for DateTime, defaulting to “{timezone}” (please check).",
+    "warn.refTargetMissingSyntax": "Column “{columnId}”: no target table found for {dslType}, imported as “Any”.",
+    "warn.unknownType": "Column “{columnId}”: unrecognized type “{dslType}”, imported as “Any”.",
+
+    "warn.decoratorNoClass":
+      'Line {line}: "@grist.UserTable" is not followed by a valid class ("class TableName:"), ignored.',
+    "warn.noTableFound": 'No table found: the text must contain an "@grist.UserTable" block followed by "class TableName:".',
+    "warn.formulaTypeNoFunction": "Line {line}: formulaType decorator not followed by a function, ignored.",
+    "warn.formulaTypeDuplicate": "Line {line}: duplicate formulaType decorator, the previous one is ignored.",
+    "warn.unknownDecorator": "Line {line}: unrecognized decorator ignored ({snippet}).",
+    "warn.unrecognizedContent": "Line {line}: unrecognized content ignored ({snippet}).",
+    "warn.reservedColumnId": "Line {line}: column “{id}” ignored (reserved identifier, already handled by Grist).",
+    "warn.duplicateColumnId": "Line {line}: duplicate column “{id}”, Grist will automatically add a suffix.",
+    "warn.tablePrefix": "Table “{tableId}” — {message}",
+
+    "import.error.fetchDocInfo": "Could not retrieve this document's information: {error}.",
+    "import.error.fetchExistingTables": "Could not read this document's existing tables: {error}.",
+    "warn.refTargetMissingInDoc":
+      "Column “{colId}”: the target table “{target}” does not exist in this document, imported as “Any” " +
+      "(you can reconfigure it as a Reference once the target table is created).",
+    "warn.visibleColMissing":
+      "Column “{colId}”: display column “{visibleColId}” not found in this document's “{target}” table, ignored (visible_col).",
+    "import.status.analyzing": "Analyzing the document…",
+    "import.error.noTableList": "Could not load this document's table list.",
+    "import.error.noTablesToComplete": "This document has no table to add columns to.",
+    "import.validation.emptyId": "The identifier cannot be empty.",
+    "import.validation.invalidId":
+      "The identifier must start with a letter or “_” and contain only letters, digits and “_” (no spaces or accents).",
+    "import.validation.duplicateId": "This identifier is used more than once in this selection.",
+    "import.validation.tableExists": "A table “{id}” already exists in this document; choose another identifier.",
+    "import.action.chooseTarget": "Choose a table to complete",
+    "import.action.noNewColumns": "No new column to add",
+    "import.action.addColumns": { one: "Add {n} column to this table", other: "Add {n} columns to this table" },
+    "import.status.new": "New",
+    "import.status.existing": "Already present",
+    "import.action.createTables": { one: "Create {n} table in this document", other: "Create {n} tables in this document" },
+    "import.status.creating": { one: "Creating the table…", other: "Creating the tables…" },
+    "import.error.tableCollision": {
+      one: "This table already exists in this document: {ids}. Choose another identifier.",
+      other: "These tables already exist in this document: {ids}. Choose other identifiers.",
+    },
+    "import.note.visibleColFailed": {
+      one: " Display column (visible_col) not applied: {error}.",
+      other: " Display columns (visible_col) not applied: {error}.",
+    },
+    "import.success.createdMulti": "{count} tables created ({ids}), {columnsPhrase} in total.",
+    "import.success.createdSingle": "Table “{id}” created with {columnsPhrase}.",
+    "import.error.createFailed": "Creation failed: {error}",
+    "import.status.addingColumns": "Adding columns to “{table}”…",
+    "import.info.noNewColumns": "No new column: they already all exist in “{table}” or were unchecked.",
+    "import.success.columnsAdded": {
+      one: "{n} column added to “{table}”.",
+      other: "{n} columns added to “{table}”.",
+    },
+    "import.error.addColumnsFailed": "Failed to add columns: {error}",
+    "import.preview.includeColumn": "Include column “{colId}”",
+
+    "export.error.fetchTables": "Could not read this document's tables: {error}.",
+    "export.refs.intro": {
+      one:
+        "The checked tables reference {n} other unchecked table in this document. " +
+        "Include it in the export, or continue without it?",
+      other:
+        "The checked tables reference {n} other unchecked tables in this document. " +
+        "Include them in the export, or continue without them?",
+    },
+    "export.refs.item": "{tableId} — referenced by: {columns}",
+    "export.status.generating": "Generating code…",
+    "export.success.generated": "Code generated for {tablesPhrase}, {columnsPhrase} in total.",
+    "export.error.generateFailed": "Generation failed: {error}.",
+    "export.copy.done": "Copied.",
+    "export.copy.fallback": "Automatic copy isn't available here: the text is selected, use Ctrl+C (Cmd+C on Mac).",
   },
 };
 
@@ -148,8 +321,39 @@ function writeStored(value) {
   }
 }
 
-export function t(key) {
-  return (STRINGS[currentLocale] && STRINGS[currentLocale][key]) || STRINGS.fr[key] || key;
+/**
+ * Replaces `{name}` placeholders in `text` with `params[name]`, leaving an
+ * unmatched placeholder as-is (rather than silently blanking it) so a
+ * missing param stays visibly wrong instead of disappearing quietly.
+ */
+function interpolate(text, params) {
+  if (!params) return text;
+  return text.replace(/\{(\w+)\}/g, (match, name) => (name in params ? String(params[name]) : match));
+}
+
+/**
+ * `params` is optional and, when given, fills `{name}` placeholders in the
+ * resolved string (see interpolate above) — used for every dynamic
+ * status/warning message in the app; `t(key)` with no params is exactly the
+ * original behavior, used for static chrome strings via data-i18n.
+ */
+export function t(key, params) {
+  const raw = (STRINGS[currentLocale] && STRINGS[currentLocale][key]) || STRINGS.fr[key] || key;
+  return interpolate(raw, params);
+}
+
+/**
+ * Pluralized counterpart of t(): `key` must resolve to a `{one, other}`
+ * object (not a plain string) in the dictionary. `{n}` in either form is
+ * the count itself; `params` adds any further placeholders. Only "one"
+ * (count === 1) vs "other" (everything else, including 0) — fr/en both
+ * only ever need these two categories for the counts this app displays
+ * (tables, columns...), never a language with more plural categories.
+ */
+export function tn(key, count, params) {
+  const entry = (STRINGS[currentLocale] && STRINGS[currentLocale][key]) || STRINGS.fr[key];
+  const form = entry && typeof entry === "object" ? (count === 1 ? entry.one : entry.other) : key;
+  return interpolate(form, { n: count, ...params });
 }
 
 export function getLocale() {

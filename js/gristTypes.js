@@ -49,6 +49,7 @@
  */
 
 import { findMatchingClose } from "./parser.js";
+import { t } from "./i18n.js";
 
 const FIRST_STRING_ARG_RE = /^\s*['"]([^'"]*)['"]/;
 const QUOTED_ITEM_RE = /'((?:\\.|[^'\\])*)'|"((?:\\.|[^"\\])*)"/g;
@@ -224,7 +225,7 @@ function extractCommonKwargs(argsRaw, columnId, warnings) {
     } catch {
       // Malformed JSON: ignored, never evaluated — just reported so it
       // isn't silently lost.
-      warnings.push(`Colonne « ${columnId} » : widget_options n'est pas un JSON valide, ignoré.`);
+      warnings.push(t("warn.invalidWidgetOptions", { columnId }));
     }
   }
 
@@ -277,9 +278,7 @@ function resolveBareType(dslType, argsRaw, columnId, warnings) {
     case "DateTime": {
       const timezone = extractFirstStringArg(argsRaw);
       if (!timezone) {
-        warnings.push(
-          `Colonne « ${columnId} » : fuseau horaire non précisé pour DateTime, « ${DEFAULT_TIMEZONE} » utilisé par défaut (à vérifier).`
-        );
+        warnings.push(t("warn.dateTimeNoTimezone", { columnId, timezone: DEFAULT_TIMEZONE }));
       }
       return { type: `DateTime:${timezone || DEFAULT_TIMEZONE}`, widgetOptions: null, refTarget: null };
     }
@@ -289,9 +288,7 @@ function resolveBareType(dslType, argsRaw, columnId, warnings) {
       const target = extractFirstStringArg(argsRaw);
       const prefix = dslType === "Reference" ? "Ref" : "RefList";
       if (!target || !TABLE_ID_RE.test(target)) {
-        warnings.push(
-          `Colonne « ${columnId} » : table cible introuvable pour ${dslType}, importée en tant que « Any ».`
-        );
+        warnings.push(t("warn.refTargetMissingSyntax", { columnId, dslType }));
         return { type: "Any", widgetOptions: null, refTarget: null };
       }
       return { type: `${prefix}:${target}`, widgetOptions: null, refTarget: target };
@@ -308,9 +305,7 @@ function resolveBareType(dslType, argsRaw, columnId, warnings) {
       return { type: "Blob", widgetOptions: null, refTarget: null };
 
     default:
-      warnings.push(
-        `Colonne « ${columnId} » : type « ${dslType} » non reconnu, importée en tant que « Any ».`
-      );
+      warnings.push(t("warn.unknownType", { columnId, dslType }));
       return { type: "Any", widgetOptions: null, refTarget: null };
   }
 }

@@ -1,9 +1,5 @@
 export const GRIST_CALL_TIMEOUT_MS = 8000;
 
-export function pluralize(count, singular, plural = `${singular}s`) {
-  return count === 1 ? singular : plural;
-}
-
 /**
  * Best-effort human-readable text for a caught error, including whatever
  * extra detail the Grist widget RPC layer attaches (`details`/`data`, seen

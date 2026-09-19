@@ -2,9 +2,8 @@ import { parseGristSchema } from "./parser.js";
 import { resolveColumnType, describeType, TABLE_ID_RE } from "./gristTypes.js";
 import { el, clear, syncCheckedClass } from "./dom.js";
 import { fetchDocSchema, existingColumnIds } from "./schema.js";
-import { withTimeout, errorMessage, pluralize, GRIST_CALL_TIMEOUT_MS } from "./util.js";
-
-const TIMEOUT_MESSAGE = "Délai dépassé en attendant la réponse du document Grist.";
+import { withTimeout, errorMessage, GRIST_CALL_TIMEOUT_MS } from "./util.js";
+import { t, tn } from "./i18n.js";
 
 export function initImportTab(grist, gristAvailable) {
   const sourceInput = document.getElementById("source-input");
@@ -33,11 +32,7 @@ export function initImportTab(grist, gristAvailable) {
 
   if (!gristAvailable) {
     analyzeBtn.disabled = true;
-    setStatus(
-      "Impossible de trouver l'API Grist. Ouvrez cette page en tant que widget personnalisé " +
-        "dans un document Grist (elle ne fonctionne pas seule, hors d'un document).",
-      "error"
-    );
+    setStatus(t("error.noGristApi"), "error");
     return;
   }
 
@@ -106,16 +101,13 @@ export function initImportTab(grist, gristAvailable) {
     }
 
     analyzeBtn.disabled = true;
-    setStatus("Analyse du document en cours…", "info");
+    setStatus(t("import.status.analyzing"), "info");
     try {
-      existingTableIds = await withTimeout(grist.docApi.listTables(), GRIST_CALL_TIMEOUT_MS, TIMEOUT_MESSAGE);
+      existingTableIds = await withTimeout(grist.docApi.listTables(), GRIST_CALL_TIMEOUT_MS, t("error.timeout"));
       await ensureDocSchema();
       setStatus(null);
     } catch (err) {
-      baseWarnings = [
-        ...baseWarnings,
-        `Impossible de récupérer les informations de ce document : ${errorMessage(err)}.`,
-      ];
+      baseWarnings = [...baseWarnings, t("import.error.fetchDocInfo", { error: errorMessage(err) })];
       setStatus(null);
     } finally {
       analyzeBtn.disabled = false;
@@ -167,12 +159,9 @@ export function initImportTab(grist, gristAvailable) {
 
   async function fetchSchemaSafely() {
     try {
-      return await withTimeout(fetchDocSchema(grist), GRIST_CALL_TIMEOUT_MS, TIMEOUT_MESSAGE);
+      return await withTimeout(fetchDocSchema(grist), GRIST_CALL_TIMEOUT_MS, t("error.timeout"));
     } catch (err) {
-      baseWarnings = [
-        ...baseWarnings,
-        `Impossible de lire les tables existantes de ce document : ${errorMessage(err)}.`,
-      ];
+      baseWarnings = [...baseWarnings, t("import.error.fetchExistingTables", { error: errorMessage(err) })];
       return null;
     }
   }
@@ -249,12 +238,12 @@ export function initImportTab(grist, gristAvailable) {
     clear(targetTableSelect);
     if (!docSchema) {
       targetTableError.hidden = false;
-      targetTableError.textContent = "Impossible de charger la liste des tables de ce document.";
+      targetTableError.textContent = t("import.error.noTableList");
       return;
     }
     if (docSchema.tables.length === 0) {
       targetTableError.hidden = false;
-      targetTableError.textContent = "Ce document ne contient aucune table à compléter.";
+      targetTableError.textContent = t("import.error.noTablesToComplete");
       return;
     }
     targetTableError.hidden = true;
@@ -332,11 +321,7 @@ export function initImportTab(grist, gristAvailable) {
         const targetExists =
           resolved.refTarget === targetTableId || existingTableIds.includes(resolved.refTarget);
         if (!targetExists) {
-          columnWarnings.push(
-            `Colonne « ${col.id} » : la table cible « ${resolved.refTarget} » n'existe pas dans ce ` +
-              "document, importée en tant que « Any » (vous pourrez la reconfigurer en Référence " +
-              "une fois la table cible créée)."
-          );
+          columnWarnings.push(t("warn.refTargetMissingInDoc", { colId: col.id, target: resolved.refTarget }));
           resolved.type = "Any";
           resolved.widgetOptions = null;
           resolved.visibleColId = null;
@@ -346,8 +331,7 @@ export function initImportTab(grist, gristAvailable) {
         resolved.visibleColRef = resolveVisibleColRef(resolved.refTarget, resolved.visibleColId);
         if (!resolved.visibleColRef) {
           columnWarnings.push(
-            `Colonne « ${col.id} » : colonne d'affichage « ${resolved.visibleColId} » introuvable dans ` +
-              `la table « ${resolved.refTarget} » de ce document, ignorée (visible_col).`
+            t("warn.visibleColMissing", { colId: col.id, visibleColId: resolved.visibleColId, target: resolved.refTarget })
           );
         }
       }
@@ -384,7 +368,7 @@ export function initImportTab(grist, gristAvailable) {
     const checkbox = el("input", {
       type: "checkbox",
       checked: !excludedColIds.has(col.id),
-      "aria-label": `Inclure la colonne « ${col.id} »`,
+      "aria-label": t("import.preview.includeColumn", { colId: col.id }),
     });
     checkbox.addEventListener("change", () => {
       if (checkbox.checked) excludedColIds.delete(col.id);
@@ -428,7 +412,9 @@ export function initImportTab(grist, gristAvailable) {
       const { resolvedColumns, resolutionWarnings } = resolveColumns(entry.table, destId, entry.excludedColIds);
       entry.resolvedColumns = resolvedColumns;
       allWarnings.push(
-        ...(multi ? resolutionWarnings.map((warning) => `Table « ${destId || entry.table.tableId} » — ${warning}`) : resolutionWarnings)
+        ...(multi
+          ? resolutionWarnings.map((warning) => t("warn.tablePrefix", { tableId: destId || entry.table.tableId, message: warning }))
+          : resolutionWarnings)
       );
 
       if (multi) {
@@ -447,24 +433,20 @@ export function initImportTab(grist, gristAvailable) {
 
     renderWarnings([...baseWarnings, ...allWarnings]);
     actionBtn.disabled = !allValid || !anyColumns;
-    actionBtn.textContent = multi
-      ? `Créer ${createTableEntries.length} tables dans ce document`
-      : "Créer la table dans ce document";
+    actionBtn.textContent = multi ? tn("import.action.createTables", createTableEntries.length) : t("import.action.create");
   }
 
   function validateOneTableId(entry, isDuplicate) {
     const value = entry.id.trim();
     let message = "";
     if (!value) {
-      message = "L'identifiant ne peut pas être vide.";
+      message = t("import.validation.emptyId");
     } else if (!TABLE_ID_RE.test(value)) {
-      message =
-        "L'identifiant doit commencer par une lettre ou « _ » et ne contenir que des lettres, " +
-        "chiffres et « _ » (pas d'espace ni d'accent).";
+      message = t("import.validation.invalidId");
     } else if (isDuplicate) {
-      message = "Identifiant utilisé plusieurs fois dans cette sélection.";
+      message = t("import.validation.duplicateId");
     } else if (existingTableIds && existingTableIds.includes(value)) {
-      message = `Une table « ${value} » existe déjà dans ce document ; choisissez un autre identifiant.`;
+      message = t("import.validation.tableExists", { id: value });
     }
     entry.errorEl.hidden = !message;
     entry.errorEl.textContent = message;
@@ -482,8 +464,8 @@ export function initImportTab(grist, gristAvailable) {
     for (const col of resolvedColumns) {
       const statusCell = el("td", {}, [
         col.isNew
-          ? el("span", { class: "status-pill status-pill-new", text: "Nouvelle" })
-          : el("span", { class: "status-pill status-pill-skip", text: "Déjà présente" }),
+          ? el("span", { class: "status-pill status-pill-new", text: t("import.status.new") })
+          : el("span", { class: "status-pill status-pill-skip", text: t("import.status.existing") }),
       ]);
       columnsBody.appendChild(columnRow(col, existingModeExcludedColIds, statusCell, () => renderExistingMode(table)));
     }
@@ -494,10 +476,10 @@ export function initImportTab(grist, gristAvailable) {
     const newCount = resolvedColumns.filter((col) => col.isNew && !existingModeExcludedColIds.has(col.id)).length;
     actionBtn.disabled = !known || newCount === 0;
     actionBtn.textContent = !known
-      ? "Choisissez une table à compléter"
+      ? t("import.action.chooseTarget")
       : newCount === 0
-      ? "Aucune nouvelle colonne à ajouter"
-      : `Ajouter ${newCount} ${pluralize(newCount, "colonne")} à cette table`;
+      ? t("import.action.noNewColumns")
+      : tn("import.action.addColumns", newCount);
   }
 
   function renderWarnings(list) {
@@ -527,14 +509,15 @@ export function initImportTab(grist, gristAvailable) {
     }
 
     const multi = createTableEntries.length > 1;
-    setStatus(multi ? "Création des tables en cours…" : "Création de la table en cours…", "info");
+    setStatus(tn("import.status.creating", createTableEntries.length), "info");
     try {
-      const freshTables = await withTimeout(grist.docApi.listTables(), GRIST_CALL_TIMEOUT_MS, TIMEOUT_MESSAGE);
+      const freshTables = await withTimeout(grist.docApi.listTables(), GRIST_CALL_TIMEOUT_MS, t("error.timeout"));
       const collisions = createTableEntries.filter((entry) => freshTables.includes(entry.id.trim()));
       if (collisions.length > 0) {
         setStatus(
-          `${pluralize(collisions.length, "Cette table existe", "Ces tables existent")} déjà dans ce document : ` +
-            `${collisions.map((entry) => entry.id.trim()).join(", ")}. Choisissez d'autres identifiants.`,
+          tn("import.error.tableCollision", collisions.length, {
+            ids: collisions.map((entry) => entry.id.trim()).join(", "),
+          }),
           "error"
         );
         return;
@@ -558,18 +541,24 @@ export function initImportTab(grist, gristAvailable) {
           await grist.docApi.applyUserActions(allVisibleColActions);
         } catch (err) {
           const n = allVisibleColActions.length / 2;
-          visibleColNote = ` ${pluralize(n, "Colonne", "Colonnes")} d'affichage (visible_col) ${pluralize(n, "non appliquée", "non appliquées")} : ${errorMessage(err)}.`;
+          visibleColNote = tn("import.note.visibleColFailed", n, { error: errorMessage(err) });
         }
       }
 
       const totalColumns = createTableEntries.reduce((n, entry) => n + includedColumns(entry).length, 0);
       const summary = multi
-        ? `${createTableEntries.length} tables créées (${createTableEntries.map((entry) => entry.id.trim()).join(", ")}), ` +
-          `${totalColumns} ${pluralize(totalColumns, "colonne")} au total.`
-        : `Table « ${createTableEntries[0].id.trim()} » créée avec ${totalColumns} ${pluralize(totalColumns, "colonne")}.`;
+        ? t("import.success.createdMulti", {
+            count: createTableEntries.length,
+            ids: createTableEntries.map((entry) => entry.id.trim()).join(", "),
+            columnsPhrase: tn("common.columnsCount", totalColumns),
+          })
+        : t("import.success.createdSingle", {
+            id: createTableEntries[0].id.trim(),
+            columnsPhrase: tn("common.columnsCount", totalColumns),
+          });
       setStatus(summary + visibleColNote, "success");
     } catch (err) {
-      setStatus(`Échec de la création : ${errorMessage(err)}`, "error");
+      setStatus(t("import.error.createFailed", { error: errorMessage(err) }), "error");
     }
   }
 
@@ -577,15 +566,15 @@ export function initImportTab(grist, gristAvailable) {
     const target = getTargetTable();
     if (!target) return;
 
-    setStatus(`Ajout des colonnes à « ${target.tableId} » en cours…`, "info");
+    setStatus(t("import.status.addingColumns", { table: target.tableId }), "info");
     try {
-      const freshSchema = await withTimeout(fetchDocSchema(grist), GRIST_CALL_TIMEOUT_MS, TIMEOUT_MESSAGE);
+      const freshSchema = await withTimeout(fetchDocSchema(grist), GRIST_CALL_TIMEOUT_MS, t("error.timeout"));
       const known = existingColumnIds(freshSchema.allColumns, target.ref);
       const newColumns = existingModeColumns.filter((col) => !known.has(col.id) && !existingModeExcludedColIds.has(col.id));
 
       if (newColumns.length === 0) {
         docSchema = freshSchema;
-        setStatus(`Aucune nouvelle colonne : toutes existent déjà dans « ${target.tableId} » ou ont été décochées.`, "info");
+        setStatus(t("import.info.noNewColumns", { table: target.tableId }), "info");
         return;
       }
 
@@ -606,7 +595,7 @@ export function initImportTab(grist, gristAvailable) {
           await grist.docApi.applyUserActions(visibleColActions);
         } catch (err) {
           const n = visibleColActions.length / 2;
-          visibleColNote = ` ${pluralize(n, "Colonne", "Colonnes")} d'affichage (visible_col) ${pluralize(n, "non appliquée", "non appliquées")} : ${errorMessage(err)}.`;
+          visibleColNote = tn("import.note.visibleColFailed", n, { error: errorMessage(err) });
         }
       }
 
@@ -621,14 +610,9 @@ export function initImportTab(grist, gristAvailable) {
           parentPos: Infinity,
         });
       }
-      setStatus(
-        `${newColumns.length} ${pluralize(newColumns.length, "colonne")} ` +
-          `${pluralize(newColumns.length, "ajoutée", "ajoutées")} à « ${target.tableId} ».` +
-          visibleColNote,
-        "success"
-      );
+      setStatus(tn("import.success.columnsAdded", newColumns.length, { table: target.tableId }) + visibleColNote, "success");
     } catch (err) {
-      setStatus(`Échec de l'ajout des colonnes : ${errorMessage(err)}`, "error");
+      setStatus(t("import.error.addColumnsFailed", { error: errorMessage(err) }), "error");
     }
   }
 

@@ -1,9 +1,8 @@
 import { el, clear } from "./dom.js";
 import { fetchDocSchema, buildExportSchema, findReferencedTables } from "./schema.js";
 import { generateCode } from "./codeGenerator.js";
-import { withTimeout, errorMessage, pluralize, GRIST_CALL_TIMEOUT_MS } from "./util.js";
-
-const TIMEOUT_MESSAGE = "Délai dépassé en attendant la réponse du document Grist.";
+import { withTimeout, errorMessage, GRIST_CALL_TIMEOUT_MS } from "./util.js";
+import { t, tn } from "./i18n.js";
 
 export function initExportTab(grist, gristAvailable) {
   const tableList = document.getElementById("export-table-list");
@@ -23,11 +22,7 @@ export function initExportTab(grist, gristAvailable) {
 
   if (!gristAvailable) {
     refreshBtn.disabled = true;
-    setStatus(
-      "Impossible de trouver l'API Grist. Ouvrez cette page en tant que widget personnalisé " +
-        "dans un document Grist (elle ne fonctionne pas seule, hors d'un document).",
-      "error"
-    );
+    setStatus(t("error.noGristApi"), "error");
     return { activate() {} };
   }
 
@@ -59,7 +54,7 @@ export function initExportTab(grist, gristAvailable) {
     dismissedRefsKey = null;
 
     try {
-      docSchema = await withTimeout(fetchDocSchema(grist), GRIST_CALL_TIMEOUT_MS, TIMEOUT_MESSAGE);
+      docSchema = await withTimeout(fetchDocSchema(grist), GRIST_CALL_TIMEOUT_MS, t("error.timeout"));
       if (docSchema.tables.length === 0) {
         tablesEmpty.hidden = false;
       } else {
@@ -75,7 +70,7 @@ export function initExportTab(grist, gristAvailable) {
         }
       }
     } catch (err) {
-      setStatus(`Impossible de lire les tables de ce document : ${errorMessage(err)}.`, "error");
+      setStatus(t("export.error.fetchTables", { error: errorMessage(err) }), "error");
     } finally {
       refreshBtn.disabled = false;
       updateGenerateEnabled();
@@ -117,18 +112,12 @@ export function initExportTab(grist, gristAvailable) {
       return;
     }
 
-    const n = missingTableIds.length;
-    refsBannerIntro.textContent =
-      `Les tables cochées font référence à ${n} ${pluralize(n, "autre")} ` +
-      `${pluralize(n, "table")} ${pluralize(n, "non cochée")} de ce document. ` +
-      "Les inclure dans l'export, ou continuer sans elles ?";
+    refsBannerIntro.textContent = tn("export.refs.intro", missingTableIds.length);
 
     clear(refsList);
     for (const tableId of missingTableIds) {
       const referencingColumns = referencedBy.get(tableId).join(", ");
-      refsList.appendChild(
-        el("li", { text: `${tableId} — référencée par : ${referencingColumns}` })
-      );
+      refsList.appendChild(el("li", { text: t("export.refs.item", { tableId, columns: referencingColumns }) }));
     }
 
     refsBanner.hidden = false;
@@ -160,23 +149,25 @@ export function initExportTab(grist, gristAvailable) {
     const selected = Array.from(tableList.querySelectorAll("input:checked")).map((input) => input.value);
     if (selected.length === 0 || !docSchema) return;
 
-    setStatus("Génération du code en cours…", "info");
+    setStatus(t("export.status.generating"), "info");
     generateBtn.disabled = true;
     try {
       // Re-read fresh, in case columns changed since the table list was loaded.
-      docSchema = await withTimeout(fetchDocSchema(grist), GRIST_CALL_TIMEOUT_MS, TIMEOUT_MESSAGE);
+      docSchema = await withTimeout(fetchDocSchema(grist), GRIST_CALL_TIMEOUT_MS, t("error.timeout"));
       const schema = buildExportSchema(docSchema.tables, docSchema.allColumns, selected);
       output.value = generateCode(schema);
       outputBlock.hidden = false;
       copyStatus.textContent = "";
-      const totalColumns = schema.reduce((n, t) => n + t.columns.length, 0);
+      const totalColumns = schema.reduce((n, tbl) => n + tbl.columns.length, 0);
       setStatus(
-        `Code généré pour ${schema.length} ${pluralize(schema.length, "table")}, ` +
-          `${totalColumns} ${pluralize(totalColumns, "colonne")} au total.`,
+        t("export.success.generated", {
+          tablesPhrase: tn("common.tablesCount", schema.length),
+          columnsPhrase: tn("common.columnsCount", totalColumns),
+        }),
         "success"
       );
     } catch (err) {
-      setStatus(`Échec de la génération : ${errorMessage(err)}.`, "error");
+      setStatus(t("export.error.generateFailed", { error: errorMessage(err) }), "error");
     } finally {
       updateGenerateEnabled();
     }
@@ -187,9 +178,9 @@ export function initExportTab(grist, gristAvailable) {
     output.select();
     try {
       await navigator.clipboard.writeText(output.value);
-      copyStatus.textContent = "Copié.";
+      copyStatus.textContent = t("export.copy.done");
     } catch {
-      copyStatus.textContent = "Copie automatique indisponible ici : le texte est sélectionné, utilisez Ctrl+C (Cmd+C sur Mac).";
+      copyStatus.textContent = t("export.copy.fallback");
     }
   }
 

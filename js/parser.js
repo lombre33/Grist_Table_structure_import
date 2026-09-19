@@ -15,6 +15,8 @@
  * understand.
  */
 
+import { t } from "./i18n.js";
+
 const CLASS_RE = /^class\s+([A-Za-z_]\w*)\s*(?:\([^)]*\))?\s*:\s*$/;
 const ASSIGN_PREFIX_RE = /^([A-Za-z_]\w*)\s*=\s*grist\.([A-Za-z_]\w*)\s*\(/;
 const FORMULA_DECORATOR_PREFIX_RE = /^@grist\.formulaType\(\s*grist\.([A-Za-z_]\w*)\s*\(/;
@@ -118,9 +120,7 @@ export function parseGristSchema(sourceText) {
 
     const classMatch = j < lines.length ? lines[j].match(CLASS_RE) : null;
     if (!classMatch) {
-      warnings.push(
-        `Ligne ${decoratorLineNo} : "${USER_TABLE_DECORATOR}" n'est pas suivi d'une classe valide ("class NomTable:"), ignoré.`
-      );
+      warnings.push(t("warn.decoratorNoClass", { line: decoratorLineNo }));
       i++;
       continue;
     }
@@ -133,16 +133,14 @@ export function parseGristSchema(sourceText) {
   }
 
   if (tables.length === 0) {
-    warnings.push(
-      `Aucune table trouvée : le texte doit contenir un bloc "${USER_TABLE_DECORATOR}" suivi de "class NomTable:".`
-    );
+    warnings.push(t("warn.noTableFound"));
   }
 
   return { tables, warnings };
 }
 
 function prefixWarnings(list, tableId) {
-  return list.map((message) => `Table « ${tableId} » — ${message}`);
+  return list.map((message) => t("warn.tablePrefix", { tableId, message }));
 }
 
 function indentOf(line) {
@@ -193,15 +191,13 @@ function parseTableBody(lines, startIndex) {
     let assign, decorator, defMatch;
     if ((assign = matchAssign(trimmed))) {
       if (pendingType) {
-        warnings.push(
-          `Ligne ${i} : décorateur formulaType non suivi d'une fonction, ignoré.`
-        );
+        warnings.push(t("warn.formulaTypeNoFunction", { line: i }));
         pendingType = null;
       }
       addColumn(columns, seenIds, warnings, i + 1, assign.id, assign.dslType, assign.argsRaw);
     } else if ((decorator = matchFormulaDecorator(trimmed))) {
       if (pendingType) {
-        warnings.push(`Ligne ${i + 1} : décorateur formulaType en double, le précédent est ignoré.`);
+        warnings.push(t("warn.formulaTypeDuplicate", { line: i + 1 }));
       }
       pendingType = { dslType: decorator.dslType, argsRaw: decorator.argsRaw };
     } else if ((defMatch = trimmed.match(DEF_RE))) {
@@ -212,9 +208,9 @@ function parseTableBody(lines, startIndex) {
     } else if (trimmed.startsWith("#")) {
       // Comment: ignored silently, this is expected, unremarkable input.
     } else if (trimmed.startsWith("@")) {
-      warnings.push(`Ligne ${i + 1} : décorateur non reconnu ignoré (${truncate(trimmed)}).`);
+      warnings.push(t("warn.unknownDecorator", { line: i + 1, snippet: truncate(trimmed) }));
     } else {
-      warnings.push(`Ligne ${i + 1} : contenu non reconnu ignoré (${truncate(trimmed)}).`);
+      warnings.push(t("warn.unrecognizedContent", { line: i + 1, snippet: truncate(trimmed) }));
     }
 
     i++;
@@ -225,15 +221,11 @@ function parseTableBody(lines, startIndex) {
 
 function addColumn(columns, seenIds, warnings, lineNo, id, dslType, argsRaw) {
   if (RESERVED_COLUMN_IDS.has(id)) {
-    warnings.push(
-      `Ligne ${lineNo} : colonne « ${id} » ignorée (identifiant réservé, déjà géré par Grist).`
-    );
+    warnings.push(t("warn.reservedColumnId", { line: lineNo, id }));
     return;
   }
   if (seenIds.has(id)) {
-    warnings.push(
-      `Ligne ${lineNo} : colonne « ${id} » en double, Grist ajoutera un suffixe automatiquement.`
-    );
+    warnings.push(t("warn.duplicateColumnId", { line: lineNo, id }));
   }
   seenIds.add(id);
   columns.push({ id, dslType, argsRaw: argsRaw.trim(), line: lineNo });
