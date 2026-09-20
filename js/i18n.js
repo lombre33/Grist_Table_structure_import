@@ -41,7 +41,8 @@ const STRINGS = {
     "tabs.import": "Import",
     "tabs.export": "Export",
     "import.step1.eyebrow": "1. Code source",
-    "import.step1.label": "Code Python d'une table (menu de la table « Code View », dans le document d'origine)",
+    "import.step1.label":
+      "Code Python d'une table (menu « Code View » du document d'origine, ou onglet Export de ce widget pour les choix détaillés)",
     "import.step1.placeholder": "@grist.UserTable\nclass MaTable:\n  MaColonne = grist.Text()",
     "import.analyze": "Analyser",
     "import.clear": "Effacer",
@@ -183,7 +184,8 @@ const STRINGS = {
     "tabs.import": "Import",
     "tabs.export": "Export",
     "import.step1.eyebrow": "1. Source code",
-    "import.step1.label": "A table's Python code (from the table's “Code View” menu, in the source document)",
+    "import.step1.label":
+      "A table's Python code (from the source document's “Code View” menu, or this widget's Export tab for detailed choices)",
     "import.step1.placeholder": "@grist.UserTable\nclass MyTable:\n  MyColumn = grist.Text()",
     "import.analyze": "Analyze",
     "import.clear": "Clear",
