@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { findMatchingClose, parseArguments, parseString, parseStringList, quotePython, unquotePython } from "../js/pyText.js";
+import { findMatchingClose, parseArguments, parseString, parseStringList, quotePython } from "../js/pyText.js";
 
 test("quotePython escapes what would end the literal or break the line", () => {
   assert.equal(quotePython("it's"), "'it\\'s'");
@@ -9,16 +9,16 @@ test("quotePython escapes what would end the literal or break the line", () => {
   assert.equal(quotePython('say "hi"'), `'say "hi"'`);
 });
 
-test("unquotePython reads Python escapes, and keeps the character of an unknown one", () => {
-  assert.equal(unquotePython("1\\n2\\r3\\t4"), "1\n2\r3\t4");
-  assert.equal(unquotePython("it\\'s \\\"x\\\""), `it's "x"`);
-  assert.equal(unquotePython("a\\\\nb"), "a\\nb", "an escaped backslash is not the start of another escape");
-  assert.equal(unquotePython("\\d"), "d");
+test("parseString reads Python escapes, and keeps the character of an unknown one", () => {
+  assert.equal(parseString("'1\\n2\\r3\\t4'"), "1\n2\r3\t4");
+  assert.equal(parseString("'it\\'s \\\"x\\\"'"), `it's "x"`);
+  assert.equal(parseString("'a\\\\nb'"), "a\\nb", "an escaped backslash is not the start of another escape");
+  assert.equal(parseString("'\\d'"), "d");
 });
 
-test("unquotePython inverts quotePython for any text", () => {
+test("parseString inverts quotePython for any text", () => {
   for (const text of ["", "'", "\\", "\\n", "\n\\n", "'\\'", "é😀", "a'b\"c\\d\ne"]) {
-    assert.equal(unquotePython(quotePython(text).slice(1, -1)), text);
+    assert.equal(parseString(quotePython(text)), text);
   }
 });
 

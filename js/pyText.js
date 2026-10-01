@@ -9,15 +9,10 @@ export function quotePython(text) {
   return `'${String(text).replace(/[\\'\n\r\t]/g, (ch) => ESCAPED[ch])}'`;
 }
 
-/** Inverse of quotePython, applied to what lies between the quotes (of either style). */
-export function unquotePython(inner) {
-  return inner.replace(/\\(.)/g, (_, ch) => UNESCAPED[ch] ?? ch);
-}
-
-/** The value of a string literal given as source text, or null. */
+/** The value of a string literal given as source text (either quote style, inverse of quotePython), or null. */
 export function parseString(source) {
   const match = source?.match(STRING_LITERAL);
-  return match ? unquotePython(match[1] ?? match[2]) : null;
+  return match ? (match[1] ?? match[2]).replace(/\\(.)/g, (_, ch) => UNESCAPED[ch] ?? ch) : null;
 }
 
 /** [index, character, depth] of every character outside a string literal; depth counts the brackets open around it. */
