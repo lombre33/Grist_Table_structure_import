@@ -133,9 +133,11 @@ et les colonnes de données avec leur formule de déclenchement (`def _default_.
 calculée à la création d'une ligne). Le texte de la fonction est lu tel qu'écrit : un
 `return X` seul devient la formule `X`, les fonctions de plusieurs lignes restent telles
 quelles, et la valeur que rend une formule vide (`return None`, `return ''`...) donne une
-colonne sans formule, comme dans Grist. La syntaxe `$Colonne` (écrite par l'onglet
-**Export**) et `rec.Colonne` (écrite par la vraie Code View) sont toutes deux valides pour
-Grist.
+colonne sans formule, comme dans Grist ; la case n'est proposée que s'il y a une formule
+non vide à reprendre. Une chaîne à guillemets triples qui s'étend sur plusieurs lignes est
+reprise telle quelle, ses lignes non indentées comprises (c'est ainsi que la vraie Code View
+les écrit). La syntaxe `$Colonne` (écrite par l'onglet **Export**) et `rec.Colonne`
+(écrite par la vraie Code View) sont toutes deux valides pour Grist.
 
 La case est **décochée par défaut, volontairement** : une formule est du code Python que
 Grist exécute dans ce document dès sa création, et un texte collé peut venir de
@@ -189,6 +191,12 @@ directement de Grist (sans ces arguments), ne donne que les types.
   du document de destination est créée telle quelle, et Grist en affiche l'erreur.
 - Le widget copie la **structure** d'une table : ni les données, ni les droits d'accès, ni
   les vues et widgets de la page, ni les tables de synthèse ne sont repris ou proposés.
+- **Versions de Grist** : la suite complète (`npm run test:grist`, plus de 300 tests) passe
+  sur Grist 1.2.1 (octobre 2024), 1.6.1, 1.7.1, 1.7.20 et une version de développement du
+  1er octobre 2026. Avant 1.2, le moteur ne connaît pas les références bidirectionnelles
+  (essayé sur 1.1.10 : le widget le dit dans le message de fin et crée des références
+  simples) ; avant 1.1, il n'a pas de description de colonne (1.0.5). Ces versions ne sont
+  pas couvertes par la suite complète.
 
 ## Export
 
@@ -383,7 +391,9 @@ GRIST_URL=http://localhost:8484 npm run test:grist   # GRIST_URL est ce défaut
 ```
 
 Grist n'accepte que le nom d'hôte de `APP_HOME_URL` (`localhost`, pas `127.0.0.1`). La CI
-exécute la même suite sur la même image (épinglée par digest). Si Chromium n'est pas à
+exécute la même suite sur trois versions de Grist (1.2.1, 1.7.20 et une version de
+développement), images épinglées par digest : pour en changer, `docker pull`, puis reporter
+le digest affiché dans `.github/workflows/ci.yml`. Si Chromium n'est pas à
 l'emplacement attendu par Playwright, `PLAYWRIGHT_CHROMIUM_PATH` indique l'exécutable.
 
 Les fixtures de `test/fixtures/code-view/` sont du texte Code View produit par le

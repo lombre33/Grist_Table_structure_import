@@ -28,11 +28,22 @@ jobs:
         run: npm run test:browser
 
   grist:
-    name: Tests against a real Grist
+    name: Tests against Grist ${{ matrix.grist.name }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The oldest version the whole suite passes on, the stable one and a development build; pinned by digest, like the actions (README.md)
+        grist:
+          - name: "1.2.1"
+            image: gristlabs/grist:1.2.1@sha256:a96916d6a70601ab86fba6eb1fef7023b206001f023622c4f22616ecfd01588c
+          - name: "1.7.20"
+            image: gristlabs/grist:1.7.20@sha256:c862d4c1ffa2a36009d69b72e7ab319155c3529da7df2de0a4e437e994cfe7f1
+          - name: "development build of 2026-10-01"
+            image: gristlabs/grist@sha256:0a927acfeddaffcb412d75d670bbc3bf0a81f8368a19ef1e8478ad45e1ec1f69
     services:
       grist:
-        image: gristlabs/grist:1.7.20@sha256:c862d4c1ffa2a36009d69b72e7ab319155c3529da7df2de0a4e437e994cfe7f1
+        image: ${{ matrix.grist.image }}
         ports:
           - 8484:8484
         env:

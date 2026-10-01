@@ -18,3 +18,9 @@ test("every npm script the README tells to run exists", () => {
   assert.ok(mentioned.length >= 3, "the commands were read");
   assert.deepEqual(mentioned.filter((name) => !scripts.includes(name)), []);
 });
+
+test("the versions of Grist the CI tests on are the ones the README names", () => {
+  const versions = [...read(".github/workflows/ci.yml").matchAll(/^\s*image:\s+gristlabs\/grist:([\d.]+)@sha256/gm)].map((match) => match[1]);
+  assert.ok(versions.length >= 2, "the versions were read");
+  for (const version of versions) assert.ok(readme.includes(version), version);
+});
