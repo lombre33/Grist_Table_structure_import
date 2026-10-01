@@ -306,7 +306,9 @@ chose que l'API d'un widget : `listTables`, `fetchTable`, `applyUserActions` ave
 `retValues`). Il vérifie ce que le widget attend du moteur (normalisation des identifiants,
 description ignorée à la création, lot atomique...), l'aller-retour Export → Import de
 chaque type de colonne avec toutes ses options, les identifiants contre le moteur, la
-logique d'import, et l'interface complète pilotée dans Chromium. Pour en lancer une :
+logique d'import, et l'interface complète pilotée dans Chromium, et le widget monté comme widget personnalisé
+dans la vraie page de Grist (iframe, vrai script d'API, vraie autorisation d'accès). Pour
+en lancer une :
 
 ```sh
 docker run -d -p 8484:8484 -e APP_HOME_URL=http://localhost:8484 \

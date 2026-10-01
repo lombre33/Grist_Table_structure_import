@@ -62,6 +62,8 @@ export async function launchWidget() {
 
   return {
     open,
+    url,
+    browser,
     async close() {
       await browser.close();
       server.close();

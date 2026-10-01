@@ -70,7 +70,7 @@ function openDoc(request, id) {
   return doc;
 }
 
-/** Logs in and returns `{ newDoc(name), cleanup() }`; a new document only holds Grist's default `Table1`. */
+/** Logs in and returns `{ newDoc(name), cleanup(), url, cookies }`; a new document only holds Grist's default `Table1`. */
 export async function connect() {
   const headers = await authHeaders();
   const request = (method, path, body) => call(headers, method, path, body);
@@ -78,8 +78,12 @@ export async function connect() {
   const org = orgs.find((candidate) => candidate.owner) ?? orgs[0];
   const [workspace] = await request("GET", `/api/orgs/${org.id}/workspaces`);
   const workspaceId = workspace?.id ?? (await request("POST", `/api/orgs/${org.id}/workspaces`, { name: "Tests" }));
+  await request("PATCH", `/api/orgs/${org.id}`, { userOrgPrefs: { showGristTour: false } }); // the first-run tour covers pages opened in a browser
   const created = new Set();
   return {
+    url: BASE,
+    /** The session as browser cookies, to open Grist's own pages. */
+    cookies: (headers.Cookie ?? "").split("; ").filter(Boolean).map((pair) => ({ name: pair.split("=")[0], value: pair.slice(pair.indexOf("=") + 1), url: BASE })),
     async newDoc(name = "test") {
       const id = await request("POST", `/api/workspaces/${workspaceId}/docs`, { name });
       created.add(id);
