@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   zipRows,
-  visibleSortedColumns,
+  userColumns,
   existingColumnIds,
   fetchDocSchema,
   buildExportSchema,
@@ -21,7 +21,7 @@ test("zipRows handles an empty table", () => {
   assert.deepEqual(zipRows({ id: [] }), []);
 });
 
-test("visibleSortedColumns hides reserved/helper columns and orders data before formulas", () => {
+test("userColumns hides reserved/helper columns and orders data before formulas", () => {
   const columns = [
     { parentId: 1, colId: "manualSort", parentPos: 0, isFormula: false },
     { parentId: 1, colId: "id", parentPos: 0.5, isFormula: false },
@@ -31,7 +31,7 @@ test("visibleSortedColumns hides reserved/helper columns and orders data before 
     { parentId: 1, colId: "Age", parentPos: 1.5, isFormula: false },
     { parentId: 2, colId: "OtherTable", parentPos: 0, isFormula: false },
   ];
-  const result = visibleSortedColumns(columns, 1).map((c) => c.colId);
+  const result = userColumns(columns, 1).map((c) => c.colId);
   assert.deepEqual(result, ["Age", "Name", "Computed"]);
 });
 
@@ -206,4 +206,21 @@ test("findReferencedTables handles RefList and groups multiple referencing colum
   ];
   const referenced = findReferencedTables(tables, allColumns, ["Foo"]);
   assert.deepEqual(referenced.get("Bar"), ["Foo.Owners", "Foo.BackupOwner"]);
+});
+
+test("fetchDocSchema also lists the id of every table, summary ones included", async () => {
+  const grist = stubGrist(
+    { id: [1, 2], tableId: ["Zebra", "Zebra_summary_X"], summarySourceTable: [0, 1] },
+    { id: [], parentId: [], colId: [], type: [], isFormula: [], formula: [], parentPos: [] }
+  );
+  assert.deepEqual((await fetchDocSchema(grist)).tableIds, ["Zebra", "Zebra_summary_X"]);
+});
+
+test("findReferencedTables lists the tables alphabetically", () => {
+  const tables = [{ tableId: "A", tableRef: 1 }, { tableId: "Zed", tableRef: 2 }, { tableId: "Bee", tableRef: 3 }];
+  const columns = [
+    { id: 1, parentId: 1, colId: "ToZed", type: "Ref:Zed", isFormula: false, parentPos: 1 },
+    { id: 2, parentId: 1, colId: "ToBee", type: "RefList:Bee", isFormula: false, parentPos: 2 },
+  ];
+  assert.deepEqual([...findReferencedTables(tables, columns, ["A"])], [["Bee", ["A.ToBee"]], ["Zed", ["A.ToZed"]]]);
 });

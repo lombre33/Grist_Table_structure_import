@@ -1,29 +1,7 @@
 /**
- * Generates Python "Code View" text from a table schema, mirroring Grist's
- * own generator (`sandbox/grist/gencode.py`, function `make_module` /
- * `_make_table_model`) closely enough to produce the same header, the same
- * blank-line spacing between fields, and the same `grist.Xxx(...)` type
- * expressions (via gristTypes.js's `buildTypeExpression`).
- *
- * One deliberate difference: for a formula column whose real formula is
- * non-blank, Grist's generator translates `$col` references to `rec.col`
- * using a full Python-aware parser. Reproducing that exactly would need a
- * Python parser, which this zero-dependency widget does not carry. Instead,
- * the raw stored formula text (still using Grist's `$col` syntax) is
- * reproduced as-is — correct information, just not translated to the same
- * dialect real Code View shows. A blank formula still becomes exactly
- * `return <type default>`, as Grist itself generates for that case.
- *
- * A second, deliberate difference, additive on top of the real format: each
- * column's `grist.Xxx(...)` call may also carry `choices=`, `widget_options=`,
- * `label=`, `description=` and `visible_col=` keyword arguments capturing
- * extra metadata read from the real document (see js/gristTypes.js's module
- * comment for the exact contract and js/schema.js for where each value is
- * read from). This is this widget's own extension — real Grist Code View
- * does not write most of these — kept to a single line per column so the
- * existing "capture up to the closing parenthesis" parsing model still
- * applies (see js/parser.js's bracket-depth scanner, which this generator's
- * output relies on for values containing parentheses).
+ * Code View text from a table schema, in the format of Grist's gencode.py. Two differences: a
+ * formula keeps Grist's `$col` syntax (translating it to `rec.col` takes a Python parser), and a
+ * column's constructor may carry this widget's own arguments (see buildKwargs).
  */
 
 import { buildTypeExpression, defaultLiteralForType } from "./gristTypes.js";
@@ -36,100 +14,53 @@ const HEADER =
   "import datetime, math, re     # modules commonly needed in formulas\n";
 
 const INDENT = "  ";
-const STATEMENT_START_RE = /^(return|if|for|while|with|try|raise|assert|import|def|class|pass|#)\b/;
+const STATEMENT_START_RE = /^(return|if|for|while|with|try|raise|assert|import|def|class|pass)\b/;
 
-/**
- * @param {Array<{tableId: string, columns: Array<{colId: string, type: string, isFormula: boolean, formula?: string}>}>} tables
- * @returns {string}
- */
+/** @param {{tableId: string, columns: object[]}[]} tables as built by buildExportSchema */
 export function generateCode(tables) {
-  let text = HEADER;
-  for (const table of tables) {
-    text += "\n\n" + tableBlockText(table);
-  }
-  return text;
+  return HEADER + tables.map((table) => `\n\n${tableText(table)}`).join("");
 }
 
-function tableBlockText(table) {
-  let text = `@grist.UserTable\nclass ${table.tableId}:\n`;
-  if (table.columns.length === 0) {
-    return text + `${INDENT}pass\n`;
-  }
-  for (const col of table.columns) {
-    text += fieldText(col);
-  }
-  return text;
+function tableText({ tableId, columns }) {
+  const body = columns.length > 0 ? columns.map(fieldText).join("") : `${INDENT}pass\n`;
+  return `@grist.UserTable\nclass ${tableId}:\n${body}`;
 }
 
 function fieldText(col) {
   const kwargs = buildKwargs(col);
   const typeExpr = buildTypeExpression(col.type, kwargs);
+  if (!col.isFormula) return `${INDENT}${col.colId} = ${typeExpr}\n`;
 
-  if (!col.isFormula) {
-    return `${INDENT}${col.colId} = ${typeExpr}\n`;
-  }
-
-  const needsType = col.type !== "Any" || Object.keys(kwargs).length > 0;
-  const decorator = needsType ? `${INDENT}@grist.formulaType(${typeExpr})\n` : "";
-  const decl = `${INDENT}def ${col.colId}(rec, table):\n`;
-  const body = formulaBodyText(col.formula, defaultLiteralForType(col.type), INDENT + INDENT);
-  return `\n${decorator}${decl}${body}\n`;
+  const typed = col.type !== "Any" || Object.keys(kwargs).length > 0;
+  const decorator = typed ? `${INDENT}@grist.formulaType(${typeExpr})\n` : "";
+  return `\n${decorator}${INDENT}def ${col.colId}(rec, table):\n${formulaBody(col.formula, defaultLiteralForType(col.type))}\n`;
 }
 
-/**
- * Builds the extra keyword arguments (see module comment) for one column,
- * as raw Python source snippets ready to hand to `buildTypeExpression`.
- * Only ever includes a kwarg when there is something non-default to say,
- * so a column with no captured metadata generates identically to before
- * this feature existed.
- */
+/** What a column has beyond its type, as Python source: only what there is to say. */
 function buildKwargs(col) {
-  const kwargs = {};
-  const widgetOptions = isPlainObject(col.widgetOptions) ? col.widgetOptions : null;
-
-  if (widgetOptions && Array.isArray(widgetOptions.choices) && widgetOptions.choices.length > 0) {
-    kwargs.choices = `[${widgetOptions.choices.map(quotePython).join(", ")}]`;
-  }
-
-  const restOptions = sanitizeWidgetOptions(widgetOptions);
-  if (restOptions) {
-    kwargs.widget_options = quotePython(JSON.stringify(restOptions));
-  }
-
-  if (col.label && col.label !== col.colId) {
-    kwargs.label = quotePython(col.label);
-  }
-  if (col.description) {
-    kwargs.description = quotePython(col.description);
-  }
-  if (col.visibleColId) {
-    kwargs.visible_col = quotePython(col.visibleColId);
-  }
-
-  return kwargs;
+  const options = isPlainObject(col.widgetOptions) ? col.widgetOptions : null;
+  const otherOptions = sanitizeWidgetOptions(options);
+  return {
+    ...(Array.isArray(options?.choices) && options.choices.length > 0 && { choices: `[${options.choices.map(quotePython).join(", ")}]` }),
+    ...(otherOptions && { widget_options: quotePython(JSON.stringify(otherOptions)) }),
+    ...(col.label && col.label !== col.colId && { label: quotePython(col.label) }),
+    ...(col.description && { description: quotePython(col.description) }),
+    ...(col.visibleColId && { visible_col: quotePython(col.visibleColId) }),
+  };
 }
 
-function formulaBodyText(formula, defaultLiteral, bodyIndent) {
-  const trimmed = String(formula || "").trim();
-  if (!trimmed) {
-    return bodyIndent + "return " + defaultLiteral;
-  }
+function formulaBody(formula, blankLiteral) {
+  const text = String(formula ?? "");
+  const body = INDENT + INDENT;
+  if (!text.trim()) return `${body}return ${blankLiteral}`;
 
-  const lines = dedent(String(formula).replace(/\r\n?/g, "\n").split("\n"));
-  if (lines.length === 1) {
-    const line = STATEMENT_START_RE.test(trimmed) ? trimmed : `return ${trimmed}`;
-    return bodyIndent + line;
-  }
-  return lines.map((line) => (line ? bodyIndent + line : "")).join("\n");
+  const lines = dedent(text.replace(/\r\n?/g, "\n").split("\n"));
+  if (lines.length > 1) return lines.map((line) => (line ? body + line : "")).join("\n");
+  return body + (STATEMENT_START_RE.test(text.trim()) ? text.trim() : `return ${text.trim()}`);
 }
 
 function dedent(lines) {
-  let minIndent = Infinity;
-  for (const line of lines) {
-    if (line.trim() === "") continue;
-    const leading = line.match(/^[ \t]*/)[0].length;
-    minIndent = Math.min(minIndent, leading);
-  }
-  if (!Number.isFinite(minIndent) || minIndent === 0) return lines;
-  return lines.map((line) => (line.trim() === "" ? line : line.slice(minIndent)));
+  const indents = lines.filter((line) => line.trim() !== "").map((line) => line.match(/^[ \t]*/)[0].length);
+  const common = Math.min(...indents);
+  return common > 0 && Number.isFinite(common) ? lines.map((line) => (line.trim() === "" ? line : line.slice(common))) : lines;
 }
