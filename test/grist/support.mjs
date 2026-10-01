@@ -99,7 +99,7 @@ export async function buildSource(doc, spec) {
       if (reverse) followUps.push(["ModifyColumn", tableId, id, { reverseCol: await columnRef(doc, type.split(":")[1], reverse) }]);
       if (visibleCol) {
         const target = await columnRef(doc, type.split(":")[1], visibleCol);
-        followUps.push(["ModifyColumn", tableId, id, { visibleCol: target }], ["SetDisplayFormula", tableId, null, id, `$${id}.${visibleCol}`]);
+        followUps.push(["ModifyColumn", tableId, id, { visibleCol: target }], ["SetDisplayFormula", tableId, null, await columnRef(doc, tableId, id), `$${id}.${visibleCol}`]);
       }
     }
   }

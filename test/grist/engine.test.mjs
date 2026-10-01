@@ -81,7 +81,8 @@ test("ModifyColumn visibleCol + SetDisplayFormula make a reference display anoth
   const doc = await instance.newDoc();
   await doc.apply([["AddTable", "Other", [column("Name")]], ["AddTable", "Main", [column("Owner", "Ref:Other")]]]);
   const nameRef = await columnRef(doc, "Other", "Name");
-  await doc.apply([["ModifyColumn", "Main", "Owner", { visibleCol: nameRef }], ["SetDisplayFormula", "Main", null, "Owner", "$Owner.Name"]]);
+  const ownerRef = await columnRef(doc, "Main", "Owner");
+  await doc.apply([["ModifyColumn", "Main", "Owner", { visibleCol: nameRef }], ["SetDisplayFormula", "Main", null, ownerRef, "$Owner.Name"]]);
 
   const main = await doc.columns("Main");
   const owner = main.find((col) => col.colId === "Owner");

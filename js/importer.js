@@ -182,8 +182,8 @@ async function finish(grist, requested, created) {
 /**
  * Applies what the creation actions cannot: AddTable and AddVisibleColumn drop
  * descriptions and the independence of an id from its label, and a display column
- * needs the row id of a column that only exists once the tables do. Returns a note
- * about whatever was not applied.
+ * needs the row ids of columns that only exist once the tables do (SetDisplayFormula takes
+ * no other form on every version of Grist). Returns a note about whatever was not applied.
  */
 async function refine(grist, tables) {
   const pending = tables.flatMap(({ id, columns }) =>
@@ -204,7 +204,7 @@ async function refine(grist, tables) {
         ...(isUntied(col) && { untieColIdFromLabel: true }),
       };
       if (Object.keys(changes).length > 0) actions.push(["ModifyColumn", col.tableId, col.id, changes]);
-      if (displayRef) actions.push(["SetDisplayFormula", col.tableId, null, col.id, `$${col.id}.${col.visibleColId}`]);
+      if (displayRef) actions.push(["SetDisplayFormula", col.tableId, null, columnRef(schema, col.tableId, col.id), `$${col.id}.${col.visibleColId}`]);
     }
     if (actions.length > 0) await grist.docApi.applyUserActions(actions);
     return unfound.map((col) => ` ${t("warn.visibleColMissing", { colId: col.id, visibleColId: col.visibleColId, target: splitType(col.type).arg })}`).join("");

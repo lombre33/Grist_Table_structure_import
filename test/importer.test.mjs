@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { checkTableId, defaultTableId, idFromLabel, resolveColumns, twoWayPairs, twoWayWarnings } from "../js/importer.js";
+import { checkTableId, createTables, defaultTableId, idFromLabel, resolveColumns, twoWayPairs, twoWayWarnings } from "../js/importer.js";
 
 const table = (...columns) => ({ tableId: "Source", columns: columns.map(([id, dslType, argsRaw = "", kind = "data", code = ""]) => ({ id, dslType, argsRaw, kind, code })) });
 const ids = (...pairs) => new Map(pairs);
@@ -187,4 +187,35 @@ test("several pairs are found, each once", () => {
     made("People", PETS, ["Patients", "ReferenceList", "'Pets', reverse_of='Vet'"]),
   ];
   assert.deepEqual(names(twoWayPairs(batch)), [["Pets.Owner", "People.Pets"], ["Pets.Vet", "People.Patients"]]);
+});
+
+/**
+ * A Grist that records what is applied and describes the document as it is once it has been: `after` maps
+ * each table to its columns (row ids follow the order), `before` lists the tables there at the start.
+ */
+function recordingGrist({ after, before = [] }) {
+  const calls = [];
+  const tableIds = Object.keys(after);
+  const columns = tableIds.flatMap((tableId, i) => after[tableId].map((colId) => ({ parentId: i + 1, colId })));
+  const metadata = {
+    _grist_Tables: { id: tableIds.map((_, i) => i + 1), tableId: tableIds, summarySourceTable: tableIds.map(() => 0) },
+    _grist_Tables_column: { id: columns.map((_, i) => i + 1), parentId: columns.map((col) => col.parentId), colId: columns.map((col) => col.colId) },
+  };
+  return {
+    calls,
+    docApi: {
+      listTables: async () => before,
+      fetchTable: async (name) => metadata[name],
+      applyUserActions: async (actions) => {
+        calls.push(actions);
+        return { retValues: actions.map(([name, tableId, second]) => (name === "AddTable" ? { table_id: tableId, columns: second.map((col) => col.id) } : null)) };
+      },
+    },
+  };
+}
+
+test("a display column is set through the row ids of both columns, the one form every Grist version accepts", async () => {
+  const grist = recordingGrist({ before: ["People"], after: { People: ["Name"], Main: ["Owner"] } });
+  await createTables(grist, [made("Main", ["Owner", "Reference", "'People', visible_col='Name'"])]);
+  assert.deepEqual(grist.calls[1], [["ModifyColumn", "Main", "Owner", { visibleCol: 1 }], ["SetDisplayFormula", "Main", null, 2, "$Owner.Name"]]);
 });

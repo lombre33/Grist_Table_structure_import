@@ -47,3 +47,11 @@ test("every action of the workflows is pinned by the commit of a version, which 
     }
   }
 });
+
+test("every container image of the workflows is pinned by digest, as a tag can be moved", () => {
+  const images = readdirSync(new URL("../.github/workflows/", import.meta.url)).flatMap((name) =>
+    [...read(`.github/workflows/${name}`).matchAll(/^\s*(?:-\s+)?image:\s+(\S+)/gm)].map((match) => [name, match[1]])
+  );
+  assert.ok(images.length > 0, "the images were read");
+  for (const [name, image] of images) assert.match(image, /@sha256:[0-9a-f]{64}$|^\$\{\{ matrix\./, `${name}: ${image}`);
+});
