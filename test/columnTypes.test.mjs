@@ -9,7 +9,7 @@
  * Other test files already cover individual behaviors (kwarg parsing,
  * sanitizeWidgetOptions, generateCode formatting...) in more depth; this
  * file's job is narrower and specific: for each type, (1) resolveColumnType
- * produces the right `type` string and no spurious warning, (2) describeType
+ * produces the right `type` string and no spurious warning, (2) typeLabel
  * gives a sensible label, (3) buildTypeExpression is the exact inverse used
  * by Export, (4) defaultLiteralForType matches Grist's own
  * `usertypes.py:_type_defaults`, and (5) a full
@@ -19,7 +19,8 @@
 
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { resolveColumnType, describeType, buildTypeExpression, defaultLiteralForType } from "../js/gristTypes.js";
+import { resolveColumnType, buildTypeExpression, defaultLiteralForType } from "../js/gristTypes.js";
+import { typeLabel } from "../js/i18n.js";
 import { generateCode } from "../js/codeGenerator.js";
 import { parseGristSchema } from "../js/parser.js";
 
@@ -30,7 +31,7 @@ function resolve(dslType, argsRaw = "") {
 }
 
 // Types with no positional constructor argument and no type-specific
-// metadata: DSL constructor name, resolved Grist `type`, describeType label,
+// metadata: DSL constructor name, resolved Grist `type`, typeLabel label,
 // and the Python literal used for a blank formula of that type.
 const SIMPLE_TYPES = [
   { dsl: "Text", label: "Texte", literal: "''" },
@@ -54,7 +55,7 @@ describe("simple (argument-less) column types", () => {
       assert.equal(widgetOptions, null);
       assert.equal(refTarget, null);
       assert.deepEqual(warnings, []);
-      assert.equal(describeType(type), c.label);
+      assert.equal(typeLabel(type), c.label);
       assert.equal(buildTypeExpression(type), `grist.${c.dsl}()`);
       assert.equal(defaultLiteralForType(type), c.literal);
     });
@@ -78,8 +79,8 @@ describe("Choice / ChoiceList", () => {
       assert.deepEqual(widgetOptions, { choices: ["A", "B", "C"] });
     });
 
-    test(`${dsl}: describeType / buildTypeExpression / defaultLiteralForType`, () => {
-      assert.equal(describeType(dsl), label);
+    test(`${dsl}: typeLabel / buildTypeExpression / defaultLiteralForType`, () => {
+      assert.equal(typeLabel(dsl), label);
       assert.equal(buildTypeExpression(dsl), `grist.${dsl}()`);
       assert.equal(defaultLiteralForType(dsl), literal);
     });
@@ -99,8 +100,8 @@ describe("DateTime (the one type with a required, defaulted positional argument)
     assert.deepEqual(warnings, []);
   });
 
-  test("describeType / buildTypeExpression / defaultLiteralForType", () => {
-    assert.equal(describeType("DateTime:UTC"), "Date et heure (UTC)");
+  test("typeLabel / buildTypeExpression / defaultLiteralForType", () => {
+    assert.equal(typeLabel("DateTime:UTC"), "Date et heure (UTC)");
     assert.equal(buildTypeExpression("DateTime:UTC"), "grist.DateTime('UTC')");
     assert.equal(defaultLiteralForType("DateTime:UTC"), "None");
   });
@@ -127,8 +128,8 @@ describe("Reference / ReferenceList", () => {
       }
     });
 
-    test(`${dsl}: describeType / buildTypeExpression / defaultLiteralForType`, () => {
-      assert.equal(describeType(`${prefix}:Foo`), label);
+    test(`${dsl}: typeLabel / buildTypeExpression / defaultLiteralForType`, () => {
+      assert.equal(typeLabel(`${prefix}:Foo`), label);
       assert.equal(buildTypeExpression(`${prefix}:Foo`), `grist.${ctor}('Foo')`);
       assert.equal(defaultLiteralForType(`${prefix}:Foo`), literal);
     });

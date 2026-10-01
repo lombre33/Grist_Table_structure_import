@@ -63,19 +63,17 @@ export function visibleSortedColumns(allColumns, tableRef) {
 }
 
 /**
- * All existing column ids of a table (unfiltered — including reserved and
- * helper ones), used to detect name collisions when adding columns.
+ * Lower-cased ids of all the columns of a table, hidden ones included: Grist
+ * keeps column ids unique ignoring case, so this is what a new id is checked against.
  */
 export function existingColumnIds(allColumns, tableRef) {
-  return new Set(allColumns.filter((col) => col.parentId === tableRef).map((col) => col.colId));
+  return new Set(allColumns.filter((col) => col.parentId === tableRef).map((col) => col.colId.toLowerCase()));
 }
 
 /**
- * Reads `_grist_Tables` and `_grist_Tables_column` and returns the list of
- * user-facing tables (excluding Grist's own `_grist_*` metadata tables and
- * summary/pivot tables, which this widget's simple AddTable/AddColumn
- * actions cannot meaningfully reproduce) plus every column row, so callers
- * can look up a specific table's columns with `visibleSortedColumns`.
+ * Reads `_grist_Tables` and `_grist_Tables_column`: the user-facing tables
+ * (no `_grist_*` metadata and no summary tables, which AddTable/AddColumn cannot
+ * reproduce), every column row, and the ids of all the tables, summary ones included.
  */
 export async function fetchDocSchema(grist) {
   const [tablesRaw, columnsRaw] = await Promise.all([
@@ -83,13 +81,13 @@ export async function fetchDocSchema(grist) {
     grist.docApi.fetchTable("_grist_Tables_column"),
   ]);
 
-  const allColumns = zipRows(columnsRaw);
-  const tables = zipRows(tablesRaw)
+  const allTables = zipRows(tablesRaw);
+  const tables = allTables
     .filter((table) => !String(table.tableId).startsWith("_grist_") && !table.summarySourceTable)
     .map((table) => ({ tableRef: table.id, tableId: table.tableId }))
     .sort((a, b) => a.tableId.localeCompare(b.tableId));
 
-  return { tables, allColumns };
+  return { tables, allColumns: zipRows(columnsRaw), tableIds: allTables.map((table) => table.tableId) };
 }
 
 /**

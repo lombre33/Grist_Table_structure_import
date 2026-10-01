@@ -85,6 +85,19 @@ const STRINGS = {
     "error.timeout": "Délai dépassé en attendant la réponse du document Grist.",
     "common.tablesCount": { one: "{n} table", other: "{n} tables" },
     "common.columnsCount": { one: "{n} colonne", other: "{n} colonnes" },
+    "type.Text": "Texte",
+    "type.Numeric": "Numérique",
+    "type.Int": "Entier",
+    "type.Bool": "Case à cocher",
+    "type.Date": "Date",
+    "type.DateTime": "Date et heure ({arg})",
+    "type.Choice": "Choix (liste déroulante)",
+    "type.ChoiceList": "Choix multiples (liste déroulante)",
+    "type.Ref": "Référence vers « {arg} »",
+    "type.RefList": "Références vers « {arg} » (liste)",
+    "type.Attachments": "Pièces jointes",
+    "type.Blob": "Binaire (Blob)",
+    "type.Any": "Quelconque (Any)",
 
     "warn.invalidWidgetOptions": "Colonne « {columnId} » : widget_options n'est pas un JSON valide, ignoré.",
     "warn.dateTimeNoTimezone":
@@ -104,7 +117,6 @@ const STRINGS = {
     "warn.tablePrefix": "Table « {tableId} » — {message}",
 
     "import.error.fetchDocInfo": "Impossible de récupérer les informations de ce document : {error}.",
-    "import.error.fetchExistingTables": "Impossible de lire les tables existantes de ce document : {error}.",
     "warn.refTargetMissingInDoc":
       "Colonne « {colId} » : la table cible « {target} » n'existe pas dans ce document, importée en tant que « Any » " +
       "(vous pourrez la reconfigurer en Référence une fois la table cible créée).",
@@ -116,8 +128,8 @@ const STRINGS = {
     "import.error.noTablesToComplete": "Ce document ne contient aucune table à compléter.",
     "import.validation.emptyId": "L'identifiant ne peut pas être vide.",
     "import.validation.invalidId":
-      "L'identifiant doit commencer par une lettre ou « _ » et ne contenir que des lettres, chiffres et « _ » " +
-      "(pas d'espace ni d'accent).",
+      "L'identifiant doit commencer par une majuscule et ne contenir que des lettres, chiffres et « _ » " +
+      "(pas d'espace ni d'accent). « None », « True » et « False » sont réservés.",
     "import.validation.duplicateId": "Identifiant utilisé plusieurs fois dans cette sélection.",
     "import.validation.tableExists": "Une table « {id} » existe déjà dans ce document ; choisissez un autre identifiant.",
     "import.action.chooseTarget": "Choisissez une table à compléter",
@@ -131,10 +143,7 @@ const STRINGS = {
       one: "Cette table existe déjà dans ce document : {ids}. Choisissez un autre identifiant.",
       other: "Ces tables existent déjà dans ce document : {ids}. Choisissez d'autres identifiants.",
     },
-    "import.note.visibleColFailed": {
-      one: " Colonne d'affichage (visible_col) non appliquée : {error}.",
-      other: " Colonnes d'affichage (visible_col) non appliquées : {error}.",
-    },
+    "import.note.refineFailed": " Descriptions et colonnes d'affichage non appliquées : {error}.",
     "import.success.createdMulti": "{count} tables créées ({ids}), {columnsPhrase} au total.",
     "import.success.createdSingle": "Table « {id} » créée avec {columnsPhrase}.",
     "import.error.createFailed": "Échec de la création : {error}",
@@ -226,6 +235,19 @@ const STRINGS = {
     "error.timeout": "Timed out waiting for a response from the Grist document.",
     "common.tablesCount": { one: "{n} table", other: "{n} tables" },
     "common.columnsCount": { one: "{n} column", other: "{n} columns" },
+    "type.Text": "Text",
+    "type.Numeric": "Numeric",
+    "type.Int": "Integer",
+    "type.Bool": "Checkbox",
+    "type.Date": "Date",
+    "type.DateTime": "Date and time ({arg})",
+    "type.Choice": "Choice (dropdown)",
+    "type.ChoiceList": "Multiple choice (dropdown)",
+    "type.Ref": "Reference to “{arg}”",
+    "type.RefList": "References to “{arg}” (list)",
+    "type.Attachments": "Attachments",
+    "type.Blob": "Binary (Blob)",
+    "type.Any": "Any",
 
     "warn.invalidWidgetOptions": "Column “{columnId}”: widget_options is not valid JSON, ignored.",
     "warn.dateTimeNoTimezone": "Column “{columnId}”: no timezone given for DateTime, defaulting to “{timezone}” (please check).",
@@ -244,7 +266,6 @@ const STRINGS = {
     "warn.tablePrefix": "Table “{tableId}” — {message}",
 
     "import.error.fetchDocInfo": "Could not retrieve this document's information: {error}.",
-    "import.error.fetchExistingTables": "Could not read this document's existing tables: {error}.",
     "warn.refTargetMissingInDoc":
       "Column “{colId}”: the target table “{target}” does not exist in this document, imported as “Any” " +
       "(you can reconfigure it as a Reference once the target table is created).",
@@ -255,7 +276,8 @@ const STRINGS = {
     "import.error.noTablesToComplete": "This document has no table to add columns to.",
     "import.validation.emptyId": "The identifier cannot be empty.",
     "import.validation.invalidId":
-      "The identifier must start with a letter or “_” and contain only letters, digits and “_” (no spaces or accents).",
+      "The identifier must start with a capital letter and contain only letters, digits and “_” (no spaces or accents). " +
+      "“None”, “True” and “False” are reserved.",
     "import.validation.duplicateId": "This identifier is used more than once in this selection.",
     "import.validation.tableExists": "A table “{id}” already exists in this document; choose another identifier.",
     "import.action.chooseTarget": "Choose a table to complete",
@@ -269,10 +291,7 @@ const STRINGS = {
       one: "This table already exists in this document: {ids}. Choose another identifier.",
       other: "These tables already exist in this document: {ids}. Choose other identifiers.",
     },
-    "import.note.visibleColFailed": {
-      one: " Display column (visible_col) not applied: {error}.",
-      other: " Display columns (visible_col) not applied: {error}.",
-    },
+    "import.note.refineFailed": " Descriptions and display columns not applied: {error}.",
     "import.success.createdMulti": "{count} tables created ({ids}), {columnsPhrase} in total.",
     "import.success.createdSingle": "Table “{id}” created with {columnsPhrase}.",
     "import.error.createFailed": "Creation failed: {error}",
@@ -356,6 +375,12 @@ export function tn(key, count, params) {
   const entry = (STRINGS[currentLocale] && STRINGS[currentLocale][key]) || STRINGS.fr[key];
   const form = entry && typeof entry === "object" ? (count === 1 ? entry.one : entry.other) : key;
   return interpolate(form, { n: count, ...params });
+}
+
+/** Readable name of a Grist column type such as "Ref:People" or "DateTime:UTC". */
+export function typeLabel(type) {
+  const [name, arg] = type.split(":");
+  return t(`type.${name}`, { arg });
 }
 
 export function getLocale() {

@@ -312,30 +312,6 @@ function choicesWidgetOptions(argsRaw) {
 }
 
 /**
- * Human-readable (French) label for a resolved Grist `type` string, used
- * only for display in the preview table.
- */
-export function describeType(type) {
-  if (type.startsWith("DateTime:")) return `Date et heure (${type.slice("DateTime:".length)})`;
-  if (type.startsWith("Ref:")) return `Référence vers « ${type.slice("Ref:".length)} »`;
-  if (type.startsWith("RefList:")) return `Références vers « ${type.slice("RefList:".length)} » (liste)`;
-
-  switch (type) {
-    case "Text": return "Texte";
-    case "Numeric": return "Numérique";
-    case "Int": return "Entier";
-    case "Bool": return "Case à cocher";
-    case "Date": return "Date";
-    case "Choice": return "Choix (liste déroulante)";
-    case "ChoiceList": return "Choix multiples (liste déroulante)";
-    case "Attachments": return "Pièces jointes";
-    case "Blob": return "Binaire (Blob)";
-    case "Any": return "Quelconque (Any)";
-    default: return type;
-  }
-}
-
-/**
  * Default value (as a Python literal) Grist uses for each pure column type,
  * taken verbatim from `_type_defaults` in Grist's own `sandbox/grist/usertypes.py`.
  * Used only to fill in `return <default>` for a formula column whose real

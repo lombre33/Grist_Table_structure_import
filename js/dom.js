@@ -27,6 +27,14 @@ export function clear(node) {
   while (node.firstChild) node.removeChild(node.firstChild);
 }
 
+/** A function that shows one message (or nothing, for a falsy one) in `region`. */
+export function statusWriter(region) {
+  return (message, level = "info") => {
+    clear(region);
+    if (message) region.appendChild(el("p", { class: `status status-${level}`, text: message }));
+  };
+}
+
 /**
  * Keeps a boolean CSS class in sync with a radio group's checked state, as a
  * JS-driven fallback for the `:has()` selector used in style.css for the

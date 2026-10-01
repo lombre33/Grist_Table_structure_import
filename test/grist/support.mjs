@@ -1,8 +1,11 @@
+import { after } from "node:test";
 import { connect, rows } from "./client.mjs";
 
 export const instance = await connect().catch((err) => {
   throw new Error(`No usable Grist instance (set GRIST_URL, see README "Tests against a real Grist"): ${err.message}`);
 });
+
+after(() => instance.cleanup());
 
 /** A plain data column payload, as the widget sends it to AddTable / AddVisibleColumn. */
 export const column = (id, type = "Text", extra = {}) => ({ id, type, isFormula: false, formula: "", ...extra });
@@ -19,3 +22,116 @@ export async function columnRef(doc, tableId, colId) {
 }
 
 export { rows };
+
+import { parseGristSchema } from "../../js/parser.js";
+import { createTables, resolveColumns, defaultTableId } from "../../js/importer.js";
+
+/**
+ * Parses Code View text and creates its tables in `doc` as the Import tab does
+ * with its defaults. `ids` renames tables, `exclude` lists unchecked columns.
+ */
+export async function importText(doc, text, { ids = {}, exclude = {} } = {}) {
+  const { tables } = parseGristSchema(text);
+  const known = await doc.tableIds();
+  const destination = new Map(tables.map((table) => [table.tableId, ids[table.tableId] ?? defaultTableId(table.tableId)]));
+  const entries = tables.map((table) => {
+    const left = new Set(exclude[table.tableId]);
+    const { columns } = resolveColumns(table, destination, known, left);
+    return { id: destination.get(table.tableId), columns: columns.filter((col) => !left.has(col.id)) };
+  });
+  return createTables(doc.grist, entries);
+}
+
+/**
+ * What a document holds, read straight from the metadata (not through the
+ * widget): for each table, its visible columns in position order.
+ */
+export async function snapshot(doc) {
+  const [tables, columns] = await Promise.all([doc.fetchTable("_grist_Tables"), doc.fetchTable("_grist_Tables_column")]);
+  const all = rows(columns);
+  const byRef = new Map(all.map((col) => [col.id, col]));
+  const visible = (col) => col.colId !== "manualSort" && !col.colId.startsWith("gristHelper_");
+  return Object.fromEntries(
+    rows(tables)
+      .filter((table) => !table.summarySourceTable)
+      .map((table) => [
+        table.tableId,
+        all
+          .filter((col) => col.parentId === table.id && visible(col))
+          .sort((a, b) => a.parentPos - b.parentPos)
+          .map((col) => ({
+            id: col.colId,
+            type: col.type,
+            isFormula: Boolean(col.isFormula),
+            label: col.label,
+            description: col.description,
+            widgetOptions: col.widgetOptions ? JSON.parse(col.widgetOptions) : null,
+            visibleCol: byRef.get(col.visibleCol)?.colId ?? null,
+          })),
+      ])
+  );
+}
+
+import { fetchDocSchema, buildExportSchema } from "../../js/schema.js";
+import { generateCode } from "../../js/codeGenerator.js";
+
+/**
+ * Creates in `doc` the tables of `spec` (`{ TableId: [{ id, type, formula?,
+ * label?, description?, widgetOptions?, visibleCol? }] }`) the way Grist's own
+ * interface does: columns first, then descriptions and display columns.
+ */
+export async function buildSource(doc, spec) {
+  const payload = ({ id, type, formula, label, widgetOptions }) =>
+    column(id, type, { isFormula: Boolean(formula), formula: formula ?? "", label, widgetOptions: widgetOptions && JSON.stringify(widgetOptions) });
+  await doc.apply(Object.entries(spec).map(([tableId, columns]) => ["AddTable", tableId, columns.map(payload)]));
+
+  const followUps = [];
+  for (const [tableId, columns] of Object.entries(spec)) {
+    for (const { id, type, description, visibleCol } of columns) {
+      if (description) followUps.push(["ModifyColumn", tableId, id, { description }]);
+      if (visibleCol) {
+        const target = await columnRef(doc, type.split(":")[1], visibleCol);
+        followUps.push(["ModifyColumn", tableId, id, { visibleCol: target }], ["SetDisplayFormula", tableId, null, id, `$${id}.${visibleCol}`]);
+      }
+    }
+  }
+  if (followUps.length > 0) await doc.apply(followUps);
+}
+
+/** The Export tab's text for the given tables of `doc`. */
+export async function exportText(doc, tableIds) {
+  const { tables, allColumns } = await fetchDocSchema(doc.grist);
+  return generateCode(buildExportSchema(tables, allColumns, tableIds));
+}
+
+/** Builds `spec` in a first document, exports it, imports the text in a second one. */
+export async function roundTrip(spec) {
+  const source = await instance.newDoc("round trip: source");
+  await buildSource(source, spec);
+  const text = await exportText(source, Object.keys(spec));
+  const target = await instance.newDoc("round trip: target");
+  const { note } = await importText(target, text);
+  const result = { text, note, before: await snapshot(source), after: await snapshot(target) };
+  await instance.cleanup([source.id, target.id]);
+  return result;
+}
+
+/**
+ * What an imported table must look like given the source's columns: data
+ * columns first (as in Code View), formulas turned into data columns, and
+ * the widgetOptions the widget agrees to carry (no rulesOptions, the
+ * dropdown condition reduced to its text).
+ */
+export function expectedAfterImport(columns) {
+  const carried = (options) => {
+    if (!options) return null;
+    const { rulesOptions, dropdownCondition, ...rest } = options;
+    const kept = { ...rest, ...(dropdownCondition && { dropdownCondition: { text: dropdownCondition.text } }) };
+    return Object.keys(kept).length > 0 ? kept : null;
+  };
+  return [...columns.filter((col) => !col.isFormula), ...columns.filter((col) => col.isFormula)].map((col) => ({
+    ...col,
+    isFormula: false,
+    widgetOptions: carried(col.widgetOptions),
+  }));
+}

@@ -1,101 +1,16 @@
 #!/usr/bin/env node
 /**
- * Automated browser regression test for the widget's actual UI/DOM
- * behavior — the parts test/*.test.mjs (pure parsing/generation/schema
- * logic) cannot reach, since they run outside a browser with no DOM.
- *
- * Exists because index.html and test/browser/harness.html duplicate their
- * markup by hand (no build step, no templating — see README.md/SECURITY.md's
- * zero-runtime-dependency posture) and drifted out of sync silently more
- * than once during development, breaking the Import tab in a way `npm test`
- * alone could not catch. This is the automated safety net for that: it
- * serves this repo statically on a local port and drives harness.html (a
- * stubbed `window.grist`, see that file) with Playwright, a devDependency
- * used only here, in CI and local development — never shipped to the
- * published widget (see .github/workflows/pages.yml's file list).
- *
- * Plain assertions (`node:assert/strict`), no test framework, matching
- * test/*.test.mjs's own style: one mental model for "how this project
- * tests things", browser or not.
+ * Interface checks: the real index.html in Chromium (Playwright, a dev-only
+ * dependency never shipped), with an in-memory `grist` (fakeGrist.mjs). Plain
+ * assertions, like the unit tests. Behaviour against a real Grist is in test/grist.
  */
 
-import { chromium } from "playwright";
 import assert from "node:assert/strict";
-import http from "node:http";
-import { readFile } from "node:fs/promises";
-import { extname, join, normalize } from "node:path";
-import { fileURLToPath } from "node:url";
+import { launchWidget } from "./widgetPage.mjs";
+import { fakeGrist } from "./fakeGrist.mjs";
+import { analyse, apply, previewRows } from "./driver.mjs";
 
-const ROOT = fileURLToPath(new URL("../../", import.meta.url));
-const PORT = 8934;
-const BASE_URL = `http://127.0.0.1:${PORT}`;
-const HARNESS_URL = `${BASE_URL}/test/browser/harness.html`;
-
-const MIME_TYPES = {
-  ".html": "text/html; charset=utf-8",
-  ".css": "text/css",
-  ".js": "text/javascript",
-  ".mjs": "text/javascript",
-  ".svg": "image/svg+xml",
-  ".jpg": "image/jpeg",
-  ".ttf": "font/ttf",
-  ".txt": "text/plain",
-};
-
-function startServer() {
-  const server = http.createServer(async (req, res) => {
-    try {
-      const urlPath = decodeURIComponent(req.url.split("?")[0]);
-      // Chromium auto-probes this regardless of whether the page declares a
-      // favicon <link> (harness.html does, since it mirrors index.html —
-      // some Chromium versions still probe it as a fallback). A plain 204
-      // here keeps this an intentional no-op instead of noisy 404 spam that
-      // a real console.error assertion below would otherwise have to
-      // specifically know to ignore.
-      if (urlPath === "/favicon.ico") {
-        res.writeHead(204);
-        res.end();
-        return;
-      }
-      const filePath = normalize(join(ROOT, urlPath));
-      if (!filePath.startsWith(ROOT)) throw new Error("path escapes repo root");
-      const data = await readFile(filePath);
-      res.writeHead(200, { "Content-Type": MIME_TYPES[extname(filePath)] || "application/octet-stream" });
-      res.end(data);
-    } catch {
-      res.writeHead(404);
-      res.end("not found");
-    }
-  });
-  return new Promise((resolve) => server.listen(PORT, "127.0.0.1", () => resolve(server)));
-}
-
-/** Fresh page per test: simplest way to avoid state leaking between checks. */
-async function withPage(browser, url, fn) {
-  const page = await browser.newPage();
-  const pageErrors = [];
-  const cspViolations = [];
-  const otherConsoleErrors = [];
-  page.on("pageerror", (err) => pageErrors.push(err.message));
-  page.on("console", (msg) => {
-    if (msg.type() !== "error") return;
-    const text = msg.text();
-    if (/Content Security Policy/i.test(text)) cspViolations.push(text);
-    else otherConsoleErrors.push(text);
-  });
-  await page.goto(url);
-  await page.waitForTimeout(200);
-  try {
-    await fn(page);
-  } finally {
-    assert.deepEqual(pageErrors, [], "unexpected uncaught page error(s)");
-    assert.deepEqual(cspViolations, [], "unexpected CSP violation(s)");
-    assert.deepEqual(otherConsoleErrors, [], "unexpected console.error(s)");
-    await page.close();
-  }
-}
-
-const SAMPLE_MULTI = `import grist
+const MULTI = `import grist
 
 @grist.UserTable
 class TableA:
@@ -107,173 +22,100 @@ class TableB:
   Extra = grist.Numeric()
 `;
 
+const TYPES = "@grist.UserTable\nclass X:\n  A = grist.Reference('Other_Table')\n  B = grist.Int()\n";
+
+const hidden = (page, id) => page.evaluate((target) => document.getElementById(target).hidden, id);
+const count = (page, selector) => page.locator(selector).count();
+
 const TESTS = [
-  {
-    name: "loads with no console/page errors and no CSP violations",
-    async fn(page) {
-      assert.equal(await page.title(), "Structure de table Grist");
-    },
-  },
+  ["loads without console error nor CSP violation, with its font", async (page) => {
+    assert.equal(await page.title(), "Structure de table Grist");
+    await page.evaluate(() => document.fonts.ready);
+    assert.ok(await page.evaluate(() => [...document.fonts].some((font) => font.family === "Manrope" && font.status === "loaded")));
+  }],
 
-  {
-    name: "Manrope font actually loads (not blocked by CSP)",
-    async fn(page) {
-      await page.evaluate(() => document.fonts.ready);
-      const loaded = await page.evaluate(() => Array.from(document.fonts).some((f) => f.family === "Manrope" && f.status === "loaded"));
-      assert.ok(loaded, "Manrope should report status 'loaded'");
-    },
-  },
+  ["Import: several tables show the checklist, not the single dropdown", async (page) => {
+    await analyse(page, MULTI);
+    assert.equal(await hidden(page, "table-multi-picker-row"), false);
+    assert.equal(await hidden(page, "table-picker-row"), true);
+    assert.equal(await count(page, "#table-multi-select input[type=checkbox]"), 2);
+  }],
 
-  {
-    name: "Import: multi-table paste shows the multi-select checklist, not the single dropdown",
-    async fn(page) {
-      await page.fill("#source-input", SAMPLE_MULTI);
-      await page.click("#analyze-btn");
-      await page.waitForTimeout(200);
-      assert.equal(await page.evaluate(() => document.getElementById("table-multi-picker-row").hidden), false);
-      assert.equal(await page.evaluate(() => document.getElementById("table-picker-row").hidden), true);
-      assert.equal(await page.evaluate(() => document.querySelectorAll("#table-multi-select input[type=checkbox]").length), 2);
-    },
-  },
+  ["Import: unticking a column keeps it out of the AddTable payload", async (page, grist) => {
+    await analyse(page, MULTI);
+    assert.equal(await count(page, "#columns-preview-body .col-checkbox input"), 3);
+    await page.locator("#columns-preview-body tr", { hasText: "Extra" }).locator("input").click();
+    await apply(page);
+    const [addTables] = grist.calls;
+    assert.deepEqual(addTables.map(([, id, columns]) => [id, columns.map((col) => col.id)]), [["TableA", ["Name"]], ["TableB", ["Label"]]]);
+  }],
 
-  {
-    name: "Import: per-column checkbox excludes a column from the AddTable payload",
-    async fn(page) {
-      await page.fill("#source-input", SAMPLE_MULTI);
-      await page.click("#analyze-btn");
-      await page.waitForTimeout(200);
-      assert.equal(await page.evaluate(() => document.querySelectorAll("#columns-preview-body .col-checkbox input").length), 3);
+  ["Import: Effacer resets the tab", async (page) => {
+    await analyse(page, MULTI);
+    await page.click("#clear-btn");
+    assert.equal(await page.inputValue("#source-input"), "");
+    assert.equal(await hidden(page, "preview-section"), true);
+    assert.equal(await hidden(page, "mode-block"), true);
+  }],
 
-      await page.evaluate(() => {
-        const rows = Array.from(document.querySelectorAll("#columns-preview-body tr:not(.table-separator)"));
-        rows.find((r) => r.children[1].textContent === "Extra").querySelector(".col-checkbox input").click();
-      });
-      await page.waitForTimeout(100);
-      await page.click("#action-btn");
-      await page.waitForTimeout(200);
+  ["Import: an existing table gets AddVisibleColumn, never the plain AddColumn", async (page, grist) => {
+    await analyse(page, "@grist.UserTable\nclass X:\n  NewCol = grist.Text()\n");
+    await page.click('label.mode-card:has(input[value="existing"])');
+    await page.selectOption("#target-table-select", { label: "Existing_Table" });
+    await apply(page);
+    assert.deepEqual(grist.calls.flat().map(([name]) => name), ["AddVisibleColumn"]);
+  }],
 
-      const payload = await page.evaluate(() => {
-        const calls = window.__harness.actionCalls.filter((c) => c[0] && c[0][0] === "AddTable");
-        return calls[calls.length - 1].map((action) => [action[1], action[2].map((c) => c.id)]);
-      });
-      assert.deepEqual(payload, [
-        ["TableA", ["Name"]],
-        ["TableB", ["Label"]],
-      ]);
-    },
-  },
+  ["Import: the preview names column types in French", async (page) => {
+    await analyse(page, TYPES);
+    assert.deepEqual(await previewRows(page), ["ARéférence vers « Other_Table »", "BEntier"]);
+  }],
 
-  {
-    name: "Import: Effacer resets the tab to its pristine state",
-    async fn(page) {
-      await page.fill("#source-input", SAMPLE_MULTI);
-      await page.click("#analyze-btn");
-      await page.waitForTimeout(200);
-      await page.click("#clear-btn");
-      await page.waitForTimeout(100);
-      assert.equal(await page.evaluate(() => document.getElementById("source-input").value), "");
-      assert.equal(await page.evaluate(() => document.getElementById("preview-section").hidden), true);
-      assert.equal(await page.evaluate(() => document.getElementById("mode-block").hidden), true);
-    },
-  },
+  ["Import: the preview names column types in English", async (page) => {
+    await analyse(page, TYPES);
+    assert.deepEqual(await previewRows(page), ["AReference to “Other_Table”", "BInteger"]);
+  }, { locale: "en" }],
 
-  {
-    name: "Import: 'Table existante' mode uses AddVisibleColumn, not the plainer AddColumn",
-    async fn(page) {
-      await page.fill("#source-input", "@grist.UserTable\nclass X:\n  NewCol = grist.Text()\n");
-      await page.click("#analyze-btn");
-      await page.waitForTimeout(200);
-      await page.click('label.mode-card:has(input[value="existing"])');
-      await page.waitForTimeout(200);
-      await page.selectOption("#target-table-select", { label: "Existing_Table" });
-      await page.waitForTimeout(200);
-      await page.click("#action-btn");
-      await page.waitForTimeout(200);
-      const actionNames = await page.evaluate(() =>
-        window.__harness.actionCalls.flat().filter((a) => a[0] === "AddColumn" || a[0] === "AddVisibleColumn").map((a) => a[0])
-      );
-      assert.ok(actionNames.includes("AddVisibleColumn"));
-      assert.ok(!actionNames.includes("AddColumn"));
-    },
-  },
+  ["Export: the table list loads and the referenced-table banner can include its tables", async (page) => {
+    await page.click("#tab-export");
+    await page.waitForSelector("#export-table-list input");
+    assert.equal(await count(page, "#export-table-list input"), 3);
+    await page.locator("#export-table-list li", { hasText: "Existing_Table" }).locator("input").check();
+    assert.equal(await hidden(page, "export-refs-banner"), false);
+    await page.click("#refs-include-btn");
+    assert.equal(await hidden(page, "export-refs-banner"), true);
+    assert.equal(await count(page, "#export-table-list input:checked"), 2);
+  }],
 
-  {
-    name: "Export: table list loads and the referenced-table banner appears/can be included",
-    async fn(page) {
-      await page.click("#tab-export");
-      await page.waitForTimeout(200);
-      await page.click("#refresh-tables-btn");
-      await page.waitForTimeout(200);
-      assert.equal(await page.evaluate(() => document.querySelectorAll("#export-table-list input[type=checkbox]").length), 3);
-
-      await page.evaluate(() => {
-        const cb = Array.from(document.querySelectorAll("#export-table-list li")).find((li) => li.textContent.includes("Existing_Table"));
-        cb.querySelector("input").click();
-      });
-      await page.evaluate(() => document.getElementById("export-table-list").dispatchEvent(new Event("change", { bubbles: true })));
-      await page.waitForTimeout(150);
-      assert.equal(await page.evaluate(() => document.getElementById("export-refs-banner").hidden), false);
-
-      await page.click("#refs-include-btn");
-      await page.waitForTimeout(150);
-      assert.equal(await page.evaluate(() => document.getElementById("export-refs-banner").hidden), true);
-      assert.equal(
-        await page.evaluate(() => Array.from(document.querySelectorAll("#export-table-list input:checked")).length),
-        2
-      );
-    },
-  },
-
-  {
-    name: "Réglages: dialog opens/closes, theme persists, locale switches visible text",
-    async fn(page) {
-      await page.click("#settings-btn");
-      await page.waitForTimeout(150);
-      assert.equal(await page.evaluate(() => document.getElementById("settings-dialog").open), true);
-
-      await page.click('label.segmented-option:has(input[value="dark"])');
-      await page.waitForTimeout(100);
-      assert.equal(await page.evaluate(() => document.documentElement.getAttribute("data-theme")), "dark");
-      assert.equal(await page.evaluate(() => localStorage.getItem("gristFactory.theme")), "dark");
-
-      assert.equal(await page.evaluate(() => document.querySelector("h1").textContent), "Structure de table");
-      await page.click('label.segmented-option:has(input[value="en"])');
-      await page.waitForTimeout(100);
-      assert.equal(await page.evaluate(() => document.querySelector("h1").textContent), "Table structure");
-
-      await page.click("#settings-close-btn");
-      await page.waitForTimeout(100);
-      assert.equal(await page.evaluate(() => document.getElementById("settings-dialog").open), false);
-    },
-  },
+  ["Réglages: opens, persists the theme, switches the language", async (page) => {
+    await page.click("#settings-btn");
+    assert.equal(await page.evaluate(() => document.getElementById("settings-dialog").open), true);
+    await page.click('label.segmented-option:has(input[value="dark"])');
+    assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), "dark");
+    assert.equal(await page.evaluate(() => localStorage.getItem("gristFactory.theme")), "dark");
+    assert.equal(await page.textContent("h1"), "Structure de table");
+    await page.click('label.segmented-option:has(input[value="en"])');
+    assert.equal(await page.textContent("h1"), "Table structure");
+    await page.click("#settings-close-btn");
+    assert.equal(await page.evaluate(() => document.getElementById("settings-dialog").open), false);
+  }],
 ];
 
-async function main() {
-  const server = await startServer();
-  // Unset in CI (a fresh `npx playwright install chromium` there puts the
-  // browser exactly where this same `playwright` package version expects
-  // it by default). Local escape hatch only, for a dev machine whose
-  // Playwright browser cache lives somewhere non-standard.
-  const executablePath = process.env.PLAYWRIGHT_CHROMIUM_PATH || undefined;
-  const browser = await chromium.launch({ executablePath });
-  let failed = 0;
-
-  for (const { name, fn } of TESTS) {
-    try {
-      await withPage(browser, HARNESS_URL, fn);
-      console.log(`ok - ${name}`);
-    } catch (err) {
-      failed++;
-      console.error(`not ok - ${name}`);
-      console.error(`  ${err.message}`);
-    }
+const widget = await launchWidget();
+let failed = 0;
+for (const [name, check, options] of TESTS) {
+  const grist = fakeGrist();
+  const page = await widget.open(grist, options);
+  try {
+    await check(page, grist);
+    assert.deepEqual(page.problems, [], "console error, page error or CSP violation");
+    console.log(`ok - ${name}`);
+  } catch (err) {
+    failed++;
+    console.error(`not ok - ${name}\n  ${err.message}`);
   }
-
-  await browser.close();
-  server.close();
-
-  console.log(`\n${TESTS.length - failed}/${TESTS.length} browser checks passed.`);
-  process.exitCode = failed > 0 ? 1 : 0;
+  await page.close();
 }
-
-main();
+await widget.close();
+console.log(`\n${TESTS.length - failed}/${TESTS.length} browser checks passed.`);
+process.exitCode = failed > 0 ? 1 : 0;

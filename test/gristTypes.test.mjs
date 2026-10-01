@@ -2,7 +2,6 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   resolveColumnType,
-  describeType,
   TABLE_ID_RE,
   buildTypeExpression,
   defaultLiteralForType,
@@ -82,13 +81,6 @@ test("unknown DSL types fall back to Any with a warning", () => {
   const { type, warnings } = resolve("SomethingMadeUp", "");
   assert.equal(type, "Any");
   assert.equal(warnings.length, 1);
-});
-
-test("describeType produces readable French labels", () => {
-  assert.equal(describeType("Text"), "Texte");
-  assert.equal(describeType("Ref:Foo"), "Référence vers « Foo »");
-  assert.equal(describeType("RefList:Foo"), "Références vers « Foo » (liste)");
-  assert.equal(describeType("DateTime:UTC"), "Date et heure (UTC)");
 });
 
 test("buildTypeExpression mirrors gencode.py's get_grist_type", () => {

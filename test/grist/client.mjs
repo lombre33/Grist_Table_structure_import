@@ -71,7 +71,7 @@ function openDoc(request, id) {
   return doc;
 }
 
-/** Logs in and returns `{ newDoc(name) }`; a new document only holds Grist's default `Table1`. */
+/** Logs in and returns `{ newDoc(name), cleanup() }`; a new document only holds Grist's default `Table1`. */
 export async function connect() {
   const headers = await authHeaders();
   const request = (method, path, body) => call(headers, method, path, body);
@@ -79,9 +79,16 @@ export async function connect() {
   const org = orgs.find((candidate) => candidate.owner) ?? orgs[0];
   const [workspace] = await request("GET", `/api/orgs/${org.id}/workspaces`);
   const workspaceId = workspace?.id ?? (await request("POST", `/api/orgs/${org.id}/workspaces`, { name: "Tests" }));
+  const created = new Set();
   return {
     async newDoc(name = "test") {
-      return openDoc(request, await request("POST", `/api/workspaces/${workspaceId}/docs`, { name }));
+      const id = await request("POST", `/api/workspaces/${workspaceId}/docs`, { name });
+      created.add(id);
+      return openDoc(request, id);
+    },
+    /** Deletes the documents created so far (all of them, or just `ids`). */
+    async cleanup(ids = [...created]) {
+      await Promise.all(ids.map((id) => request("DELETE", `/api/docs/${id}`).finally(() => created.delete(id))));
     },
   };
 }

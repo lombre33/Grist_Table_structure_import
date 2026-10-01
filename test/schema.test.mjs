@@ -35,13 +35,13 @@ test("visibleSortedColumns hides reserved/helper columns and orders data before 
   assert.deepEqual(result, ["Age", "Name", "Computed"]);
 });
 
-test("existingColumnIds includes reserved columns (used for collision checks)", () => {
+test("existingColumnIds lists reserved columns too, lower-cased (Grist ids are unique ignoring case)", () => {
   const columns = [
     { parentId: 1, colId: "id" },
     { parentId: 1, colId: "Name" },
-    { parentId: 2, colId: "Name" },
+    { parentId: 2, colId: "Other" },
   ];
-  assert.deepEqual(existingColumnIds(columns, 1), new Set(["id", "Name"]));
+  assert.deepEqual(existingColumnIds(columns, 1), new Set(["id", "name"]));
 });
 
 function stubGrist(tablesById, columnsById) {
