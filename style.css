@@ -469,6 +469,14 @@ table#columns-preview {
 
 #warnings-block {
   margin-top: 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--warning);
+  border-radius: var(--radius-sm);
+  background: var(--warning-soft);
+}
+
+#warnings-block .eyebrow {
+  color: var(--warning);
 }
 
 #warnings-block ul {
@@ -478,7 +486,6 @@ table#columns-preview {
 
 #warnings-block li {
   font-size: 0.8rem;
-  color: var(--muted);
   margin-bottom: 3px;
 }
 
