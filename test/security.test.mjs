@@ -37,3 +37,13 @@ test("index.html declares a CSP that blocks every other origin and any network c
   assert.match(csp, /connect-src 'none'/);
   assert.doesNotMatch(csp, /unsafe-inline/);
 });
+
+test("every action of the workflows is pinned by the commit of a version, which a tag could not guarantee", () => {
+  const workflows = readdirSync(new URL("../.github/workflows/", import.meta.url));
+  assert.ok(workflows.length > 0);
+  for (const name of workflows) {
+    for (const [, action] of read(`.github/workflows/${name}`).matchAll(/\buses:\s+(\S+)/g)) {
+      if (!action.startsWith("./")) assert.match(action, /@[0-9a-f]{40}$/, `${name}: ${action}`);
+    }
+  }
+});

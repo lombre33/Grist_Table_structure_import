@@ -205,8 +205,11 @@ GitHub Pages, `pages.yml`, ne part que s'il passe) :
   par digest) : ce que le widget demande au moteur, l'aller-retour de chaque type de colonne
   et l'interface complète.
 
-Les actions GitHub utilisées sont référencées par leur étiquette majeure
-(`actions/checkout@v4`...) et non par empreinte de commit : un durcissement possible.
+Les actions GitHub utilisées sont référencées par l'empreinte du commit d'une version
+précise (`actions/checkout@<40 caractères> # v4.4.0`...), non par une étiquette qu'un
+dépôt peut déplacer ; `test/security.test.mjs` refuse toute action qui ne l'est pas, et
+`.github/dependabot.yml` demande chaque semaine la mise à jour de ces empreintes (et
+chaque mois celle de Playwright, la seule dépendance de développement).
 
 ## Dépendances
 
