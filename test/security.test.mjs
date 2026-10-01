@@ -28,7 +28,7 @@ for (const [pattern, what] of FORBIDDEN) {
 
 test("index.html loads no script but the official Grist plugin API and the widget's own", () => {
   const scripts = [...read("index.html").matchAll(/<script[^>]*\ssrc="([^"]*)"/g)].map((match) => match[1]);
-  assert.deepEqual(scripts.sort(), ["https://docs.getgrist.com/grist-plugin-api.js", "js/app.js"]);
+  assert.deepEqual(scripts.sort(), ["https://docs.getgrist.com/grist-plugin-api.js", "js/app.js", "js/theme-init.js"]);
 });
 
 test("index.html declares a CSP that blocks every other origin and any network call", () => {

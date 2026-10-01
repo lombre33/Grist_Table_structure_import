@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' https://docs.getgrist.com 'unsafe-eval'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none';">
+<script src="js/theme-init.js"></script>
 <title>Structure de table Grist</title>
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="stylesheet" href="style.css">
@@ -17,7 +18,7 @@
     <div class="masthead-text">
       <p class="eyebrow" data-i18n="app.eyebrow">Widget Grist</p>
       <h1 data-i18n="app.title">Structure de table</h1>
-      <p class="lede" data-i18n="app.lede">Importez la structure d'une table depuis un autre document, ou exportez celle d'une table de ce document.</p>
+      <p class="lede" data-i18n="app.lede">Importez la structure d’une table depuis un autre document, ou exportez celle d’une table de ce document.</p>
     </div>
     <div class="masthead-controls">
       <button id="settings-btn" type="button" class="icon-btn" data-i18n-aria-label="settings.open" aria-label="Réglages" aria-haspopup="dialog">
@@ -106,8 +107,8 @@
 
     <div class="block">
       <h2 class="eyebrow" data-i18n="import.step1.eyebrow">1. Code source</h2>
-      <label for="source-input" data-i18n="import.step1.label">Code Python d'une table</label>
-      <p id="source-hint" class="hint" data-i18n="import.step1.hint">À copier depuis le menu &laquo;&nbsp;Code View&nbsp;&raquo; de la table, dans le document d'origine, ou depuis l'onglet Export de ce widget (qui garde en plus les choix détaillés).</p>
+      <label for="source-input" data-i18n="import.step1.label">Code Python d’une table</label>
+      <p id="source-hint" class="hint" data-i18n="import.step1.hint">À copier depuis le menu &laquo;&nbsp;Code View&nbsp;&raquo; de la table, dans le document d’origine, ou depuis l’onglet Export de ce widget (qui garde en plus les choix détaillés).</p>
       <textarea id="source-input" rows="12" spellcheck="false" aria-describedby="source-hint"
         data-i18n-placeholder="import.step1.placeholder"
         placeholder="@grist.UserTable&#10;class MaTable:&#10;  MaColonne = grist.Text()"></textarea>
@@ -118,7 +119,7 @@
     </div>
 
     <div id="mode-block" class="block" hidden>
-      <h2 class="eyebrow" id="mode-heading" data-i18n="import.step2.eyebrow">2. Que faire de ce code ?</h2>
+      <h2 class="eyebrow" id="mode-heading" data-i18n="import.step2.eyebrow">2. Que faire de ce code&nbsp;?</h2>
       <div class="mode-picker" role="radiogroup" aria-labelledby="mode-heading">
         <label class="mode-card">
           <input type="radio" name="import-mode" value="create" class="mode-radio" checked>
@@ -128,7 +129,7 @@
         <label class="mode-card">
           <input type="radio" name="import-mode" value="existing" class="mode-radio">
           <span class="mode-card-title" data-i18n="import.mode.existing.title">Table existante</span>
-          <span class="mode-card-desc" data-i18n="import.mode.existing.desc">Ajoute uniquement les colonnes qui manquent à une table déjà présente ici.</span>
+          <span class="mode-card-desc" data-i18n="import.mode.existing.desc">Ajoute uniquement les colonnes qui manquent à une table de ce document.</span>
         </label>
       </div>
     </div>
@@ -174,7 +175,7 @@
           <input type="checkbox" id="with-formulas" aria-describedby="formulas-hint">
           <span id="with-formulas-label"></span>
         </label>
-        <p id="formulas-hint" class="hint" data-i18n="import.formulas.hint">Les formules s'exécutent dans ce document dès leur création : n'activez cette option que pour du code de confiance. Sans elle, ces colonnes sont créées vides.</p>
+        <p id="formulas-hint" class="hint" data-i18n="import.formulas.hint">Les formules s’exécutent dans ce document dès leur création&nbsp;: n’activez cette option que pour du code de confiance. Sans elle, ces colonnes sont créées vides.</p>
       </div>
 
       <div id="warnings-block" hidden>
@@ -227,9 +228,7 @@
         <span id="copy-status" aria-live="polite"></span>
       </div>
       <p class="hint">
-        <span data-i18n="export.formulaHint.before">Seule la structure (types de colonnes) est garantie fidèle. Pour une colonne de formule,
-        la formule d'origine est recopiée telle que stockée (syntaxe </span><code>$Colonne</code><span data-i18n="export.formulaHint.after"> de Grist) quand elle existe, sinon remplacée par la valeur par défaut du type — comme le
-        fait Grist lui-même pour une formule vide.</span>
+        <span data-i18n="export.formulaHint.before">Seule la structure (types de colonnes) est garantie fidèle. Pour une colonne de formule, la formule d’origine est recopiée telle que stockée (syntaxe </span><code>$Colonne</code><span data-i18n="export.formulaHint.after"> de Grist) quand elle existe, sinon remplacée par la valeur par défaut du type — comme le fait Grist lui-même pour une formule vide.</span>
       </p>
     </div>
 

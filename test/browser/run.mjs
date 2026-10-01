@@ -8,7 +8,7 @@ import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { launchWidget } from "./widgetPage.mjs";
 import { fakeGrist } from "./fakeGrist.mjs";
-import { analyse, apply, previewRows, warnings } from "./driver.mjs";
+import { analyse, apply, previewRows, textOf, warnings } from "./driver.mjs";
 
 const MULTI = `import grist
 
@@ -121,7 +121,7 @@ const TESTS = [
     await page.click('label.mode-card:has(input[value="existing"])');
     await page.selectOption("#target-table-select", { label: "Existing_Table" });
     assert.equal(await page.locator("#columns-preview-body input:disabled").count(), 1);
-    assert.equal(await page.textContent("#action-btn"), "Ajouter 1 colonne à « Existing_Table »", "the button names what it will change");
+    assert.equal(await textOf(page, "#action-btn"), "Ajouter 1 colonne à « Existing_Table »", "the button names what it will change");
   }],
 
   ["Import: one box in the table's head takes all the columns in or out, and what is left out is dimmed", async (page) => {
@@ -158,7 +158,7 @@ const TESTS = [
 
   ["Import: a text without any table gets a result of its own, not a step 3 with nothing to verify", async (page) => {
     await analyse(page, "print('hello')");
-    assert.equal(await page.textContent("#preview-heading"), "Résultat de l'analyse");
+    assert.equal(await page.textContent("#preview-heading"), "Résultat de l’analyse");
     assert.equal(await hidden(page, "table-id-row"), true);
     assert.equal(await hidden(page, "columns-preview"), true);
     assert.match(await page.textContent("#warnings-list"), /Aucune table trouvée/);
@@ -171,7 +171,7 @@ const TESTS = [
     await analyse(page, WITH_FORMULA);
     assert.equal(await hidden(page, "formulas-row"), false);
     assert.equal(await page.getByRole("checkbox", { name: /formule de 1 colonne/ }).isChecked(), false);
-    assert.match(await page.textContent("#warnings-list"), /créées vides : Double/);
+    assert.match(await textOf(page, "#warnings-list"), /créées vides : Double/);
     assert.deepEqual(await previewRows(page), ["AEntier", "DoubleEntier formule"]);
 
     await page.check("#with-formulas");
@@ -220,7 +220,7 @@ const TESTS = [
     assert.equal(await page.getByRole("textbox", { name: "TableB" }).getAttribute("aria-invalid"), "true");
     const error = await page.getByRole("textbox", { name: "TableB" }).getAttribute("aria-describedby");
     assert.match(await page.textContent(`#${error}`), /plusieurs fois/);
-    assert.equal(await page.textContent("#import-announcement"), "Analyse terminée : 2 tables, 3 colonnes au total.");
+    assert.equal(await textOf(page, "#import-announcement"), "Analyse terminée : 2 tables, 3 colonnes au total.");
     assert.equal(await page.getByRole("radiogroup", { name: /Que faire/ }).count(), 1);
   }],
 
@@ -313,6 +313,27 @@ const TESTS = [
 
 const widget = await launchWidget();
 after(() => widget.close());
+
+test("the saved theme and language apply before any module has run", async () => {
+  const page = await widget.browser.newPage();
+  await page.route("https://docs.getgrist.com/**", (route) => route.fulfill({ contentType: "text/javascript", body: "" }));
+  await page.route("**/js/app.js", (route) => route.abort());
+  await page.addInitScript(() => {
+    localStorage.setItem("gristFactory.theme", "dark");
+    localStorage.setItem("gristFactory.locale", "en");
+  });
+  await page.goto(widget.url);
+  assert.deepEqual(await page.evaluate(() => [document.documentElement.dataset.theme, document.documentElement.lang]), ["dark", "en"]);
+  await page.close();
+});
+
+test("a short pane keeps the buttons in view: the title and the code box shrink", async () => {
+  const page = await widget.open(fakeGrist());
+  await page.setViewportSize({ width: 600, height: 500 });
+  const bottom = await page.$eval("#analyze-btn", (button) => button.getBoundingClientRect().bottom);
+  assert.ok(bottom <= 500, `Analyser ends at ${bottom} px of a 500 px pane`);
+  await page.close();
+});
 
 for (const [name, check, options] of TESTS) {
   test(name, async () => {

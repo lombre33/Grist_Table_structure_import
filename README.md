@@ -387,17 +387,18 @@ index.html             page du widget (en-tête, panneau Réglages, onglets Impo
 style.css              mise en forme (identité visuelle Grist Factory, thème clair/sombre)
 fonts/manrope/         police Manrope vendorisée (voir SECURITY.md)
 assets/                logo Grist Factory (voir SECURITY.md)
+js/theme-init.js       applique le thème et la langue mémorisés avant le premier affichage
 js/app.js              point d'entrée : onglets, initialisation
 js/importTab.js        onglet Import : câblage du DOM
 js/importer.js         logique de l'import sans DOM : résolution des colonnes, identifiants,
-                       création en un lot puis descriptions et colonnes d'affichage
+                       formules, création en un lot, puis détails et références bidirectionnelles
 js/exportTab.js        onglet Export
 js/parser.js           lecture du code source (motifs fixes + scanner de parenthèses, jamais exécuté)
 js/pyText.js           texte Python : littéraux, parenthèse fermante, arguments d'un appel
 js/gristTypes.js       types de colonne <-> constructeurs Code View (une table de types)
 js/widgetOptions.js    ce qui d'un widgetOptions peut voyager d'un document à l'autre
 js/schema.js           structure réelle du document (_grist_Tables*), tables référencées
-js/codeGenerator.js    génère le code Python (types + métadonnées)
+js/codeGenerator.js    génère le code Python (types, métadonnées, formules, références bidirectionnelles)
 js/dom.js              construction du DOM sans innerHTML
 js/i18n.js             dictionnaire fr/en + liaison data-i18n
 js/settings.js         panneau Réglages (thème, langue)

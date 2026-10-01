@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { resolveColumnType, buildTypeExpression, defaultLiteralForType, splitType } from "../js/gristTypes.js";
 import { typeLabel } from "../js/i18n.js";
 
+const plain = (text) => text.replaceAll("\u00a0", " ");
+
 function resolve(dslType, argsRaw = "") {
   const warnings = [];
   return { ...resolveColumnType(dslType, argsRaw, "Col", warnings), warnings };
@@ -32,7 +34,7 @@ for (const [type, expression, label, blank] of TYPES) {
     assert.equal(resolved.type, type);
     assert.deepEqual(resolved.warnings, []);
     assert.equal(buildTypeExpression(type), expression);
-    assert.equal(typeLabel(type), label);
+    assert.equal(plain(typeLabel(type)), label);
     assert.equal(defaultLiteralForType(type), blank);
   });
 }

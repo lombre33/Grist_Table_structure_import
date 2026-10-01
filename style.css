@@ -809,6 +809,22 @@ dialog#settings-dialog::backdrop {
   overflow-wrap: anywhere;
 }
 
+/* A short pane, which a Grist widget often is: the title and the code box are what the buttons need above them. */
+@media (max-height: 640px) {
+  .shell {
+    padding-top: 12px;
+  }
+
+  .masthead .eyebrow,
+  .lede {
+    display: none;
+  }
+
+  #source-input {
+    height: 8.5rem;
+  }
+}
+
 /* High-contrast modes drop backgrounds: keep what they said (selected, framed) as outlines and borders. */
 @media (forced-colors: active) {
   .tab[aria-selected="true"],

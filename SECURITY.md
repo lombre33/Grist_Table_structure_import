@@ -181,6 +181,12 @@ navigateur (protections anti-tracking tierces) : chaque lecture/écriture est en
 d'un `try/catch` et une indisponibilité ne casse rien, elle fait simplement revenir le
 réglage à sa valeur par défaut (thème système, français) au chargement suivant.
 
+Pour que ce réglage s'applique dès le premier affichage plutôt qu'après le chargement des
+modules, un petit script classique, `js/theme-init.js` (une dizaine de lignes, seule autre
+source de code du widget avec les modules ES, autorisée par `script-src 'self'`), lit les
+deux mêmes clés dans `<head>` et pose l'attribut `data-theme` et la langue de la page, sans
+rien interpréter d'autre ; un test vérifie qu'il lit les clés et accepte les valeurs des modules.
+
 Le panneau lui-même utilise l'élément natif `<dialog>` (`showModal()`/`close()`) : pas
 de gestion maison du focus ni de la touche Échap, ce sont des comportements standard du
 navigateur, pas du code spécifique à ce widget.
