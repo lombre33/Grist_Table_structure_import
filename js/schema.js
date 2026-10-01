@@ -54,8 +54,9 @@ function parseWidgetOptions(json) {
 }
 
 /**
- * What the Export tab writes for the given tables, in that order. `visibleColId` is the id of the
- * column a reference displays: the row id Grist stores (`visibleCol`) means nothing in another document.
+ * What the Export tab writes for the given tables, in that order. `visibleColId` and `reverseColId` are
+ * the ids of the column a reference displays and of its two-way counterpart: the row ids Grist stores
+ * (`visibleCol`, `reverseCol`) mean nothing in another document.
  */
 export function buildExportSchema(tables, allColumns, tableIds) {
   const byRef = new Map(allColumns.map((col) => [col.id, col]));
@@ -73,6 +74,7 @@ export function buildExportSchema(tables, allColumns, tableIds) {
         description: col.description || null,
         widgetOptions: col.widgetOptions ? parseWidgetOptions(col.widgetOptions) : null,
         visibleColId: byRef.get(col.visibleCol)?.colId ?? null,
+        reverseColId: byRef.get(col.reverseCol)?.colId ?? null,
       })),
     }));
 }

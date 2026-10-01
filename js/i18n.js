@@ -107,7 +107,9 @@ export const STRINGS = {
     "warn.reservedColumnId": "Ligne {line} : colonne « {id} » ignorée (identifiant réservé, déjà géré par Grist).",
     "warn.duplicateColumnId": "Ligne {line} : colonne « {id} » en double (Grist ignore la casse des identifiants), ignorée.",
     "warn.computedColumns": "Colonnes calculées (formule ou formule de déclenchement), créées vides : {columns}.",
-    "warn.twoWayColumns": "Références bidirectionnelles, créées comme références simples : {columns}.",
+    "warn.twoWayColumns":
+      "Références bidirectionnelles créées comme références simples (la colonne réciproque n'est pas créée en même " +
+      "temps) : {columns}.",
     "warn.tablePrefix": "Table « {tableId} » — {message}",
 
     "import.error.fetchDocInfo": "Impossible de récupérer les informations de ce document : {error}.",
@@ -138,6 +140,8 @@ export const STRINGS = {
       other: "Ces tables existent déjà dans ce document : {ids}. Choisissez d'autres identifiants.",
     },
     "import.note.refineFailed": " Descriptions et colonnes d'affichage non appliquées : {error}.",
+    "import.note.linkFailed": " Références bidirectionnelles non reliées : {error}.",
+    "import.preview.twoWay": "bidirectionnelle",
     "import.success.createdMulti": "{count} tables créées ({ids}), {columnsPhrase} au total.",
     "import.success.createdSingle": "Table « {id} » créée avec {columnsPhrase}.",
     "import.error.createFailed": "Échec de la création : {error}",
@@ -269,7 +273,8 @@ export const STRINGS = {
     "warn.reservedColumnId": "Line {line}: column “{id}” ignored (reserved identifier, already handled by Grist).",
     "warn.duplicateColumnId": "Line {line}: duplicate column “{id}” (Grist ignores the case of identifiers), ignored.",
     "warn.computedColumns": "Computed columns (formula or trigger formula), created empty: {columns}.",
-    "warn.twoWayColumns": "Two-way references, created as plain references: {columns}.",
+    "warn.twoWayColumns":
+      "Two-way references created as plain references (their counterpart column is not created with them): {columns}.",
     "warn.tablePrefix": "Table “{tableId}” — {message}",
 
     "import.error.fetchDocInfo": "Could not retrieve this document's information: {error}.",
@@ -299,6 +304,8 @@ export const STRINGS = {
       other: "These tables already exist in this document: {ids}. Choose other identifiers.",
     },
     "import.note.refineFailed": " Descriptions and display columns not applied: {error}.",
+    "import.note.linkFailed": " Two-way references not linked: {error}.",
+    "import.preview.twoWay": "two-way",
     "import.success.createdMulti": "{count} tables created ({ids}), {columnsPhrase} in total.",
     "import.success.createdSingle": "Table “{id}” created with {columnsPhrase}.",
     "import.error.createFailed": "Creation failed: {error}",

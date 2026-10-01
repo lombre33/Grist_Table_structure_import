@@ -79,6 +79,20 @@
       ["ToNumbers","Ref:Numbers",false],
       ["Styled","Ref:Texts",false]
     ],
+    "Projects": [
+      ["Name","Text",false],
+      ["Owner","Ref:People",false]
+    ],
+    "People": [
+      ["Name","Text",false],
+      ["Projects","RefList:Projects",false]
+    ],
+    "Grid": [
+      ["Left","RefList:Grid",false],
+      ["Right","RefList:Grid",false],
+      ["Parent","Ref:Grid",false],
+      ["Kids","RefList:Grid",false]
+    ],
     "Misc": [
       ["Files","Attachments",false],
       ["FilesTall","Attachments",false],

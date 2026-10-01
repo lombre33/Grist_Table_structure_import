@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { checkTableId, defaultTableId, resolveColumns } from "../js/importer.js";
+import { checkTableId, defaultTableId, resolveColumns, twoWayPairs, twoWayWarnings } from "../js/importer.js";
 
 const table = (...columns) => ({ tableId: "Source", columns: columns.map(([id, dslType, argsRaw = "", kind = "data", code = ""]) => ({ id, dslType, argsRaw, kind, code })) });
 const ids = (...pairs) => new Map(pairs);
@@ -66,11 +66,11 @@ test("without the document's table list, references are left alone", () => {
   assert.deepEqual(warnings, []);
 });
 
-test("columns Grist computes or links both ways are said to be created plainly", () => {
-  const source = table(["Calc", "Numeric", "", "formula", "return 1"], ["Pets", "ReferenceList", "'Pets', reverse_of='Owner'"], ["Stamp", "Text", "", "trigger", "return 'x'"], ["Plain", "Text"]);
-  const { warnings } = resolveColumns(source, ids(["Pets", "Pets"]), []);
-  assert.deepEqual(warnings.map((w) => [w.key, w.params.columns]), [["warn.computedColumns", "Calc, Stamp"], ["warn.twoWayColumns", "Pets"]]);
-  assert.deepEqual(resolveColumns(source, ids(["Pets", "Pets"]), [], { excluded: new Set(["Calc", "Stamp", "Pets"]) }).warnings, []);
+test("columns Grist computes are said to be created empty", () => {
+  const source = table(["Calc", "Numeric", "", "formula", "return 1"], ["Stamp", "Text", "", "trigger", "return 'x'"], ["Plain", "Text"]);
+  const { warnings } = resolveColumns(source, ids(), []);
+  assert.deepEqual(warnings.map((w) => [w.key, w.params.columns]), [["warn.computedColumns", "Calc, Stamp"]]);
+  assert.deepEqual(resolveColumns(source, ids(), [], { excluded: new Set(["Calc", "Stamp"]) }).warnings, []);
 });
 
 test("formulas that are imported are not said to be lost", () => {
@@ -125,4 +125,56 @@ test("resolved columns carry the id, the type and the extended metadata", () => 
     reverseOf: null,
   });
   assert.equal(columns[1].label, null);
+});
+
+/** A table as the batch holds it: the columns of `source` resolved, every table of the tests known. */
+const made = (id, ...columns) => ({
+  id,
+  columns: resolveColumns(
+    { tableId: id, columns: columns.map(([colId, dslType, argsRaw]) => ({ id: colId, dslType, argsRaw, kind: "data", code: "" })) },
+    ids(["People", "People"], ["Pets", "Pets"], ["Org", "Org"]),
+    []
+  ).columns,
+});
+const names = (pairs) => pairs.map((pair) => pair.map(({ tableId, col }) => `${tableId}.${col.id}`));
+
+const OWNER = ["Owner", "Reference", "'People', reverse_of='Pets'"];
+const PETS = ["Pets", "ReferenceList", "'Pets', reverse_of='Owner'"];
+
+test("two columns that name each other and refer to each other's table are one two-way pair", () => {
+  const batch = [made("Pets", OWNER), made("People", PETS)];
+  assert.deepEqual(names(twoWayPairs(batch)), [["Pets.Owner", "People.Pets"]]);
+  assert.deepEqual(twoWayWarnings(batch), []);
+});
+
+test("a table can be paired with itself", () => {
+  const batch = [made("Org", ["Parent", "Reference", "'Org', reverse_of='Children'"], ["Children", "ReferenceList", "'Org', reverse_of='Parent'"])];
+  assert.deepEqual(names(twoWayPairs(batch)), [["Org.Parent", "Org.Children"]]);
+});
+
+test("a column whose counterpart is not created with it stays a plain reference, and is said to", () => {
+  for (const batch of [[made("Pets", OWNER)], [made("Pets", OWNER), made("People", ["Pets", "ReferenceList", "'Pets'"])], [made("Pets", OWNER), made("People", ["Pets", "ReferenceList", "'Pets', reverse_of='Other'"])]]) {
+    assert.deepEqual(twoWayPairs(batch), []);
+    assert.deepEqual(twoWayWarnings(batch)[0], { key: "warn.twoWayColumns", params: { columns: "Owner" }, table: "Pets" });
+  }
+});
+
+test("a counterpart that does not refer back to the table is no counterpart", () => {
+  const batch = [made("Pets", OWNER), made("People", ["Pets", "ReferenceList", "'Org', reverse_of='Owner'"])];
+  assert.deepEqual(twoWayPairs(batch), []);
+  assert.deepEqual(twoWayWarnings(batch).map((warning) => [warning.table, warning.params.columns]), [["Pets", "Owner"], ["People", "Pets"]]);
+});
+
+test("a column that is not a reference after all is never paired", () => {
+  const ghost = made("Pets", ["Owner", "Reference", "'Ghost', reverse_of='Pets'"]);
+  ghost.columns[0].type = "Any";
+  assert.deepEqual(twoWayPairs([ghost, made("People", PETS)]), []);
+});
+
+test("several pairs are found, each once", () => {
+  const batch = [
+    made("Pets", OWNER, ["Vet", "Reference", "'People', reverse_of='Patients'"]),
+    made("People", PETS, ["Patients", "ReferenceList", "'Pets', reverse_of='Vet'"]),
+  ];
+  assert.deepEqual(names(twoWayPairs(batch)), [["Pets.Owner", "People.Pets"], ["Pets.Vet", "People.Patients"]]);
 });

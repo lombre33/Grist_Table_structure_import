@@ -72,12 +72,35 @@ export function resolveColumns(table, tableIds, documentTableIds, { excluded = n
     return { id: col.id, kind: col.kind, formula, ...resolved };
   });
 
-  const named = (flagged) => columns.filter((col) => flagged(col) && !excluded.has(col.id)).map((col) => col.id).join(", ");
-  const computed = withFormulas ? "" : named(isComputed);
-  if (computed) warnings.push({ key: "warn.computedColumns", params: { columns: computed } });
-  const twoWay = named((col) => col.reverseOf);
-  if (twoWay) warnings.push({ key: "warn.twoWayColumns", params: { columns: twoWay } });
+  const computed = withFormulas ? [] : columns.filter((col) => isComputed(col) && !excluded.has(col.id));
+  if (computed.length > 0) warnings.push({ key: "warn.computedColumns", params: { columns: computed.map((col) => col.id).join(", ") } });
   return { columns, warnings };
+}
+
+const keyOf = (tableId, colId) => `${tableId}.${colId}`;
+
+/**
+ * The two-way references among `tables` (`[{ id, columns }]`): two columns that each name the other
+ * in `reverse_of` and refer to each other's table, as `[{ tableId, col }, { tableId, col }]`. Only
+ * columns created together can be linked: linking one that exists would overwrite its values.
+ */
+export function twoWayPairs(tables) {
+  const all = tables.flatMap(({ id, columns }) => columns.map((col) => ({ tableId: id, col })));
+  const byKey = new Map(all.map((entry) => [keyOf(entry.tableId, entry.col.id), entry]));
+  return all.flatMap((a, i) => {
+    const b = a.col.reverseOf && byKey.get(keyOf(splitType(a.col.type).arg, a.col.reverseOf));
+    const mutual = b && b.col.reverseOf === a.col.id && splitType(b.col.type).arg === a.tableId;
+    return mutual && i < all.indexOf(b) ? [[a, b]] : [];
+  });
+}
+
+/** What is said, per table, about the two-way references that `tables` cannot link: they become plain references. */
+export function twoWayWarnings(tables) {
+  const linked = new Set(twoWayPairs(tables).flat().map(({ col }) => col));
+  return tables.flatMap(({ id, columns }) => {
+    const plain = columns.filter((col) => col.reverseOf && !linked.has(col));
+    return plain.length > 0 ? [{ key: "warn.twoWayColumns", params: { columns: plain.map((col) => col.id).join(", ") }, table: id }] : [];
+  });
 }
 
 const columnPayload = (col, withFormulas) => ({
@@ -106,7 +129,9 @@ export async function createTables(grist, tables, { withFormulas = false } = {})
     id: retValues[i].table_id,
     columns: columns.map((col, j) => ({ ...col, id: retValues[i].columns[j] })),
   }));
-  return { tables: created, note: await refine(grist, created) };
+  const actual = new Map(created.flatMap(({ id, columns }, i) => tables[i].columns.map((col, j) => [col, { tableId: id, id: columns[j].id }])));
+  const pairs = twoWayPairs(tables).map((pair) => pair.map(({ col }) => actual.get(col)));
+  return { tables: created, note: (await refine(grist, created)) + (await linkTwoWay(grist, pairs)) };
 }
 
 /**
@@ -124,7 +149,9 @@ export async function addColumns(grist, table, columns, { withFormulas = false }
     missing.map((col) => ["AddVisibleColumn", table.tableId, col.id, columnPayload(col, withFormulas)])
   );
   const added = missing.map((col, i) => ({ ...col, id: retValues[i].colId }));
-  return { added: added.length, note: await refine(grist, [{ id: table.tableId, columns: added }]) };
+  const actual = new Map(missing.map((col, i) => [col, { tableId: table.tableId, id: added[i].id }]));
+  const pairs = twoWayPairs([{ id: table.tableId, columns: missing }]).map((pair) => pair.map(({ col }) => actual.get(col)));
+  return { added: added.length, note: (await refine(grist, [{ id: table.tableId, columns: added }])) + (await linkTwoWay(grist, pairs)) };
 }
 
 /**
@@ -156,8 +183,26 @@ async function refine(grist, tables) {
   }
 }
 
-/** Row id of the column `col.visibleColId` in the table `col` refers to. */
-function displayColumnRef(schema, col) {
-  const target = schema.tables.find((table) => table.tableId === splitType(col.type).arg);
-  return target && schema.allColumns.find((c) => c.parentId === target.tableRef && c.colId === col.visibleColId)?.id;
+/**
+ * Links each pair of two-way reference columns (`[{ tableId, id }, { tableId, id }]`): Grist then
+ * keeps the values of both in step. A failure is reported without undoing what was created.
+ */
+async function linkTwoWay(grist, pairs) {
+  if (pairs.length === 0) return "";
+  try {
+    const schema = await fetchDocSchema(grist);
+    await grist.docApi.applyUserActions(pairs.map(([a, b]) => ["ModifyColumn", a.tableId, a.id, { reverseCol: columnRef(schema, b.tableId, b.id) }]));
+    return "";
+  } catch (err) {
+    return t("import.note.linkFailed", { error: reportError(err) });
+  }
 }
+
+/** Row id of a column of the document, from the table's id and the column's. */
+function columnRef(schema, tableId, colId) {
+  const table = schema.tables.find((candidate) => candidate.tableId === tableId);
+  return table && schema.allColumns.find((col) => col.parentId === table.tableRef && col.colId === colId)?.id;
+}
+
+/** Row id of the column `col.visibleColId` in the table `col` refers to. */
+const displayColumnRef = (schema, col) => columnRef(schema, splitType(col.type).arg, col.visibleColId);

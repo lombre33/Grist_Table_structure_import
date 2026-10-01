@@ -108,6 +108,14 @@ class Formulas:
 
 
 @grist.UserTable
+class Grid:
+  Left = grist.ReferenceList('Grid', reverse_of='Right')
+  Right = grist.ReferenceList('Grid', reverse_of='Left')
+  Parent = grist.Reference('Grid', reverse_of='Kids')
+  Kids = grist.ReferenceList('Grid', reverse_of='Parent')
+
+
+@grist.UserTable
 class Ids:
   a = grist.Text()
   A_b = grist.Text()
@@ -162,6 +170,18 @@ class Numbers:
   WholeUsd = grist.Int()
   WholeSpin = grist.Int()
   BackToLinks = grist.Reference('Links')
+
+
+@grist.UserTable
+class People:
+  Name = grist.Text()
+  Projects = grist.ReferenceList('Projects', reverse_of='Owner')
+
+
+@grist.UserTable
+class Projects:
+  Name = grist.Text()
+  Owner = grist.Reference('People', reverse_of='Projects')
 
 
 @grist.UserTable

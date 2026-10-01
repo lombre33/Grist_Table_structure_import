@@ -109,8 +109,21 @@ Par défaut, toutes les colonnes sont créées comme colonnes de données, y com
 écrites avec `@grist.formulaType(...)` dans le code source, et sans formule. Ce que
 l'import ne reprend pas n'est pas perdu en silence : une remarque de l'aperçu liste les
 colonnes calculées (formule, ou formule de déclenchement `def _default_...`), créées
-vides, et les références bidirectionnelles (`reverse_of=`), créées comme références
-simples.
+vides, et les références bidirectionnelles qui ne peuvent pas être reliées (voir
+ci-dessous), créées comme références simples.
+
+#### Références bidirectionnelles
+
+Deux colonnes qui se désignent l'une l'autre (`reverse_of='Autre'` des deux côtés, comme
+l'écrit la vraie Code View) et sont créées **ensemble** — deux tables du même collé, ou
+deux colonnes ajoutées à la même table existante — sont reliées par Grist (leur
+« colonne réciproque »), et leurs valeurs restent synchronisées. L'aperçu les marque
+« bidirectionnelle ». Une colonne dont la réciproque n'est pas créée en même temps
+(décochée, absente du texte, ou déjà présente dans le document) reste une référence simple,
+avec une remarque : relier une colonne existante réécrirait ses valeurs, ce que ce widget
+ne fait jamais. Si Grist refuse de relier une paire (version sans références
+bidirectionnelles, par exemple), les tables et leurs descriptions restent et le message de
+fin le dit.
 
 #### Reprendre les formules
 
@@ -215,6 +228,10 @@ supplémentaires, tous optionnels :
 - **`visible_col='NomDeColonne'`** : pour une colonne de référence, l'identifiant (pas
   l'identifiant technique interne, propre au document et sans signification ailleurs) de
   la colonne de la table cible utilisée comme « colonne d'affichage ».
+
+Une référence bidirectionnelle est écrite, comme le fait la vraie Code View, avec
+**`reverse_of='NomDeColonne'`** (la colonne réciproque, dans la table cible) : ce
+n'est pas une extension de ce widget.
 
 **Ce sont des arguments propres à ce widget, pas le format officiel de la Code View de
 Grist** : Grist lui-même n'écrit, au mieux, que `choices=[...]` dans de rares cas, jamais

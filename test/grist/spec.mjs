@@ -83,6 +83,9 @@ export const SPEC = {
     col("ToNumbers", "Ref:Numbers", { visibleCol: "Eur" }),
     col("Styled", "Ref:Texts", { widgetOptions: { fillColor: "#ABCDEF" } }),
   ],
+  Projects: [col("Name", "Text"), col("Owner", "Ref:People", { reverse: "Projects", label: "Responsable", description: "Qui porte le projet", visibleCol: "Name" })],
+  People: [col("Name", "Text"), col("Projects", "RefList:Projects", { visibleCol: "Name" })],
+  Grid: [col("Left", "RefList:Grid", { reverse: "Right" }), col("Right", "RefList:Grid"), col("Parent", "Ref:Grid", { reverse: "Kids" }), col("Kids", "RefList:Grid")],
   Misc: [
     col("Files", "Attachments"),
     col("FilesTall", "Attachments", { widgetOptions: { height: 120 } }),

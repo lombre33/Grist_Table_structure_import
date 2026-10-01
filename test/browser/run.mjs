@@ -8,7 +8,7 @@ import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { launchWidget } from "./widgetPage.mjs";
 import { fakeGrist } from "./fakeGrist.mjs";
-import { analyse, apply, previewRows } from "./driver.mjs";
+import { analyse, apply, previewRows, warnings } from "./driver.mjs";
 
 const MULTI = `import grist
 
@@ -25,6 +25,9 @@ class TableB:
 const TYPES = "@grist.UserTable\nclass X:\n  A = grist.Reference('Other_Table')\n  B = grist.Int()\n";
 
 const WITH_FORMULA = "@grist.UserTable\nclass X:\n  A = grist.Int()\n\n  @grist.formulaType(grist.Int())\n  def Double(rec, table):\n    return rec.A * 2\n";
+
+const TWO_WAY =
+  "@grist.UserTable\nclass Pets:\n  Owner = grist.Reference('People', reverse_of='Pets')\n\n@grist.UserTable\nclass People:\n  Pets = grist.ReferenceList('Pets', reverse_of='Owner')\n";
 
 const hidden = (page, id) => page.evaluate((target) => document.getElementById(target).hidden, id);
 const count = (page, selector) => page.locator(selector).count();
@@ -158,6 +161,16 @@ const TESTS = [
     await apply(page);
     const added = grist.calls.flat().map(([name, , id, payload]) => [name, id, payload.isFormula, payload.formula]);
     assert.deepEqual(added, [["AddVisibleColumn", "Fresh", false, ""], ["AddVisibleColumn", "Double", true, "rec.A * 2"]]);
+  }],
+
+  ["Import: two-way references created together are marked, and one left alone is said to become a plain reference", async (page) => {
+    await analyse(page, TWO_WAY);
+    assert.deepEqual(await previewRows(page), ["Pets", "OwnerRéférence vers « People » bidirectionnelle", "People", "PetsRéférences vers « Pets » (liste) bidirectionnelle"]);
+    assert.deepEqual(await warnings(page), []);
+
+    await page.locator("#columns-preview-body tr", { hasText: "Références vers" }).locator("input").click();
+    assert.deepEqual(await previewRows(page), ["Pets", "OwnerRéférence vers « People »", "People", "PetsRéférences vers « Pets » (liste)"]);
+    assert.match((await warnings(page)).join(" "), /Table « Pets » — Références bidirectionnelles créées comme références simples .*: Owner\./);
   }],
 
   ["Import: the fields are named, linked to their error, and the result is announced", async (page) => {

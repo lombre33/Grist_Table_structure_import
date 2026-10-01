@@ -163,6 +163,17 @@ test("buildExportSchema captures label, description, parsed widgetOptions and a 
   assert.equal(owner.visibleColId, "Name"); // resolved from the raw visibleCol row id (3) to a colId
 });
 
+test("buildExportSchema gives the id of the column a two-way reference is linked to", () => {
+  const tables = [{ tableRef: 10, tableId: "Pets" }, { tableRef: 20, tableId: "People" }];
+  const allColumns = [
+    { id: 1, parentId: 10, colId: "Owner", type: "Ref:People", isFormula: false, formula: "", parentPos: 1, reverseCol: 2 },
+    { id: 2, parentId: 20, colId: "Pets", type: "RefList:Pets", isFormula: false, formula: "", parentPos: 2, reverseCol: 1 },
+    { id: 3, parentId: 20, colId: "Name", type: "Text", isFormula: false, formula: "", parentPos: 1, reverseCol: 0 },
+  ];
+  const [pets, people] = buildExportSchema(tables, allColumns, ["Pets", "People"]);
+  assert.deepEqual([pets.columns[0].reverseColId, people.columns.map((col) => col.reverseColId)], ["Pets", [null, "Owner"]]);
+});
+
 test("buildExportSchema never throws on an unparseable widgetOptions string", () => {
   const tables = [{ tableRef: 10, tableId: "Foo" }];
   const allColumns = [

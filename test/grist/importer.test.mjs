@@ -1,6 +1,7 @@
 /** The Import tab's logic (js/importer.js) applied to a real document. */
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { fetchDocSchema } from "../../js/schema.js";
 import { parseGristSchema } from "../../js/parser.js";
 import { addColumns, createTables, resolveColumns } from "../../js/importer.js";
@@ -291,4 +292,93 @@ test("a column added to an existing table can bring its formula", async () => {
   assert.deepEqual((await formulas(doc, "Contacts")).at(-1), ["Shout", true, "rec.Name.upper()"]);
   await doc.apply([["AddRecord", "Contacts", null, { Name: "ada" }]]);
   assert.equal((await doc.fetchTable("Contacts")).Shout[0], "ADA");
+});
+
+const PROJECTS = `
+@grist.UserTable
+class Projects:
+  Name = grist.Text()
+  Owner = grist.Reference('People', reverse_of='Projects', description='kept')
+
+@grist.UserTable
+class People:
+  Name = grist.Text()
+  Projects = grist.ReferenceList('Projects', reverse_of='Owner')
+`;
+
+const links = async (doc, tableId) => (await snapshot(doc))[tableId].filter((col) => col.reverseCol).map((col) => [col.id, col.reverseCol]);
+
+test("two-way references created together are linked, and Grist keeps their values in step", async () => {
+  const doc = await instance.newDoc();
+  const { note } = await importText(doc, PROJECTS);
+  assert.equal(note, "");
+  assert.deepEqual([await links(doc, "Projects"), await links(doc, "People")], [[["Owner", "Projects"]], [["Projects", "Owner"]]]);
+  await doc.apply([["AddRecord", "People", null, { Name: "Ada" }], ["AddRecord", "Projects", null, { Name: "P1", Owner: 1 }]]);
+  assert.deepEqual((await doc.fetchTable("People")).Projects, [["L", 1]]);
+});
+
+test("a renamed table keeps its two-way link, and the other details are applied too", async () => {
+  const doc = await instance.newDoc();
+  const { note } = await importText(doc, PROJECTS, { ids: { People: "Persons" } });
+  assert.equal(note, "");
+  assert.deepEqual([await links(doc, "Projects"), await links(doc, "Persons")], [[["Owner", "Projects"]], [["Projects", "Owner"]]]);
+  assert.equal((await snapshot(doc)).Projects[1].description, "kept");
+});
+
+test("a pair whose counterpart is left out stays a plain reference, and nothing fails", async () => {
+  const doc = await instance.newDoc();
+  const { note } = await importText(doc, PROJECTS, { exclude: { People: ["Projects"] } });
+  assert.equal(note, "");
+  assert.deepEqual([await links(doc, "Projects"), (await snapshot(doc)).People.map((col) => col.id)], [[], ["Name"]]);
+});
+
+test("a reference whose counterpart is in the document already is not linked: its values would be overwritten", async () => {
+  const doc = await instance.newDoc();
+  await addTable(doc, "People", [column("Name"), column("Projects", "RefList:Projects")]);
+  await importText(doc, "@grist.UserTable\nclass Projects:\n  Owner = grist.Reference('People', reverse_of='Projects')\n");
+  assert.deepEqual([await links(doc, "Projects"), await links(doc, "People")], [[], []]);
+});
+
+test("a pair of columns of one table can be linked while adding them to an existing table", async () => {
+  const doc = await instance.newDoc();
+  await addTable(doc, "Org", [column("Name")]);
+  const { tables } = await fetchDocSchema(doc.grist);
+  const [source] = parseGristSchema("@grist.UserTable\nclass X:\n  Parent = grist.Reference('X', reverse_of='Kids')\n  Kids = grist.ReferenceList('X', reverse_of='Parent')\n").tables;
+  const { columns } = resolveColumns(source, new Map([["X", "Org"]]), ["Org"]);
+  const { note } = await addColumns(doc.grist, tables.find((table) => table.tableId === "Org"), columns);
+  assert.equal(note, "");
+  assert.deepEqual(await links(doc, "Org"), [["Parent", "Kids"], ["Kids", "Parent"]]);
+});
+
+test("a link Grist refuses is reported, and the tables with their descriptions stay", async () => {
+  const doc = await instance.newDoc();
+  const refusing = {
+    ...doc,
+    grist: {
+      docApi: {
+        ...doc.grist.docApi,
+        applyUserActions: (actions) => (actions.some((action) => action[3]?.reverseCol) ? Promise.reject(new Error("no two-way here")) : doc.grist.docApi.applyUserActions(actions)),
+      },
+    },
+  };
+  const { tables, note } = await importText(refusing, PROJECTS);
+  assert.deepEqual(tables.map((table) => table.id), ["Projects", "People"]);
+  assert.match(note, /no two-way here/);
+  assert.deepEqual([await links(doc, "Projects"), (await snapshot(doc)).Projects[1].description], [[], "kept"]);
+});
+
+test("a whole real Code View, recorded from Grist, is imported with its formulas and its two-way references linked", async () => {
+  const fixtures = new URL("../fixtures/code-view/", import.meta.url);
+  const expected = JSON.parse(readFileSync(new URL("every-column.json", fixtures), "utf8")).tables;
+  const doc = await instance.newDoc();
+  const { tables, note } = await importText(doc, readFileSync(new URL("every-column.py", fixtures), "utf8"), { ids: { Table1: "Table1_copy" }, withFormulas: true });
+
+  assert.equal(note, "");
+  assert.equal(tables.length, Object.keys(expected).length);
+  const after = await snapshot(doc);
+  delete after.Table1;
+  const computed = (columns) => columns.filter((col) => col.isFormula || col.formula).length;
+  assert.equal(Object.values(after).reduce((total, columns) => total + computed(columns), 0), Object.values(expected).flat().filter(([, , isComputed]) => isComputed).length);
+  assert.deepEqual([await links(doc, "Projects"), await links(doc, "People")], [[["Owner", "Projects"]], [["Projects", "Owner"]]]);
+  assert.deepEqual(await links(doc, "Grid"), [["Left", "Right"], ["Right", "Left"], ["Parent", "Kids"], ["Kids", "Parent"]]);
 });

@@ -3,7 +3,7 @@ import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { launchWidget } from "../browser/widgetPage.mjs";
 import { analyse, apply, previewRows, warnings } from "../browser/driver.mjs";
-import { instance, column, addTable, snapshot } from "./support.mjs";
+import { instance, column, columnRef, addTable, snapshot } from "./support.mjs";
 
 const widget = await launchWidget();
 after(() => widget.close());
@@ -139,10 +139,13 @@ class Members:
 test("Export then Import through the interface keeps what Grist drops on its own", async () => {
   const source = await instance.newDoc("e2e source");
   await source.apply([
-    ["AddTable", "Teams", [column("Title", "Text", { label: "Intitulé" })]],
+    ["AddTable", "Teams", [column("Title", "Text", { label: "Intitulé" }), column("Roster", "RefList:Members")]],
     ["AddTable", "Members", [column("Team", "Ref:Teams"), column("Mood", "Choice", { widgetOptions: JSON.stringify({ choices: ["a'b", 'c"d', "Content (ok)"], alignment: "center" }) })]],
   ]);
-  await source.apply([["ModifyColumn", "Members", "Mood", { description: "Humeur\ndu jour" }]]);
+  await source.apply([
+    ["ModifyColumn", "Members", "Mood", { description: "Humeur\ndu jour" }],
+    ["ModifyColumn", "Members", "Team", { reverseCol: await columnRef(source, "Teams", "Roster") }],
+  ]);
 
   const exporter = await widget.open(source.grist);
   await exporter.click("#tab-export");
@@ -161,6 +164,7 @@ test("Export then Import through the interface keeps what Grist drops on its own
     assert.deepEqual(imported.Members, expected.Members);
     assert.deepEqual(imported.Teams, expected.Teams);
     assert.equal(imported.Members[1].description, "Humeur\ndu jour");
+    assert.deepEqual([imported.Members[0].reverseCol, imported.Teams[1].reverseCol], ["Roster", "Team"], "the two-way link is back");
   });
 });
 

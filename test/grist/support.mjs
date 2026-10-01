@@ -69,6 +69,7 @@ export async function snapshot(doc) {
             description: col.description,
             widgetOptions: col.widgetOptions ? JSON.parse(col.widgetOptions) : null,
             visibleCol: byRef.get(col.visibleCol)?.colId ?? null,
+            reverseCol: byRef.get(col.reverseCol)?.colId ?? null,
           })),
       ])
   );
@@ -79,8 +80,9 @@ import { generateCode } from "../../js/codeGenerator.js";
 
 /**
  * Creates in `doc` the tables of `spec` (`{ TableId: [{ id, type, formula?,
- * label?, description?, widgetOptions?, visibleCol? }] }`) the way Grist's own
- * interface does: columns first, then descriptions and display columns.
+ * label?, description?, widgetOptions?, visibleCol?, reverse? }] }`) the way Grist's own
+ * interface does: columns first, then descriptions, display columns and two-way links
+ * (`reverse`: the column of the target table this one is the counterpart of).
  */
 export async function buildSource(doc, spec) {
   const payload = ({ id, type, formula, trigger, label, widgetOptions }) =>
@@ -89,8 +91,9 @@ export async function buildSource(doc, spec) {
 
   const followUps = [];
   for (const [tableId, columns] of Object.entries(spec)) {
-    for (const { id, type, description, visibleCol } of columns) {
+    for (const { id, type, description, visibleCol, reverse } of columns) {
       if (description) followUps.push(["ModifyColumn", tableId, id, { description }]);
+      if (reverse) followUps.push(["ModifyColumn", tableId, id, { reverseCol: await columnRef(doc, type.split(":")[1], reverse) }]);
       if (visibleCol) {
         const target = await columnRef(doc, type.split(":")[1], visibleCol);
         followUps.push(["ModifyColumn", tableId, id, { visibleCol: target }], ["SetDisplayFormula", tableId, null, id, `$${id}.${visibleCol}`]);

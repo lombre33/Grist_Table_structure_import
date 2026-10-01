@@ -76,6 +76,14 @@ test("choices, widget options, label, description and display column are written
   assert.match(gen(data("Owner", "Ref:Other", { visibleColId: "Name" })), /Owner = grist\.Reference\('Other', visible_col='Name'\)\n/);
 });
 
+test("a two-way reference names its counterpart first, as Code View does, and reads back", () => {
+  const text = gen(data("Owner", "Ref:People", { reverseColId: "Pets" }), data("Many", "RefList:People", { reverseColId: "Owner", label: "Plusieurs" }), data("Plain", "Ref:People"));
+  assert.match(text, /Owner = grist\.Reference\('People', reverse_of='Pets'\)\n/);
+  assert.match(text, /Many = grist\.ReferenceList\('People', reverse_of='Owner', label='Plusieurs'\)\n/);
+  const read = readBack(text);
+  assert.deepEqual([read.get("Owner").reverseOf, read.get("Many").reverseOf, read.get("Plain").reverseOf], ["Pets", "Owner", null]);
+});
+
 test("the other widgetOptions go in widget_options, without what must not travel", () => {
   const text = gen(data("Mood", "Choice", { widgetOptions: { choices: ["A", "B"], alignment: "center", rulesOptions: [{ fillColor: "#FF0000" }] } }));
   assert.match(text, /choices=\['A', 'B'\]/);

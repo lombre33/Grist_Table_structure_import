@@ -29,6 +29,11 @@ Trois actions métier possibles, toutes via l'API officielle du widget
   avoir réécrits) et ne ciblent **jamais** que des colonnes créées par le premier appel —
   jamais une colonne préexistante. Un échec de ce second appel n'annule pas la création
   déjà faite ; il est signalé séparément à l'utilisateur.
+- **Import, références bidirectionnelles** : pour deux colonnes de référence créées par le
+  même appel et qui se désignent l'une l'autre (`reverse_of`), un dernier appel envoie
+  `ModifyColumn` avec `reverseCol` (l'action que Grist utilise pour relier deux colonnes).
+  Il ne cible, lui aussi, que des colonnes créées par le premier appel : relier une colonne
+  qui existait déjà réécrirait ses valeurs. Un échec est signalé sans annuler la création.
 - **Import, formules (option)** : si l'utilisateur coche **Reprendre aussi les formules**
   (décochée à chaque analyse), les colonnes de formule et les formules de déclenchement
   du texte sont envoyées à Grist avec le même appel `AddTable` / `AddVisibleColumn`

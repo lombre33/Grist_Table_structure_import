@@ -1,7 +1,7 @@
 import { parseGristSchema } from "./parser.js";
 import { $, el, checklistItem, statusWriter, syncCheckedClass } from "./dom.js";
 import { fetchDocSchema, existingColumnIds } from "./schema.js";
-import { addColumns, checkTableId, createTables, defaultTableId, isComputed, resolveColumns } from "./importer.js";
+import { addColumns, checkTableId, createTables, defaultTableId, isComputed, resolveColumns, twoWayPairs, twoWayWarnings } from "./importer.js";
 import { callGrist, reportError } from "./util.js";
 import { t, tn, typeLabel, onLocaleChange } from "./i18n.js";
 
@@ -207,7 +207,7 @@ export function initImportTab(grist) {
   }
 
   /** A column's row, with the checkbox that takes it out of (or back into) what will be applied; `locked` when it is there already. */
-  function columnRow(col, excluded, statusCell, rerender, locked = false) {
+  function columnRow(col, { excluded, rerender, status = null, locked = false, linked = false }) {
     const checkbox = el("input", {
       type: "checkbox",
       checked: !locked && !excluded.has(col.id),
@@ -222,32 +222,29 @@ export function initImportTab(grist) {
       rerender();
       boxes()[position]?.focus();
     });
-    const kind = isComputed(col) ? [" ", el("span", { class: "tag", text: t(COMPUTED_TAGS[col.kind]) })] : [];
-    const cells = [el("td", { class: "col-checkbox" }, [checkbox]), el("td", { text: col.id }), el("td", {}, [typeLabel(col.type), ...kind])];
-    return el("tr", {}, statusCell ? [...cells, statusCell] : cells);
+    const tags = [isComputed(col) && COMPUTED_TAGS[col.kind], linked && "import.preview.twoWay"].filter(Boolean);
+    const type = el("td", {}, [typeLabel(col.type), ...tags.flatMap((key) => [" ", el("span", { class: "tag", text: t(key) })])]);
+    const cells = [el("td", { class: "col-checkbox" }, [checkbox]), el("td", { text: col.id }), type];
+    return el("tr", {}, status ? [...cells, status] : cells);
   }
 
   /** Resolves and checks every ticked table again: called after each change the user makes. */
   function renderCreate() {
-    const several = entries.length > 1;
     const destination = new Map(entries.map((entry) => [entry.table.tableId, entry.id.trim()]));
-    const rows = [];
-    const notes = [];
-    let valid = entries.length > 0;
-    let anyColumn = false;
-    let computed = 0;
+    const resolved = entries.map((entry) => resolveColumns(entry.table, destination, documentTableIds(), { excluded: entry.excluded, withFormulas }));
+    entries.forEach((entry, i) => (entry.columns = resolved[i].columns));
+    const batch = entries.map((entry) => ({ id: entry.id.trim() || entry.table.tableId, columns: entry.columns.filter((col) => !entry.excluded.has(col.id)) }));
+    const linked = new Set(twoWayPairs(batch).flat().map(({ col }) => col));
+    const notes = [...resolved.flatMap(({ warnings: found }, i) => found.map((warning) => ({ ...warning, table: batch[i].id }))), ...twoWayWarnings(batch)];
 
+    const rows = entries.flatMap((entry, i) => [
+      ...(entries.length > 1 ? [el("tr", { class: "table-separator" }, [el("td", { colspan: "3", text: batch[i].id })])] : []),
+      ...entry.columns.map((col) => columnRow(col, { excluded: entry.excluded, rerender: renderCreate, linked: linked.has(col) })),
+    ]);
+
+    let valid = entries.length > 0;
     for (const entry of entries) {
       const id = entry.id.trim();
-      const resolved = resolveColumns(entry.table, destination, documentTableIds(), { excluded: entry.excluded, withFormulas });
-      entry.columns = resolved.columns;
-      notes.push(...resolved.warnings.map((warning) => ({ ...warning, table: id || entry.table.tableId })));
-
-      if (several) rows.push(el("tr", { class: "table-separator" }, [el("td", { colspan: "3", text: id || entry.table.tableId })]));
-      rows.push(...entry.columns.map((col) => columnRow(col, entry.excluded, null, renderCreate)));
-      anyColumn ||= entry.columns.some((col) => !entry.excluded.has(col.id));
-      computed += entry.columns.filter((col) => isComputed(col) && !entry.excluded.has(col.id)).length;
-
       const others = entries.filter((other) => other !== entry).map((other) => other.id.trim());
       const problem = checkTableId(id, documentTableIds(), others);
       entry.error.hidden = !problem;
@@ -257,10 +254,10 @@ export function initImportTab(grist) {
     }
 
     columnsBody.replaceChildren(...rows);
-    renderFormulasOption(computed);
+    renderFormulasOption(batch.flatMap((table) => table.columns).filter(isComputed).length);
     renderWarnings(notes);
-    actionBtn.disabled = busy || !valid || !anyColumn;
-    actionBtn.textContent = several ? tn("import.action.createTables", entries.length) : t("import.action.create");
+    actionBtn.disabled = busy || !valid || batch.every((table) => table.columns.length === 0);
+    actionBtn.textContent = entries.length > 1 ? tn("import.action.createTables", entries.length) : t("import.action.create");
   }
 
   function renderExisting() {
@@ -270,21 +267,22 @@ export function initImportTab(grist) {
     const known = target ? existingColumnIds(docSchema.allColumns, target.tableRef) : null;
     const resolved = resolveColumns(table, new Map(target ? [[table.tableId, target.tableId]] : []), documentTableIds(), { excluded: existing.excluded, withFormulas });
     existing.columns = resolved.columns.map((col) => ({ ...col, isNew: !known || !known.has(col.id.toLowerCase()) }));
+    const included = existing.columns.filter((col) => col.isNew && !existing.excluded.has(col.id));
+    const batch = [{ id: target?.tableId ?? table.tableId, columns: included }];
+    const linked = new Set(twoWayPairs(batch).flat().map(({ col }) => col));
 
     columnsBody.replaceChildren(
       ...existing.columns.map((col) => {
         const pill = col.isNew ? ["new", t("import.status.new")] : ["skip", t("import.status.existing")];
         const status = el("td", {}, [el("span", { class: `status-pill status-pill-${pill[0]}`, text: pill[1] })]);
-        return columnRow(col, existing.excluded, status, renderExisting, !col.isNew);
+        return columnRow(col, { excluded: existing.excluded, rerender: renderExisting, status, locked: !col.isNew, linked: linked.has(col) });
       })
     );
 
-    renderWarnings(resolved.warnings);
-    const included = existing.columns.filter((col) => col.isNew && !existing.excluded.has(col.id));
     renderFormulasOption(included.filter(isComputed).length);
-    const newCount = included.length;
-    actionBtn.disabled = busy || !known || newCount === 0;
-    actionBtn.textContent = !known ? t("import.action.chooseTarget") : newCount === 0 ? t("import.action.noNewColumns") : tn("import.action.addColumns", newCount);
+    renderWarnings([...resolved.warnings, ...twoWayWarnings(batch)]);
+    actionBtn.disabled = busy || !known || included.length === 0;
+    actionBtn.textContent = !known ? t("import.action.chooseTarget") : included.length === 0 ? t("import.action.noNewColumns") : tn("import.action.addColumns", included.length);
   }
 
   /** The checkbox that imports the formulas, offered when some of the columns to create have one. */

@@ -45,6 +45,7 @@ function buildKwargs(col) {
   const options = isPlainObject(col.widgetOptions) ? col.widgetOptions : null;
   const otherOptions = sanitizeWidgetOptions(options);
   return {
+    ...(col.reverseColId && { reverse_of: quotePython(col.reverseColId) }),
     ...(Array.isArray(options?.choices) && options.choices.length > 0 && { choices: `[${options.choices.map(quotePython).join(", ")}]` }),
     ...(otherOptions && { widget_options: quotePython(JSON.stringify(otherOptions)) }),
     ...(col.label && col.label !== col.colId && { label: quotePython(col.label) }),
