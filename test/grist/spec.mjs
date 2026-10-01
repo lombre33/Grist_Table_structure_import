@@ -22,6 +22,7 @@ export const SPEC = {
     col("Styled", "Text", { widgetOptions: styled }),
     col("Labelled", "Text", { label: "Un libellé" }),
     col("Tied_label", "Text", { label: "Tied label", tied: true }),
+    col("ID2", "Text", { label: "ID", tied: true }),
     col("Described", "Text", { description: "A description" }),
     col("Form", "Text", { widgetOptions: { question: "Votre nom ?", formRequired: true, formTextLines: "3" } }),
     col("Rules", "Text", { widgetOptions: { rulesOptions: [{ fillColor: "#FF0000" }] } }),

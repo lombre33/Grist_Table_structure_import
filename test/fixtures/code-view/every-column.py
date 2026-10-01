@@ -225,6 +225,7 @@ class Texts:
   Styled = grist.Text()
   Labelled = grist.Text()
   Tied_label = grist.Text()
+  ID2 = grist.Text()
   Described = grist.Text()
   Form = grist.Text()
   Rules = grist.Text()

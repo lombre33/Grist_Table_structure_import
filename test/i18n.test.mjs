@@ -50,7 +50,7 @@ test("French text keeps its punctuation attached by no-break spaces, and both la
   }
   for (const locale of ["fr", "en"]) {
     for (const [key, entry] of Object.entries(STRINGS[locale])) {
-      for (const text of values(entry)) assert.doesNotMatch(text, /\w'\w/, `${locale} ${key}: ’ rather than '`);
+      for (const text of values(entry)) assert.doesNotMatch(text, /\w'/, `${locale} ${key}: ’ rather than '`);
     }
   }
 });

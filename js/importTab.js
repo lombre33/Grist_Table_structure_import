@@ -57,6 +57,7 @@ export function initImportTab(grist) {
   const mode = () => modeRadios.find((radio) => radio.checked)?.value ?? "create";
   const render = () => {
     previewHeading.textContent = t(parsed.length > 0 ? "import.step3.eyebrow" : "import.step3.none");
+    renderTargetProblem();
     return mode() === "existing" ? renderExisting() : renderCreate();
   };
   /** The columns whose checkbox can take them out of (or back into) what will be applied, each with the ids left out of its table. */
@@ -116,6 +117,7 @@ export function initImportTab(grist) {
     setStatus(null);
     reset();
     ({ tables: parsed, warnings } = parseGristSchema(sourceInput.value));
+    const analysed = parsed;
 
     const found = parsed.length > 0;
     modeBlock.hidden = columnsPreview.hidden = createActions.hidden = !found;
@@ -125,6 +127,7 @@ export function initImportTab(grist) {
       sourcePickerRow.hidden = checklistRow.hidden = tableIdRow.hidden = targetRow.hidden = true;
       actionBtn.disabled = true;
       previewHeading.textContent = t("import.step3.none");
+      renderFormulasOption(0);
       renderWarnings();
       announcement.textContent = t("import.announce.none");
       return;
@@ -132,6 +135,7 @@ export function initImportTab(grist) {
 
     setStatus(t("import.status.analyzing"));
     await loadSchema();
+    if (parsed !== analysed) return; // the text was edited, or cleared, while the document was being read
     setStatus(null);
 
     sourceSelect.replaceChildren(...parsed.map((table, index) => el("option", { value: String(index), text: table.tableId })));
@@ -183,10 +187,14 @@ export function initImportTab(grist) {
   }
 
   function fillTargetSelect() {
+    targetSelect.replaceChildren(...(docSchema?.tables ?? []).map((table) => el("option", { value: String(table.tableRef), text: table.tableId })));
+  }
+
+  /** What stops a table of the document from being completed, if anything: written again with every render, so that it follows the language. */
+  function renderTargetProblem() {
     const problem = !docSchema ? "import.error.noTableList" : docSchema.tables.length === 0 ? "import.error.noTablesToComplete" : null;
     targetError.hidden = !problem;
     targetError.textContent = problem ? t(problem) : "";
-    targetSelect.replaceChildren(...(docSchema?.tables ?? []).map((table) => el("option", { value: String(table.tableRef), text: table.tableId })));
   }
 
   const targetTable = () => docSchema?.tables.find((table) => String(table.tableRef) === targetSelect.value) ?? null;
@@ -297,8 +305,10 @@ export function initImportTab(grist) {
     if (!table) return;
     const target = targetTable();
     const known = target ? existingColumnIds(docSchema.allColumns, target.tableRef) : null;
-    const resolved = resolveColumns(table, new Map(target ? [[table.tableId, target.tableId]] : []), documentTableIds(), { excluded: existing.excluded, withFormulas });
-    existing.columns = resolved.columns.map((col) => ({ ...col, isNew: !known || !known.has(col.id.toLowerCase()) }));
+    const present = (col) => Boolean(known?.has(col.id.toLowerCase()));
+    const excluded = new Set([...existing.excluded, ...table.columns.filter(present).map((col) => col.id)]); // those already there are not imported: no note about them
+    const resolved = resolveColumns(table, new Map(target ? [[table.tableId, target.tableId]] : []), documentTableIds(), { excluded, withFormulas });
+    existing.columns = resolved.columns.map((col) => ({ ...col, isNew: !present(col) }));
     const included = existing.columns.filter((col) => col.isNew && !existing.excluded.has(col.id));
     const batch = [{ id: target?.tableId ?? table.tableId, columns: included }];
     const linked = new Set(twoWayPairs(batch).flat().map(({ col }) => col));

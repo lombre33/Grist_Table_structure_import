@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { checkTableId, createTables, defaultTableId, idFromLabel, resolveColumns, twoWayPairs, twoWayWarnings } from "../js/importer.js";
+import { checkTableId, createTables, defaultTableId, idFromLabel, isComputed, isTied, resolveColumns, twoWayPairs, twoWayWarnings } from "../js/importer.js";
 
 const table = (...columns) => ({ tableId: "Source", columns: columns.map(([id, dslType, argsRaw = "", kind = "data", code = ""]) => ({ id, dslType, argsRaw, kind, code })) });
 const ids = (...pairs) => new Map(pairs);
@@ -218,4 +218,24 @@ test("a display column is set through the row ids of both columns, the one form 
   const grist = recordingGrist({ before: ["People"], after: { People: ["Name"], Main: ["Owner"] } });
   await createTables(grist, [made("Main", ["Owner", "Reference", "'People', visible_col='Name'"])]);
   assert.deepEqual(grist.calls[1], [["ModifyColumn", "Main", "Owner", { visibleCol: 1 }], ["SetDisplayFormula", "Main", null, 2, "$Owner.Name"]]);
+});
+
+test("isTied accepts the id Grist derives from a label, numbered or lettered, and no other", () => {
+  const tied = [["Nom", "Nom"], ["Prénom", "Prenom"], ["ID", "ID2"], ["id", "id3"], ["manualSort", "manualSort2"], ["Col1", "Col1_2"], ["Nom", "Nom3"], ["日本", "A"], ["日本", "BC"]];
+  const own = [["Nom complet", "Nom"], ["Nom", "Nom_x"], ["Nom", "Nomade"], ["Nom", "Nom_"], ["日本", "a"], ["日本", "Nom"]];
+  assert.deepEqual(tied.map(([label, id]) => isTied(label, id)), tied.map(() => true));
+  assert.deepEqual(own.map(([label, id]) => isTied(label, id)), own.map(() => false));
+});
+
+test("a blank formula is no formula: the empty column of Grist is not offered as one", () => {
+  const { columns, warnings } = resolveColumns(table(["Empty", "Any", "", "formula", "return None"], ["Real", "Int", "", "formula", "return 1"], ["Plain", "Text"]), ids(), []);
+  assert.deepEqual(columns.map(isComputed), [false, true, false]);
+  assert.deepEqual(warnings.map((warning) => [warning.key, warning.params.columns]), [["warn.computedColumns", "Real"]]);
+});
+
+test("a column whose id Grist numbered stays tied to its label, only one with an id of its own is untied", async () => {
+  const grist = recordingGrist({ after: { T: ["ID2", "Nom", "A", "Col1_2", "Extra"] } });
+  const labelled = made("T", ["ID2", "Text", "label='ID'"], ["Nom", "Text", "label='Nom complet'"], ["A", "Text", "label='日本'"], ["Col1_2", "Text", "label='Col1'"], ["Extra", "Text", "label='Autre'"]);
+  await createTables(grist, [labelled]);
+  assert.deepEqual(grist.calls[1], [["ModifyColumn", "T", "Nom", { untieColIdFromLabel: true }], ["ModifyColumn", "T", "Extra", { untieColIdFromLabel: true }]]);
 });

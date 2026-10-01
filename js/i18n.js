@@ -216,7 +216,7 @@ export const STRINGS = {
     "import.step3.eyebrow": "3. Review before applying",
     "import.tablePicker.label": "Table to import (several found)",
     "import.tableMultiPicker.label": "Tables to create (several found)",
-    "import.tableId.label": { one: "New table’s identifier", other: "New tables' identifiers" },
+    "import.tableId.label": { one: "New table’s identifier", other: "New tables’ identifiers" },
     "import.step3.none": "Result of the analysis",
     "import.targetTable.label": "Table to complete",
     "import.preview.includeAll": "Include every column",

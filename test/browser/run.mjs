@@ -156,6 +156,58 @@ const TESTS = [
     assert.equal(await textOf(page, "#action-btn"), "Ajouter 1 colonne à « Existing_Table »", "the button names what it will change");
   }],
 
+  ["Import: a column already in the table raises no note, since it is not imported", async (page) => {
+    await analyse(page, "@grist.UserTable\nclass X:\n  Name = grist.Mystery()\n\n  @grist.formulaType(grist.Int())\n  def Computed(rec, table):\n    return 1\n  Fresh = grist.Text()\n");
+    assert.equal((await warnings(page)).length, 2, "to create the table, both are noted");
+    await page.click('label.mode-card:has(input[value="existing"])');
+    await page.selectOption("#target-table-select", { label: "Existing_Table" });
+    assert.deepEqual(await warnings(page), [], "Name and Computed are in Existing_Table already");
+  }],
+
+  ["Import: the formulas option goes with the tables, and is unticked at every analysis", async (page, grist) => {
+    await analyse(page, WITH_FORMULA);
+    assert.equal(await hidden(page, "formulas-row"), false);
+    await page.check("#with-formulas");
+    await analyse(page, WITH_FORMULA);
+    assert.equal(await page.isChecked("#with-formulas"), false, "what was decided for a text that is no longer there");
+    await page.check("#with-formulas");
+    await analyse(page, "nothing to read here");
+    assert.equal(await hidden(page, "formulas-row"), true);
+    await analyse(page, WITH_FORMULA);
+    assert.equal(await page.isChecked("#with-formulas"), false);
+    await apply(page);
+    assert.deepEqual(grist.calls[0][0][2].map((col) => [col.id, col.isFormula]), [["A", false], ["Double", false]]);
+  }],
+
+  ["Import: editing the text while the document is being read announces and shows nothing", async (page, grist) => {
+    const fetchTable = grist.docApi.fetchTable;
+    grist.docApi.fetchTable = async (...args) => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      return fetchTable(...args);
+    };
+    await page.fill("#source-input", MULTI);
+    await page.click("#analyze-btn");
+    await page.fill("#source-input", `${MULTI}\n`);
+    await page.waitForFunction(() => !document.getElementById("analyze-btn").disabled);
+    await page.waitForTimeout(100);
+    assert.equal(await page.textContent("#import-announcement"), "");
+    assert.equal(await hidden(page, "preview-section"), true);
+  }],
+
+  ["Import: the message about a document that cannot be read follows the language", async (page, grist) => {
+    grist.docApi.fetchTable = async () => {
+      throw new Error("unreadable");
+    };
+    await analyse(page, MULTI);
+    await page.click('label.mode-card:has(input[value="existing"])');
+    assert.equal(await textOf(page, "#target-table-error"), "Impossible de charger la liste des tables de ce document.");
+    await page.click("#settings-btn");
+    await page.click('label.segmented-option:has(input[value="en"])');
+    assert.equal(await textOf(page, "#target-table-error"), "Could not load this document’s table list.");
+    assert.equal(page.problems.length, 1, "the failure is logged, as it is meant to be");
+    page.problems.length = 0;
+  }],
+
   ["Import: one box in the table's head takes all the columns in or out, and what is left out is dimmed", async (page) => {
     await analyse(page, MULTI);
     const state = () => page.evaluate(() => {

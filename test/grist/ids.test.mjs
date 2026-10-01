@@ -1,7 +1,7 @@
 /** The ids the widget expects Grist to create or derive: tables as typed, columns from their label. */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { checkTableId, defaultTableId, idFromLabel } from "../../js/importer.js";
+import { checkTableId, defaultTableId, idFromLabel, isTied } from "../../js/importer.js";
 import { instance, column, rows } from "./support.mjs";
 import { seeded } from "../random.mjs";
 
@@ -55,4 +55,18 @@ test("the id derived from a label is the one Grist gives a column whose label is
     if (derived) assert.equal(engine, derived, JSON.stringify(label));
     else assert.match(engine, /^[A-Z]+$/, `${JSON.stringify(label)}: nothing to derive, Grist numbers the column`);
   });
+});
+
+test("whatever id Grist gives a column whose label is edited, the widget takes it for tied to that label", async () => {
+  const doc = await instance.newDoc();
+  const seeds = Array.from({ length: 9 }, (_, i) => `Zz${i}`);
+  await doc.apply([["AddTable", "N", [column("Nom"), column("Col1"), column("Ab2"), ...seeds.map((id) => column(id))]]]);
+  const refs = new Map(rows(await doc.fetchTable("_grist_Tables_column")).filter((col) => seeds.includes(col.colId)).map((col) => [col.colId, col.id]));
+  const labels = ["Nom", "Col1", "ID", "id", "manualSort", "日本", "日本", "Nom", "Ab2"];
+  await doc.apply(labels.map((label, i) => ["UpdateRecord", "_grist_Tables_column", refs.get(seeds[i]), { label }]));
+
+  const after = rows(await doc.fetchTable("_grist_Tables_column"));
+  const ids = seeds.map((seed) => after.find((col) => col.id === refs.get(seed)).colId);
+  assert.deepEqual(ids, ["Nom2", "Col1_2", "ID2", "id3", "manualSort2", "A", "B", "Nom3", "Ab2_2"], "the engine numbers an id that is taken or reserved");
+  labels.forEach((label, i) => assert.ok(isTied(label, ids[i]), `${label} -> ${ids[i]}`));
 });

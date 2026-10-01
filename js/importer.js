@@ -44,15 +44,24 @@ export function checkTableId(id, documentTableIds, otherIds) {
 export function idFromLabel(label) {
   let id = label.normalize("NFKD").replace(/\p{M}/gu, "").replace(/[^A-Za-z0-9_]+/g, "_").replace(/^_+/, "");
   if (/^\d/.test(id)) id = `c${id}`;
-  while (PYTHON_KEYWORDS.has(id)) id = `c${id}`;
+  if (PYTHON_KEYWORDS.has(id)) id = `c${id}`;
   return id;
 }
 
-/** Grist renames a column when its label changes, unless told its id is its own: which a label that is not the id's says. */
-const isUntied = (col) => Boolean(col.label) && idFromLabel(col.label) !== col.id;
+/**
+ * Whether `id` is what Grist derived from `label`: that id, numbered when it was taken (`ID` is, `id` being
+ * reserved: `ID2`), or letters (`A`, `B`...) when nothing is left of the label. Any other id was given to the
+ * column apart from its label, and Grist then no longer renames it when the label changes.
+ */
+export function isTied(label, id) {
+  const base = idFromLabel(label);
+  return base ? id.startsWith(base) && /^(?:_?\d+)?$/.test(id.slice(base.length)) : /^[A-Z]+$/.test(id);
+}
 
-/** A formula column, or a data column with a trigger formula: what an import cannot reproduce without `withFormulas`. */
-export const isComputed = (col) => col.kind !== "data";
+const isUntied = (col) => Boolean(col.label) && !isTied(col.label, col.id);
+
+/** A column with a formula, or a data column with a trigger formula: what an import cannot reproduce without `withFormulas` (a blank formula is none). */
+export const isComputed = (col) => col.formula !== "";
 
 /**
  * The formula Grist stores for a function body of Code View: a lone `return X` is X, and what a
