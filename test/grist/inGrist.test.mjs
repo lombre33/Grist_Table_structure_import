@@ -51,10 +51,11 @@ test("the theme <style> noise is recognised in both wordings of Chromium's messa
 test("Export in one document, Import in another, both through Grist's own interface", async () => {
   const source = await instance.newDoc("in Grist: source");
   await buildSource(source, {
-    Teams: [{ id: "Title", type: "Text", label: "Intitulé", description: "Nom de l'équipe\nsur deux lignes" }],
+    Teams: [{ id: "Title", type: "Text", label: "Intitulé", description: "Nom de l'équipe\nsur deux lignes" }, { id: "Roster", type: "RefList:Members" }],
     Members: [
-      { id: "Team", type: "Ref:Teams", visibleCol: "Title" },
+      { id: "Team", type: "Ref:Teams", visibleCol: "Title", reverse: "Roster" },
       { id: "Mood", type: "Choice", widgetOptions: { choices: ["Content (ok)", "it's"], alignment: "center" } },
+      { id: "Shout", type: "Text", formula: "$Mood.upper()" },
     ],
   });
 
@@ -71,6 +72,7 @@ test("Export in one document, Import in another, both through Grist's own interf
   const target = await instance.newDoc("in Grist: target");
   const importer = await openWidgetIn(target);
   await analyse(importer.frame, text);
+  await importer.frame.check("#with-formulas");
   assert.match(await apply(importer.frame), /^2 tables créées \(Members, Teams\)/);
   assert.deepEqual(importer.errors, []);
   await importer.page.close();
@@ -79,6 +81,7 @@ test("Export in one document, Import in another, both through Grist's own interf
   assert.deepEqual(after.Members, before.Members);
   assert.deepEqual(after.Teams, before.Teams);
   assert.equal(after.Teams[0].description, "Nom de l'équipe\nsur deux lignes");
+  assert.deepEqual([after.Members[0].reverseCol, after.Members.at(-1).formula], ["Roster", "$Mood.upper()"], "the two-way link and the formula came through the plugin API");
 });
 
 test("columns added to an existing table show up in its page", async () => {
