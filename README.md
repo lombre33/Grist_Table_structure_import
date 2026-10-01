@@ -287,8 +287,8 @@ L'interface suit l'identité UI/UX commune aux widgets **Grist Factory** (grist-
   Début et à Fin. Mesuré dans Chromium (arbre d'accessibilité, clavier, contrastes) :
   pas encore passé au lecteur d'écran.
 - **Typographie** : **Manrope** (police variable) pour toute l'interface, vendorisée
-  dans `fonts/manrope/` (police variable, licence SIL Open Font License jointe) plutôt
-  que chargée depuis une CDN — voir SECURITY.md. Le code Python (collé ou généré) reste
+  dans `fonts/manrope/` (police variable réduite à l'alphabet latin, 28 Ko, licence SIL
+  Open Font License jointe) plutôt que chargée depuis une CDN — voir SECURITY.md. Le code Python (collé ou généré) reste
   en police à chasse fixe, monospace, inchangé.
 - **Thème système / clair / sombre** : réglable dans le panneau Réglages (icône en haut
   à droite), mémorisé sur cet appareil. « Système » (par défaut) suit le thème du
@@ -385,7 +385,7 @@ Structure :
 ```
 index.html             page du widget (en-tête, panneau Réglages, onglets Import / Export)
 style.css              mise en forme (identité visuelle Grist Factory, thème clair/sombre)
-fonts/manrope/         police Manrope vendorisée (voir SECURITY.md)
+fonts/manrope/         police Manrope vendorisée et son fichier d'origine (voir SECURITY.md)
 assets/                logo Grist Factory (voir SECURITY.md)
 js/theme-init.js       applique le thème et la langue mémorisés avant le premier affichage
 js/app.js              point d'entrée : onglets, initialisation

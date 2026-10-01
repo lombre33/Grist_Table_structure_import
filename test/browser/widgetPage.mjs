@@ -17,7 +17,7 @@ const MIME_TYPES = {
   ".js": "text/javascript",
   ".svg": "image/svg+xml",
   ".jpg": "image/jpeg",
-  ".ttf": "font/ttf",
+  ".woff2": "font/woff2",
 };
 
 function serveRepository() {

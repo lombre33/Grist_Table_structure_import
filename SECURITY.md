@@ -221,8 +221,10 @@ lister les tables existantes). Voir « Pourquoi charger un script externe » ci-
 pour la justification de ce choix plutôt qu'un renvoi local.
 
 Une seule ressource statique (pas de code) est vendorisée : la police **Manrope**
-(`fonts/manrope/Manrope-Variable.ttf`, licence SIL Open Font License jointe dans le même
-dossier), utilisée pour l'interface (voir README.md, identité visuelle). Elle est servie
+(`fonts/manrope/Manrope-Variable.woff2`, licence SIL Open Font License jointe dans le même
+dossier), utilisée pour l'interface (voir README.md, identité visuelle) : un sous-ensemble
+latin de 28 Ko du fichier d'origine, conservé dans `fonts/manrope/source/` avec la commande
+qui le reconstruit (`fonts/manrope/README.md`). Elle est servie
 depuis ce même dépôt plutôt que depuis une CDN (ex. Google Fonts) : aucun appel réseau
 supplémentaire au chargement, aucun tiers à ajouter à la CSP (`font-src 'self'`
 suffit), fichier entièrement auditable dans le dépôt au même titre que le reste du code.
@@ -238,9 +240,10 @@ tests, jamais au widget publié.
 ## Logo Grist Factory
 
 `assets/grist-factory-logo.jpg` est une image statique fournie par l'auteur (Grist
-Factory), affichée telle quelle dans l'en-tête (`<img>`, jamais de fond dynamique ni de
-donnée utilisateur) ; `img-src 'self'` (déjà en place pour `favicon.svg`) couvre ce
-fichier sans modification de la CSP.
+Factory), ramenée de 1024 à 96 px (elle s'affiche à 28 px : 2,6 Ko au lieu de 38) et
+affichée telle quelle dans l'en-tête (`<img>`, jamais de fond dynamique ni de donnée
+utilisateur) ; `img-src 'self'` (déjà en place pour `favicon.svg`) couvre ce fichier sans
+modification de la CSP.
 
 ## Icônes : SVG en ligne, jamais de police d'icônes
 
