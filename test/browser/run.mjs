@@ -1,10 +1,10 @@
-#!/usr/bin/env node
 /**
  * Interface checks: the real index.html in Chromium (Playwright, a dev-only
- * dependency never shipped), with an in-memory `grist` (fakeGrist.mjs). Plain
- * assertions, like the unit tests. Behaviour against a real Grist is in test/grist.
+ * dependency never shipped), with an in-memory `grist` (fakeGrist.mjs), each check
+ * on a fresh page. Behaviour against a real Grist is in test/grist.
  */
 
+import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { launchWidget } from "./widgetPage.mjs";
 import { fakeGrist } from "./fakeGrist.mjs";
@@ -161,20 +161,17 @@ const TESTS = [
 ];
 
 const widget = await launchWidget();
-let failed = 0;
+after(() => widget.close());
+
 for (const [name, check, options] of TESTS) {
-  const grist = fakeGrist(options);
-  const page = await widget.open(grist, options);
-  try {
-    await check(page, grist);
-    assert.deepEqual(page.problems, [], "console error, page error or CSP violation");
-    console.log(`ok - ${name}`);
-  } catch (err) {
-    failed++;
-    console.error(`not ok - ${name}\n  ${err.message}`);
-  }
-  await page.close();
+  test(name, async () => {
+    const grist = fakeGrist(options);
+    const page = await widget.open(grist, options);
+    try {
+      await check(page, grist);
+      assert.deepEqual(page.problems, [], "console error, page error or CSP violation");
+    } finally {
+      await page.close();
+    }
+  });
 }
-await widget.close();
-console.log(`\n${TESTS.length - failed}/${TESTS.length} browser checks passed.`);
-process.exitCode = failed > 0 ? 1 : 0;
