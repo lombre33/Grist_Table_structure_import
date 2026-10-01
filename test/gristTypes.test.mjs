@@ -51,7 +51,7 @@ test("a type Grist has but this widget does not know gets the blank value None",
 test("an unrecognized constructor becomes Any, with a warning", () => {
   const { type, warnings } = resolve("SomethingMadeUp");
   assert.equal(type, "Any");
-  assert.deepEqual(warnings, [{ key: "warn.unknownType", params: { columnId: "Col", dslType: "SomethingMadeUp" } }]);
+  assert.deepEqual(warnings, [{ key: "warn.unknownType", params: { colId: "Col", dslType: "SomethingMadeUp" } }]);
 });
 
 test("DateTime without a time zone is UTC, with a warning", () => {

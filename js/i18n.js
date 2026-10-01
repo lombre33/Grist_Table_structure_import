@@ -94,11 +94,11 @@ export const STRINGS = {
     "type.Blob": "Binaire (Blob)",
     "type.Any": "Quelconque (Any)",
 
-    "warn.invalidWidgetOptions": "Colonne « {columnId} » : widget_options n’est pas un JSON valide, ignoré.",
+    "warn.invalidWidgetOptions": "Colonne « {colId} » : widget_options n’est pas un JSON valide, ignoré.",
     "warn.dateTimeNoTimezone":
-      "Colonne « {columnId} » : fuseau horaire non précisé pour DateTime, « {timezone} » utilisé par défaut (à vérifier).",
-    "warn.refTargetMissingSyntax": "Colonne « {columnId} » : table cible introuvable pour {dslType}, importée en tant que « Any ».",
-    "warn.unknownType": "Colonne « {columnId} » : type « {dslType} » non reconnu, importée en tant que « Any ».",
+      "Colonne « {colId} » : fuseau horaire non précisé pour DateTime, « {timezone} » utilisé par défaut (à vérifier).",
+    "warn.refTargetMissingSyntax": "Colonne « {colId} » : table cible introuvable pour {dslType}, importée en tant que « Any ».",
+    "warn.unknownType": "Colonne « {colId} » : type « {dslType} » non reconnu, importée en tant que « Any ».",
 
     "warn.decoratorNoClass":
       "Ligne {line} : « @grist.UserTable » n’est pas suivi d’une classe valide (« class NomTable: »), ignoré.",
@@ -107,8 +107,8 @@ export const STRINGS = {
     "warn.formulaTypeDuplicate": "Ligne {line} : décorateur formulaType en double, le précédent est ignoré.",
     "warn.unknownDecorator": "Ligne {line} : décorateur non reconnu ignoré ({snippet}).",
     "warn.unrecognizedContent": "Ligne {line} : contenu non reconnu ignoré ({snippet}).",
-    "warn.reservedColumnId": "Ligne {line} : colonne « {id} » ignorée (identifiant réservé, déjà géré par Grist).",
-    "warn.duplicateColumnId": "Ligne {line} : colonne « {id} » en double (Grist ignore la casse des identifiants), ignorée.",
+    "warn.reservedColumnId": "Ligne {line} : colonne « {colId} » ignorée (identifiant réservé, déjà géré par Grist).",
+    "warn.duplicateColumnId": "Ligne {line} : colonne « {colId} » en double (Grist ignore la casse des identifiants), ignorée.",
     "warn.computedColumns": "Colonnes calculées (formule ou formule de déclenchement), créées vides : {columns}.",
     "warn.twoWayColumns":
       "Références bidirectionnelles créées comme références simples (la colonne réciproque n’est pas créée en même " +
@@ -130,7 +130,7 @@ export const STRINGS = {
       "L’identifiant doit commencer par une majuscule et ne contenir que des lettres, chiffres et « _ » " +
       "(pas d’espace ni d’accent). « None », « True » et « False » sont réservés.",
     "import.validation.duplicateId": "Identifiant utilisé plusieurs fois dans cette sélection.",
-    "import.validation.tableExists": "Une table « {id} » existe déjà dans ce document. Choisissez un autre identifiant.",
+    "import.validation.tableExists": "Une table « {tableId} » existe déjà dans ce document. Choisissez un autre identifiant.",
     "import.action.chooseTarget": "Choisissez une table à compléter",
     "import.action.noNewColumns": "Aucune nouvelle colonne à ajouter",
     "import.action.addColumns": { one: "Ajouter {n} colonne à « {table} »", other: "Ajouter {n} colonnes à « {table} »" },
@@ -148,7 +148,7 @@ export const STRINGS = {
     "import.note.linkFailed": " Références bidirectionnelles non reliées : {error}",
     "import.preview.twoWay": "bidirectionnelle",
     "import.success.createdMulti": "{count} tables créées ({ids}), {columnsPhrase} au total.",
-    "import.success.createdSingle": "Table « {id} » créée avec {columnsPhrase}.",
+    "import.success.createdSingle": "Table « {tableId} » créée avec {columnsPhrase}.",
     "import.error.createFailed": "Échec de la création : {error}",
     "import.status.addingColumns": "Ajout des colonnes à « {table} » en cours…",
     "import.info.noNewColumns": "Aucune nouvelle colonne : toutes existent déjà dans « {table} » ou ont été décochées.",
@@ -269,10 +269,10 @@ export const STRINGS = {
     "type.Blob": "Binary (Blob)",
     "type.Any": "Any",
 
-    "warn.invalidWidgetOptions": "Column “{columnId}”: widget_options is not valid JSON, ignored.",
-    "warn.dateTimeNoTimezone": "Column “{columnId}”: no timezone given for DateTime, defaulting to “{timezone}” (please check).",
-    "warn.refTargetMissingSyntax": "Column “{columnId}”: no target table found for {dslType}, imported as “Any”.",
-    "warn.unknownType": "Column “{columnId}”: unrecognized type “{dslType}”, imported as “Any”.",
+    "warn.invalidWidgetOptions": "Column “{colId}”: widget_options is not valid JSON, ignored.",
+    "warn.dateTimeNoTimezone": "Column “{colId}”: no timezone given for DateTime, defaulting to “{timezone}” (please check).",
+    "warn.refTargetMissingSyntax": "Column “{colId}”: no target table found for {dslType}, imported as “Any”.",
+    "warn.unknownType": "Column “{colId}”: unrecognized type “{dslType}”, imported as “Any”.",
 
     "warn.decoratorNoClass": "Line {line}: “@grist.UserTable” is not followed by a valid class (“class TableName:”), ignored.",
     "warn.noTableFound": "No table found: the text must contain a “@grist.UserTable” block followed by “class TableName:”.",
@@ -280,8 +280,8 @@ export const STRINGS = {
     "warn.formulaTypeDuplicate": "Line {line}: duplicate formulaType decorator, the previous one is ignored.",
     "warn.unknownDecorator": "Line {line}: unrecognized decorator ignored ({snippet}).",
     "warn.unrecognizedContent": "Line {line}: unrecognized content ignored ({snippet}).",
-    "warn.reservedColumnId": "Line {line}: column “{id}” ignored (reserved identifier, already handled by Grist).",
-    "warn.duplicateColumnId": "Line {line}: duplicate column “{id}” (Grist ignores the case of identifiers), ignored.",
+    "warn.reservedColumnId": "Line {line}: column “{colId}” ignored (reserved identifier, already handled by Grist).",
+    "warn.duplicateColumnId": "Line {line}: duplicate column “{colId}” (Grist ignores the case of identifiers), ignored.",
     "warn.computedColumns": "Computed columns (formula or trigger formula), created empty: {columns}.",
     "warn.twoWayColumns":
       "Two-way references created as plain references (their counterpart column is not created with them): {columns}.",
@@ -301,7 +301,7 @@ export const STRINGS = {
       "The identifier must start with a capital letter and contain only letters, digits and “_” (no spaces or accents). " +
       "“None”, “True” and “False” are reserved.",
     "import.validation.duplicateId": "This identifier is used more than once in this selection.",
-    "import.validation.tableExists": "A table “{id}” already exists in this document. Choose another identifier.",
+    "import.validation.tableExists": "A table “{tableId}” already exists in this document. Choose another identifier.",
     "import.action.chooseTarget": "Choose a table to complete",
     "import.action.noNewColumns": "No new column to add",
     "import.action.addColumns": { one: "Add {n} column to “{table}”", other: "Add {n} columns to “{table}”" },
@@ -319,7 +319,7 @@ export const STRINGS = {
     "import.note.linkFailed": " Two-way references not linked: {error}",
     "import.preview.twoWay": "two-way",
     "import.success.createdMulti": "{count} tables created ({ids}), {columnsPhrase} in total.",
-    "import.success.createdSingle": "Table “{id}” created with {columnsPhrase}.",
+    "import.success.createdSingle": "Table “{tableId}” created with {columnsPhrase}.",
     "import.error.createFailed": "Creation failed: {error}",
     "import.status.addingColumns": "Adding columns to “{table}”…",
     "import.info.noNewColumns": "No new column: they already all exist in “{table}” or were unchecked.",

@@ -261,7 +261,7 @@ export function initImportTab(grist) {
       const others = entries.filter((other) => other !== entry).map((other) => other.id.trim());
       const problem = checkTableId(id, documentTableIds(), others);
       entry.error.hidden = !problem;
-      entry.error.textContent = problem ? t(problem, { id }) : "";
+      entry.error.textContent = problem ? t(problem, { tableId: id }) : "";
       entry.input.setAttribute("aria-invalid", String(Boolean(problem)));
       valid &&= !problem;
     }
@@ -359,7 +359,7 @@ export function initImportTab(grist) {
       const summary =
         created.length > 1
           ? t("import.success.createdMulti", { count: created.length, ids: created.map((table) => table.id).join(", "), columnsPhrase })
-          : t("import.success.createdSingle", { id: created[0].id, columnsPhrase });
+          : t("import.success.createdSingle", { tableId: created[0].id, columnsPhrase });
       clearResults();
       setStatus(summary + note, "success");
     } catch (err) {

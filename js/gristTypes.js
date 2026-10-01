@@ -39,9 +39,9 @@ export function splitType(type) {
  * @returns {{type: string, widgetOptions: ?object, refTarget: ?string, label: ?string,
  *   description: ?string, visibleColId: ?string, reverseOf: ?string}}
  */
-export function resolveColumnType(dslType, argsRaw, columnId, warnings) {
+export function resolveColumnType(dslType, argsRaw, colId, warnings) {
   const { positional, kwargs } = parseArguments(argsRaw);
-  const warn = (key, params) => warnings.push({ key, params: { columnId, ...params } });
+  const warn = (key, params) => warnings.push({ key, params: { colId, ...params } });
   const name = TYPE_OF_DSL[dslType];
   const spec = TYPES[name];
   let type = name ?? "Any";

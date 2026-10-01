@@ -102,8 +102,8 @@ function parseTableBody(lines, start, table) {
   if (bodyIndent === 0) return { columns, warnings, end: i };
 
   const addColumn = (id, dslType, argsRaw, kind, code, line) => {
-    if (RESERVED_COLUMN_IDS.has(id)) warn("warn.reservedColumnId", { line, id });
-    else if (seen.has(id.toLowerCase())) warn("warn.duplicateColumnId", { line, id });
+    if (RESERVED_COLUMN_IDS.has(id)) warn("warn.reservedColumnId", { line, colId: id });
+    else if (seen.has(id.toLowerCase())) warn("warn.duplicateColumnId", { line, colId: id });
     else {
       seen.add(id.toLowerCase());
       columns.push({ id, dslType, argsRaw, kind, code });

@@ -36,6 +36,15 @@ const RICH_SOURCE = (() => {
 const TWO_WAY =
   "@grist.UserTable\nclass Pets:\n  Owner = grist.Reference('People', reverse_of='Pets')\n\n@grist.UserTable\nclass People:\n  Pets = grist.ReferenceList('Pets', reverse_of='Owner')\n";
 
+/** A check that the notes, the id error and the success message of the Import tab say what they are about. */
+const ids = (expected) => async (page) => {
+  await analyse(page, "@grist.UserTable\nclass Fresh:\n  id = grist.Int()\n  Title = grist.Text()\n  title = grist.Text()\n");
+  assert.deepEqual(await warnings(page), expected.notes);
+  assert.equal(await apply(page), expected.created);
+  await analyse(page, "@grist.UserTable\nclass Existing_Table:\n  Name = grist.Text()\n");
+  assert.equal(await textOf(page, "#table-ids-list .field-error"), expected.exists);
+};
+
 const hidden = (page, id) => page.evaluate((target) => document.getElementById(target).hidden, id);
 const count = (page, selector) => page.locator(selector).count();
 
@@ -87,6 +96,18 @@ const TESTS = [
     await analyse(page, TYPES);
     assert.deepEqual(await previewRows(page), ["AReference to “Other_Table”", "BInteger"]);
   }, { locale: "en" }],
+
+  ["Import: the messages name the columns and tables they are about, in French", ids({
+    notes: ["Ligne 3 : colonne « id » ignorée (identifiant réservé, déjà géré par Grist).", "Ligne 5 : colonne « title » en double (Grist ignore la casse des identifiants), ignorée."],
+    exists: "Une table « Existing_Table » existe déjà dans ce document. Choisissez un autre identifiant.",
+    created: "Table « Fresh » créée avec 1 colonne.",
+  })],
+
+  ["Import: the messages name the columns and tables they are about, in English", ids({
+    notes: ["Line 3: column “id” ignored (reserved identifier, already handled by Grist).", "Line 5: duplicate column “title” (Grist ignores the case of identifiers), ignored."],
+    exists: "A table “Existing_Table” already exists in this document. Choose another identifier.",
+    created: "Table “Fresh” created with 1 column.",
+  }), { locale: "en" }],
 
   ["Import: a long identifier wraps instead of overflowing a narrow pane", async (page) => {
     await page.setViewportSize({ width: 320, height: 640 });
