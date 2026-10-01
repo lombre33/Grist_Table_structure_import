@@ -8,6 +8,7 @@ import { t, tn, typeLabel, onLocaleChange } from "./i18n.js";
 export function initImportTab(grist) {
   const sourceInput = $("source-input");
   const analyzeBtn = $("analyze-btn");
+  const clearBtn = $("clear-btn");
   const modeBlock = $("mode-block");
   const modeRadios = Array.from(document.querySelectorAll('input[name="import-mode"]'));
   const previewSection = $("preview-section");
@@ -19,7 +20,9 @@ export function initImportTab(grist) {
   const tableIdsList = $("table-ids-list");
   const targetRow = $("target-table-row");
   const targetSelect = $("target-table-select");
+  const targetError = $("target-table-error");
   const columnsPreview = $("columns-preview");
+  const statusHeader = $("status-column-header");
   const columnsBody = $("columns-preview-body");
   const warningsBlock = $("warnings-block");
   const warningsList = $("warnings-list");
@@ -46,8 +49,8 @@ export function initImportTab(grist) {
   const render = () => (mode() === "existing" ? renderExisting() : renderCreate());
   const documentTableIds = () => docSchema?.tableIds ?? null;
 
-  $("analyze-btn").addEventListener("click", onAnalyze);
-  $("clear-btn").addEventListener("click", onClear);
+  analyzeBtn.addEventListener("click", onAnalyze);
+  clearBtn.addEventListener("click", onClear);
   sourceInput.addEventListener("input", () => parsed.length > 0 && !busy && clearResults());
   sourceSelect.addEventListener("change", () => {
     existing = { index: Number(sourceSelect.value), excluded: new Set(), columns: [] };
@@ -154,13 +157,13 @@ export function initImportTab(grist) {
     sourcePickerRow.hidden = !(isExisting && several);
     checklistRow.hidden = isExisting || !several;
     targetRow.hidden = !isExisting;
-    $("status-column-header").hidden = !isExisting;
+    statusHeader.hidden = !isExisting;
   }
 
   function fillTargetSelect() {
     const problem = !docSchema ? "import.error.noTableList" : docSchema.tables.length === 0 ? "import.error.noTablesToComplete" : null;
-    $("target-table-error").hidden = !problem;
-    $("target-table-error").textContent = problem ? t(problem) : "";
+    targetError.hidden = !problem;
+    targetError.textContent = problem ? t(problem) : "";
     targetSelect.replaceChildren(...(docSchema?.tables ?? []).map((table) => el("option", { value: String(table.tableRef), text: table.tableId })));
   }
 
@@ -293,15 +296,12 @@ export function initImportTab(grist) {
     setStatus(tn("import.status.creating", tables.length));
     try {
       const { tables: created, note } = await createTables(grist, tables);
-      await loadSchema();
       const columnsPhrase = tn("common.columnsCount", created.reduce((total, table) => total + table.columns.length, 0));
       const summary =
         created.length > 1
           ? t("import.success.createdMulti", { count: created.length, ids: created.map((table) => table.id).join(", "), columnsPhrase })
           : t("import.success.createdSingle", { id: created[0].id, columnsPhrase });
-      parsed = [];
-      entries = [];
-      previewSection.hidden = modeBlock.hidden = true;
+      clearResults();
       setStatus(summary + note, "success");
     } catch (err) {
       setStatus(t("import.error.createFailed", { error: reportError(err) }), "error");
