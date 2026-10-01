@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseGristSchema, findMatchingClose } from "../js/parser.js";
+import { parseGristSchema } from "../js/parser.js";
 
 test("parses a simple table with assignment and formula-style columns", () => {
   const source = `
@@ -115,20 +115,6 @@ class T:
     ["A"]
   );
   assert.deepEqual(warnings.map((w) => w.key), ["warn.unknownDecorator"]);
-});
-
-test("findMatchingClose skips brackets inside quoted strings", () => {
-  const text = "(choices=['Oui (confirmé)', \"B]\"])";
-  assert.equal(findMatchingClose(text, 0), text.length - 1);
-});
-
-test("findMatchingClose handles escaped quotes inside a string", () => {
-  const text = "('it\\'s (nested)')";
-  assert.equal(findMatchingClose(text, 0), text.length - 1);
-});
-
-test("findMatchingClose returns -1 for an unterminated bracket", () => {
-  assert.equal(findMatchingClose("(abc", 0), -1);
 });
 
 test("a column value containing a literal parenthesis no longer breaks parsing", () => {

@@ -4,38 +4,16 @@
  * warning, `{ key, params, table }`, rendered by the interface.
  */
 
+import { findMatchingClose } from "./pyText.js";
+import { RESERVED_COLUMN_IDS } from "./gristTypes.js";
+
 const CLASS_RE = /^class\s+([A-Za-z_]\w*)\s*(?:\([^)]*\))?\s*:\s*$/;
 const ASSIGN_RE = /^([A-Za-z_]\w*)\s*=\s*grist\.([A-Za-z_]\w*)\s*\(/;
 const FORMULA_TYPE_RE = /^@grist\.formulaType\(\s*grist\.([A-Za-z_]\w*)\s*\(/;
 const FORMULA_DEF_RE = /^def\s+([A-Za-z_]\w*)\s*\(\s*rec\s*,\s*table\s*\)\s*:\s*$/;
 const TRIGGER_DEF_RE = /^def\s+_default_(\w+)\s*\(\s*rec\s*,\s*table\s*,\s*value\s*,\s*user\s*\)\s*:\s*$/;
 const SUMMARY_CLASS_RE = /^class\s+_Summary\s*:\s*$/;
-const RESERVED_COLUMN_IDS = new Set(["id", "manualSort"]);
 const MAX_SNIPPET_LENGTH = 80;
-
-/**
- * Index of the bracket closing the one at `text[openIndex]`, skipping quoted
- * strings (a `)` inside 'Oui (confirmé)' does not count), or -1.
- */
-export function findMatchingClose(text, openIndex) {
-  if (!"([{".includes(text[openIndex])) return -1;
-  let depth = 0;
-  let quote = null;
-  for (let i = openIndex; i < text.length; i++) {
-    const ch = text[i];
-    if (quote) {
-      if (ch === "\\") i++;
-      else if (ch === quote) quote = null;
-    } else if (ch === "'" || ch === '"') {
-      quote = ch;
-    } else if ("([{".includes(ch)) {
-      depth++;
-    } else if (")]}".includes(ch) && --depth === 0) {
-      return i;
-    }
-  }
-  return -1;
-}
 
 /** `prefix` followed by a closed call and then only `tail`: the prefix match and the call's arguments, or null. */
 function matchCall(text, prefix, tail) {

@@ -26,8 +26,9 @@
  * output relies on for values containing parentheses).
  */
 
-import { buildTypeExpression, defaultLiteralForType, sanitizeWidgetOptions } from "./gristTypes.js";
-import { quotePython } from "./pyString.js";
+import { buildTypeExpression, defaultLiteralForType } from "./gristTypes.js";
+import { quotePython } from "./pyText.js";
+import { isPlainObject, sanitizeWidgetOptions } from "./widgetOptions.js";
 
 const HEADER =
   "import grist\n" +
@@ -84,7 +85,7 @@ function fieldText(col) {
  */
 function buildKwargs(col) {
   const kwargs = {};
-  const widgetOptions = col.widgetOptions && typeof col.widgetOptions === "object" ? col.widgetOptions : null;
+  const widgetOptions = isPlainObject(col.widgetOptions) ? col.widgetOptions : null;
 
   if (widgetOptions && Array.isArray(widgetOptions.choices) && widgetOptions.choices.length > 0) {
     kwargs.choices = `[${widgetOptions.choices.map(quotePython).join(", ")}]`;

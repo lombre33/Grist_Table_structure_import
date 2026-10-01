@@ -1,12 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import {
-  resolveColumnType,
-  TABLE_ID_RE,
-  buildTypeExpression,
-  defaultLiteralForType,
-  sanitizeWidgetOptions,
-} from "../js/gristTypes.js";
+import { resolveColumnType, buildTypeExpression, defaultLiteralForType } from "../js/gristTypes.js";
 
 function resolve(dslType, argsRaw) {
   const warnings = [];
@@ -182,56 +176,6 @@ test("all extended kwargs together on a Reference column", () => {
   assert.deepEqual(result.widgetOptions, { alignment: "left" });
 });
 
-test("sanitizeWidgetOptions drops rulesOptions entirely", () => {
-  const out = sanitizeWidgetOptions({ alignment: "left", rulesOptions: [{ fillColor: "#FF0000" }] });
-  assert.deepEqual(out, { alignment: "left" });
-});
-
-test("sanitizeWidgetOptions narrows dropdownCondition to its text only", () => {
-  const out = sanitizeWidgetOptions({ dropdownCondition: { text: "$Active", parsed: "[SOME, AST]" } });
-  assert.deepEqual(out, { dropdownCondition: { text: "$Active" } });
-});
-
-test("sanitizeWidgetOptions drops a dropdownCondition with no text", () => {
-  const out = sanitizeWidgetOptions({ dropdownCondition: { parsed: "x" }, alignment: "left" });
-  assert.deepEqual(out, { alignment: "left" });
-});
-
-test("sanitizeWidgetOptions validates root color keys (valid hex kept, invalid dropped)", () => {
-  const out = sanitizeWidgetOptions({ textColor: "#112233", fillColor: "not-a-color" });
-  assert.deepEqual(out, { textColor: "#112233" });
-});
-
-test("sanitizeWidgetOptions validates root boolean keys (non-boolean dropped)", () => {
-  const out = sanitizeWidgetOptions({ fontBold: true, wrap: "yes" });
-  assert.deepEqual(out, { fontBold: true });
-});
-
-test("sanitizeWidgetOptions keeps only the known choiceOptions style keys, valid colors only", () => {
-  const out = sanitizeWidgetOptions({
-    choiceOptions: {
-      A: { fillColor: "#FF0000", textColor: "bogus", fontBold: true, someUnknownKey: 1 },
-      B: { fontItalic: "not-a-bool" },
-    },
-  });
-  assert.deepEqual(out, { choiceOptions: { A: { fillColor: "#FF0000", fontBold: true } } });
-});
-
-test("sanitizeWidgetOptions passes unknown generic keys through untouched", () => {
-  const out = sanitizeWidgetOptions({ numMode: "currency", question: "How many?", widget: "TextBox" });
-  assert.deepEqual(out, { numMode: "currency", question: "How many?", widget: "TextBox" });
-});
-
-test("sanitizeWidgetOptions always excludes choices (represented separately)", () => {
-  const out = sanitizeWidgetOptions({ choices: ["A", "B"], alignment: "left" });
-  assert.deepEqual(out, { alignment: "left" });
-});
-
-test("sanitizeWidgetOptions returns null for nothing left / non-object input", () => {
-  assert.equal(sanitizeWidgetOptions(null), null);
-  assert.equal(sanitizeWidgetOptions({ rulesOptions: [] }), null);
-});
-
 test("buildTypeExpression appends extra kwargs in insertion order after the positional argument", () => {
   assert.equal(
     buildTypeExpression("Ref:Other", { visible_col: "'Name'", label: "'Owner'" }),
@@ -241,10 +185,14 @@ test("buildTypeExpression appends extra kwargs in insertion order after the posi
   assert.equal(buildTypeExpression("Text"), "grist.Text()");
 });
 
-test("TABLE_ID_RE matches valid Grist/Python identifiers only", () => {
-  assert.ok(TABLE_ID_RE.test("Ma_Table1"));
-  assert.ok(TABLE_ID_RE.test("_private"));
-  assert.ok(!TABLE_ID_RE.test("1Table"));
-  assert.ok(!TABLE_ID_RE.test("Ma Table"));
-  assert.ok(!TABLE_ID_RE.test("Ma-Table"));
+test("a reference target must be a plain identifier, otherwise the column becomes Any", () => {
+  for (const target of ["'1bad'", "'two words'", "''", ""]) {
+    assert.equal(resolve("Reference", target).type, "Any", target);
+  }
+  assert.equal(resolve("Reference", "'_private'").type, "Ref:_private");
+});
+
+test("a kwarg name quoted inside another value, or merely ending in it, is not that kwarg", () => {
+  const { label, description } = resolve("Text", "description='see label=\"x\"', xlabel='y'");
+  assert.deepEqual([label, description], [null, 'see label="x"']);
 });
