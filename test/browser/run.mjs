@@ -121,7 +121,47 @@ const TESTS = [
     await page.click('label.mode-card:has(input[value="existing"])');
     await page.selectOption("#target-table-select", { label: "Existing_Table" });
     assert.equal(await page.locator("#columns-preview-body input:disabled").count(), 1);
-    assert.equal(await page.textContent("#action-btn"), "Ajouter 1 colonne à cette table");
+    assert.equal(await page.textContent("#action-btn"), "Ajouter 1 colonne à « Existing_Table »", "the button names what it will change");
+  }],
+
+  ["Import: one box in the table's head takes all the columns in or out, and what is left out is dimmed", async (page) => {
+    await analyse(page, MULTI);
+    const state = () => page.evaluate(() => {
+      const box = document.getElementById("columns-select-all");
+      return [box.checked, box.indeterminate, document.querySelectorAll("#columns-preview-body tr.is-excluded").length];
+    });
+    assert.deepEqual(await state(), [true, false, 0]);
+
+    await page.locator("#columns-preview-body tr", { hasText: "Extra" }).locator("input").click();
+    assert.deepEqual(await state(), [false, true, 1]);
+
+    await page.click("#columns-select-all");
+    assert.deepEqual(await state(), [true, false, 0], "from some, it takes all in");
+    assert.equal(await page.isDisabled("#action-btn"), false);
+
+    await page.click("#columns-select-all");
+    assert.deepEqual(await state(), [false, false, 3], "from all, it takes all out");
+    assert.equal(await page.textContent("#action-btn"), "Aucune colonne à créer");
+    assert.equal(await page.isDisabled("#action-btn"), true);
+  }],
+
+  ["Import: a table renamed still shows which table of the code it comes from, and unticking every table says what to do", async (page) => {
+    await analyse(page, MULTI);
+    await page.getByRole("textbox", { name: "TableB" }).fill("Beta");
+    assert.deepEqual((await previewRows(page)).filter((row) => /^(TableA|Beta)/.test(row) && !row.includes("Texte")), ["TableA", "Beta depuis TableB"]);
+
+    await page.locator("#table-multi-select input").nth(0).uncheck();
+    await page.locator("#table-multi-select input").nth(1).uncheck();
+    assert.equal(await page.textContent("#action-btn"), "Cochez au moins une table");
+    assert.equal(await page.isDisabled("#action-btn"), true);
+  }],
+
+  ["Import: a text without any table gets a result of its own, not a step 3 with nothing to verify", async (page) => {
+    await analyse(page, "print('hello')");
+    assert.equal(await page.textContent("#preview-heading"), "Résultat de l'analyse");
+    assert.equal(await hidden(page, "table-id-row"), true);
+    assert.equal(await hidden(page, "columns-preview"), true);
+    assert.match(await page.textContent("#warnings-list"), /Aucune table trouvée/);
   }],
 
   ["Import: formulas are offered only when there are some, off by default, and sent only once ticked", async (page, grist) => {

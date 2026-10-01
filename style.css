@@ -488,6 +488,18 @@ table#columns-preview {
   accent-color: var(--accent);
 }
 
+.table-separator .tag {
+  background: var(--surface);
+}
+
+.is-excluded td:not(.col-checkbox) {
+  color: var(--muted);
+}
+
+label + .hint {
+  margin: -2px 0 8px;
+}
+
 .status-pill-skip {
   background: var(--surface-sunken);
   color: var(--muted);

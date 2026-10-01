@@ -26,8 +26,10 @@ export const STRINGS = {
     "tabs.import": "Import",
     "tabs.export": "Export",
     "import.step1.eyebrow": "1. Code source",
-    "import.step1.label":
-      "Code Python d'une table (menu « Code View » du document d'origine, ou onglet Export de ce widget pour les choix détaillés)",
+    "import.step1.label": "Code Python d'une table",
+    "import.step1.hint":
+      "À copier depuis le menu « Code View » de la table, dans le document d'origine, ou depuis l'onglet Export de ce " +
+      "widget (qui garde en plus les choix détaillés).",
     "import.step1.placeholder": "@grist.UserTable\nclass MaTable:\n  MaColonne = grist.Text()",
     "import.analyze": "Analyser",
     "import.clear": "Effacer",
@@ -35,13 +37,15 @@ export const STRINGS = {
     "import.mode.create.title": "Nouvelle table",
     "import.mode.create.desc": "Crée une table dédiée avec toutes les colonnes détectées. Recommandé.",
     "import.mode.existing.title": "Table existante",
-    "import.mode.existing.desc": "Ajoute uniquement les colonnes qui manquent à une table déjà présente ici.",
+    "import.mode.existing.desc": "Ajoute uniquement les colonnes qui manquent à une table de ce document.",
     "import.step3.eyebrow": "3. Vérification avant application",
     "import.tablePicker.label": "Table à importer (plusieurs trouvées)",
     "import.tableMultiPicker.label": "Tables à créer (plusieurs trouvées)",
-    "import.tableId.label": "Identifiant(s) de la nouvelle table",
+    "import.tableId.label": { one: "Identifiant de la nouvelle table", other: "Identifiants des nouvelles tables" },
+    "import.step3.none": "Résultat de l'analyse",
     "import.targetTable.label": "Table à compléter",
-    "import.preview.include": "Inclure",
+    "import.preview.includeAll": "Inclure toutes les colonnes",
+    "import.preview.fromTable": "depuis {tableId}",
     "import.preview.column": "Colonne",
     "import.preview.type": "Type Grist",
     "import.preview.status": "Statut",
@@ -111,14 +115,14 @@ export const STRINGS = {
       "temps) : {columns}.",
     "warn.tablePrefix": "Table « {tableId} » — {message}",
 
-    "import.error.fetchDocInfo": "Impossible de récupérer les informations de ce document : {error}.",
+    "import.error.fetchDocInfo": "Impossible de récupérer les informations de ce document : {error}",
     "warn.refTargetMissingInDoc":
       "Colonne « {colId} » : la table cible « {target} » n'existe pas dans ce document, importée en tant que « Any » " +
       "(vous pourrez la reconfigurer en Référence une fois la table cible créée).",
     "warn.visibleColMissing":
       "Colonne « {colId} » : colonne d'affichage « {visibleColId} » introuvable dans la table « {target} » de ce " +
       "document, ignorée (visible_col).",
-    "import.status.analyzing": "Analyse du document en cours…",
+    "import.status.analyzing": "Lecture des tables du document…",
     "import.error.noTableList": "Impossible de charger la liste des tables de ce document.",
     "import.error.noTablesToComplete": "Ce document ne contient aucune table à compléter.",
     "import.validation.emptyId": "L'identifiant ne peut pas être vide.",
@@ -126,10 +130,12 @@ export const STRINGS = {
       "L'identifiant doit commencer par une majuscule et ne contenir que des lettres, chiffres et « _ » " +
       "(pas d'espace ni d'accent). « None », « True » et « False » sont réservés.",
     "import.validation.duplicateId": "Identifiant utilisé plusieurs fois dans cette sélection.",
-    "import.validation.tableExists": "Une table « {id} » existe déjà dans ce document ; choisissez un autre identifiant.",
+    "import.validation.tableExists": "Une table « {id} » existe déjà dans ce document. Choisissez un autre identifiant.",
     "import.action.chooseTarget": "Choisissez une table à compléter",
     "import.action.noNewColumns": "Aucune nouvelle colonne à ajouter",
-    "import.action.addColumns": { one: "Ajouter {n} colonne à cette table", other: "Ajouter {n} colonnes à cette table" },
+    "import.action.addColumns": { one: "Ajouter {n} colonne à « {table} »", other: "Ajouter {n} colonnes à « {table} »" },
+    "import.action.chooseTables": "Cochez au moins une table",
+    "import.action.noColumns": "Aucune colonne à créer",
     "import.status.new": "Nouvelle",
     "import.status.existing": "Déjà présente",
     "import.action.createTables": { one: "Créer {n} table dans ce document", other: "Créer {n} tables dans ce document" },
@@ -138,8 +144,8 @@ export const STRINGS = {
       one: "Cette table existe déjà dans ce document : {ids}. Choisissez un autre identifiant.",
       other: "Ces tables existent déjà dans ce document : {ids}. Choisissez d'autres identifiants.",
     },
-    "import.note.refineFailed": " Détails des colonnes (descriptions, colonnes d'affichage...) non appliqués : {error}.",
-    "import.note.linkFailed": " Références bidirectionnelles non reliées : {error}.",
+    "import.note.refineFailed": " Détails des colonnes (descriptions, colonnes d'affichage...) non appliqués : {error}",
+    "import.note.linkFailed": " Références bidirectionnelles non reliées : {error}",
     "import.preview.twoWay": "bidirectionnelle",
     "import.success.createdMulti": "{count} tables créées ({ids}), {columnsPhrase} au total.",
     "import.success.createdSingle": "Table « {id} » créée avec {columnsPhrase}.",
@@ -155,7 +161,7 @@ export const STRINGS = {
     "import.announce.found": "Analyse terminée : {tablesPhrase}, {columnsPhrase} au total.",
     "import.announce.none": "Analyse terminée : aucune table trouvée.",
 
-    "export.error.fetchTables": "Impossible de lire les tables de ce document : {error}.",
+    "export.error.fetchTables": "Impossible de lire les tables de ce document : {error}",
     "export.refs.intro": {
       one:
         "Les tables cochées font référence à {n} autre table non cochée de ce document. " +
@@ -170,7 +176,7 @@ export const STRINGS = {
     "export.status.loading": "Lecture des tables du document…",
     "export.status.generating": "Génération du code en cours…",
     "export.success.generated": "Code généré pour {tablesPhrase}, {columnsPhrase} au total.",
-    "export.error.generateFailed": "Échec de la génération : {error}.",
+    "export.error.generateFailed": "Échec de la génération : {error}",
     "export.copy.done": "Copié.",
     "export.copy.fallback":
       "Copie automatique indisponible ici : le texte est sélectionné, utilisez Ctrl+C (Cmd+C sur Mac).",
@@ -191,26 +197,30 @@ export const STRINGS = {
     "app.documentTitle": "Grist table structure",
     "app.eyebrow": "Grist widget",
     "app.title": "Table structure",
-    "app.lede": "Import a table's structure from another document, or export one from a table in this document.",
+    "app.lede": "Import a table's structure from another document, or export the structure of a table of this document.",
     "tabs.import": "Import",
     "tabs.export": "Export",
     "import.step1.eyebrow": "1. Source code",
-    "import.step1.label":
-      "A table's Python code (from the source document's “Code View” menu, or this widget's Export tab for detailed choices)",
+    "import.step1.label": "A table's Python code",
+    "import.step1.hint":
+      "Copy it from the table's “Code View” menu in the source document, or from this widget's Export tab (which also " +
+      "keeps the detailed choices).",
     "import.step1.placeholder": "@grist.UserTable\nclass MyTable:\n  MyColumn = grist.Text()",
     "import.analyze": "Analyze",
     "import.clear": "Clear",
-    "import.step2.eyebrow": "2. What should happen to this code?",
+    "import.step2.eyebrow": "2. What to do with this code?",
     "import.mode.create.title": "New table",
     "import.mode.create.desc": "Creates a dedicated table with every detected column. Recommended.",
     "import.mode.existing.title": "Existing table",
-    "import.mode.existing.desc": "Only adds the columns missing from a table already present here.",
+    "import.mode.existing.desc": "Only adds the columns missing from a table of this document.",
     "import.step3.eyebrow": "3. Review before applying",
     "import.tablePicker.label": "Table to import (several found)",
     "import.tableMultiPicker.label": "Tables to create (several found)",
-    "import.tableId.label": "New table's identifier(s)",
+    "import.tableId.label": { one: "New table's identifier", other: "New tables' identifiers" },
+    "import.step3.none": "Result of the analysis",
     "import.targetTable.label": "Table to complete",
-    "import.preview.include": "Include",
+    "import.preview.includeAll": "Include every column",
+    "import.preview.fromTable": "from {tableId}",
     "import.preview.column": "Column",
     "import.preview.type": "Grist type",
     "import.preview.status": "Status",
@@ -278,13 +288,13 @@ export const STRINGS = {
       "Two-way references created as plain references (their counterpart column is not created with them): {columns}.",
     "warn.tablePrefix": "Table “{tableId}” — {message}",
 
-    "import.error.fetchDocInfo": "Could not retrieve this document's information: {error}.",
+    "import.error.fetchDocInfo": "Could not retrieve this document's information: {error}",
     "warn.refTargetMissingInDoc":
       "Column “{colId}”: the target table “{target}” does not exist in this document, imported as “Any” " +
       "(you can reconfigure it as a Reference once the target table is created).",
     "warn.visibleColMissing":
       "Column “{colId}”: display column “{visibleColId}” not found in this document's “{target}” table, ignored (visible_col).",
-    "import.status.analyzing": "Analyzing the document…",
+    "import.status.analyzing": "Reading this document's tables…",
     "import.error.noTableList": "Could not load this document's table list.",
     "import.error.noTablesToComplete": "This document has no table to add columns to.",
     "import.validation.emptyId": "The identifier cannot be empty.",
@@ -292,10 +302,12 @@ export const STRINGS = {
       "The identifier must start with a capital letter and contain only letters, digits and “_” (no spaces or accents). " +
       "“None”, “True” and “False” are reserved.",
     "import.validation.duplicateId": "This identifier is used more than once in this selection.",
-    "import.validation.tableExists": "A table “{id}” already exists in this document; choose another identifier.",
+    "import.validation.tableExists": "A table “{id}” already exists in this document. Choose another identifier.",
     "import.action.chooseTarget": "Choose a table to complete",
     "import.action.noNewColumns": "No new column to add",
-    "import.action.addColumns": { one: "Add {n} column to this table", other: "Add {n} columns to this table" },
+    "import.action.addColumns": { one: "Add {n} column to “{table}”", other: "Add {n} columns to “{table}”" },
+    "import.action.chooseTables": "Tick at least one table",
+    "import.action.noColumns": "No column to create",
     "import.status.new": "New",
     "import.status.existing": "Already present",
     "import.action.createTables": { one: "Create {n} table in this document", other: "Create {n} tables in this document" },
@@ -304,8 +316,8 @@ export const STRINGS = {
       one: "This table already exists in this document: {ids}. Choose another identifier.",
       other: "These tables already exist in this document: {ids}. Choose other identifiers.",
     },
-    "import.note.refineFailed": " Column details (descriptions, display columns...) not applied: {error}.",
-    "import.note.linkFailed": " Two-way references not linked: {error}.",
+    "import.note.refineFailed": " Column details (descriptions, display columns...) not applied: {error}",
+    "import.note.linkFailed": " Two-way references not linked: {error}",
     "import.preview.twoWay": "two-way",
     "import.success.createdMulti": "{count} tables created ({ids}), {columnsPhrase} in total.",
     "import.success.createdSingle": "Table “{id}” created with {columnsPhrase}.",
@@ -321,7 +333,7 @@ export const STRINGS = {
     "import.announce.found": "Analysis done: {tablesPhrase}, {columnsPhrase} in total.",
     "import.announce.none": "Analysis done: no table found.",
 
-    "export.error.fetchTables": "Could not read this document's tables: {error}.",
+    "export.error.fetchTables": "Could not read this document's tables: {error}",
     "export.refs.intro": {
       one:
         "The checked tables reference {n} other unchecked table in this document. " +
@@ -336,7 +348,7 @@ export const STRINGS = {
     "export.status.loading": "Reading this document's tables…",
     "export.status.generating": "Generating code…",
     "export.success.generated": "Code generated for {tablesPhrase}, {columnsPhrase} in total.",
-    "export.error.generateFailed": "Generation failed: {error}.",
+    "export.error.generateFailed": "Generation failed: {error}",
     "export.copy.done": "Copied.",
     "export.copy.fallback": "Automatic copy isn't available here: the text is selected, use Ctrl+C (Cmd+C on Mac).",
   },

@@ -14,17 +14,20 @@ export function initImportTab(grist) {
   const modeBlock = $("mode-block");
   const modeRadios = Array.from(document.querySelectorAll('input[name="import-mode"]'));
   const previewSection = $("preview-section");
+  const previewHeading = $("preview-heading");
   const sourcePickerRow = $("table-picker-row");
   const sourceSelect = $("table-select");
   const checklistRow = $("table-multi-picker-row");
   const checklist = $("table-multi-select");
   const tableIdRow = $("table-id-row");
+  const tableIdsLabel = $("table-ids-label");
   const tableIdsList = $("table-ids-list");
   const targetRow = $("target-table-row");
   const targetSelect = $("target-table-select");
   const targetError = $("target-table-error");
   const columnsPreview = $("columns-preview");
   const statusHeader = $("status-column-header");
+  const selectAllColumns = $("columns-select-all");
   const columnsBody = $("columns-preview-body");
   const formulasRow = $("formulas-row");
   const formulasOption = $("with-formulas");
@@ -52,7 +55,15 @@ export function initImportTab(grist) {
   reset();
 
   const mode = () => modeRadios.find((radio) => radio.checked)?.value ?? "create";
-  const render = () => (mode() === "existing" ? renderExisting() : renderCreate());
+  const render = () => {
+    previewHeading.textContent = t(parsed.length > 0 ? "import.step3.eyebrow" : "import.step3.none");
+    return mode() === "existing" ? renderExisting() : renderCreate();
+  };
+  /** The columns whose checkbox can take them out of (or back into) what will be applied, each with the ids left out of its table. */
+  const toggleable = () =>
+    mode() === "existing"
+      ? existing.columns.filter((col) => col.isNew).map((col) => [col, existing.excluded])
+      : entries.flatMap((entry) => entry.columns.map((col) => [col, entry.excluded]));
   const documentTableIds = () => docSchema?.tableIds ?? null;
 
   analyzeBtn.addEventListener("click", onAnalyze);
@@ -63,6 +74,10 @@ export function initImportTab(grist) {
     renderExisting();
   });
   checklist.addEventListener("change", onChecklistChange);
+  selectAllColumns.addEventListener("change", () => {
+    for (const [col, excluded] of toggleable()) selectAllColumns.checked ? excluded.delete(col.id) : excluded.add(col.id);
+    render();
+  });
   formulasOption.addEventListener("change", () => {
     withFormulas = formulasOption.checked;
     render();
@@ -109,6 +124,7 @@ export function initImportTab(grist) {
       for (const list of [columnsBody, tableIdsList, checklist]) list.replaceChildren();
       sourcePickerRow.hidden = checklistRow.hidden = tableIdRow.hidden = targetRow.hidden = true;
       actionBtn.disabled = true;
+      previewHeading.textContent = t("import.step3.none");
       renderWarnings();
       announcement.textContent = t("import.announce.none");
       return;
@@ -196,7 +212,8 @@ export function initImportTab(grist) {
           entry.id = entry.input.value;
           renderCreate();
         });
-        return el("div", { class: "table-id-entry" }, [el("label", { text: entry.table.tableId, for: inputId }), entry.input, entry.error]);
+        const label = el("label", { text: entry.table.tableId, for: inputId, class: entries.length > 1 ? "" : "sr-only" });
+        return el("div", { class: "table-id-entry" }, [label, entry.input, entry.error]);
       })
     );
   }
@@ -218,9 +235,10 @@ export function initImportTab(grist) {
       boxes()[position]?.focus();
     });
     const tags = [isComputed(col) && COMPUTED_TAGS[col.kind], linked && "import.preview.twoWay"].filter(Boolean);
+    const included = !locked && !excluded.has(col.id);
     const type = el("td", {}, [typeLabel(col.type), ...tags.flatMap((key) => [" ", el("span", { class: "tag", text: t(key) })])]);
     const cells = [el("td", { class: "col-checkbox" }, [checkbox]), el("td", { text: col.id }), type];
-    return el("tr", {}, status ? [...cells, status] : cells);
+    return el("tr", { class: included ? "" : "is-excluded" }, status ? [...cells, status] : cells);
   }
 
   /** Resolves and checks every ticked table again: called after each change the user makes. */
@@ -233,7 +251,7 @@ export function initImportTab(grist) {
     const notes = [...resolved.flatMap(({ warnings: found }, i) => found.map((warning) => ({ ...warning, table: batch[i].id }))), ...twoWayWarnings(batch)];
 
     const rows = entries.flatMap((entry, i) => [
-      ...(entries.length > 1 ? [el("tr", { class: "table-separator" }, [el("td", { colspan: "3", text: batch[i].id })])] : []),
+      ...(entries.length > 1 ? [separatorRow(batch[i].id, entry.table.tableId)] : []),
       ...entry.columns.map((col) => columnRow(col, { excluded: entry.excluded, rerender: renderCreate, linked: linked.has(col) })),
     ]);
 
@@ -249,10 +267,29 @@ export function initImportTab(grist) {
     }
 
     columnsBody.replaceChildren(...rows);
+    tableIdsLabel.textContent = tn("import.tableId.label", Math.max(entries.length, 1));
+    renderSelectAll();
     renderFormulasOption(batch.flatMap((table) => table.columns).filter(isComputed).length);
     renderWarnings(notes);
-    actionBtn.disabled = busy || !valid || batch.every((table) => table.columns.length === 0);
-    actionBtn.textContent = entries.length > 1 ? tn("import.action.createTables", entries.length) : t("import.action.create");
+    const anyColumn = batch.some((table) => table.columns.length > 0);
+    actionBtn.disabled = busy || !valid || !anyColumn;
+    actionBtn.textContent =
+      entries.length === 0 ? t("import.action.chooseTables") : !anyColumn ? t("import.action.noColumns") : entries.length > 1 ? tn("import.action.createTables", entries.length) : t("import.action.create");
+  }
+
+  /** The row that names a table of several: the id it will have, and the table of the code it comes from when that is another. */
+  function separatorRow(id, source) {
+    const origin = id === source ? [] : [" ", el("span", { class: "tag", text: t("import.preview.fromTable", { tableId: source }) })];
+    return el("tr", { class: "table-separator" }, [el("td", { colspan: "3" }, [id, ...origin])]);
+  }
+
+  /** The checkbox of the table's head: all the columns that can be ticked, or some. */
+  function renderSelectAll() {
+    const items = toggleable();
+    const included = items.filter(([col, excluded]) => !excluded.has(col.id)).length;
+    selectAllColumns.disabled = items.length === 0;
+    selectAllColumns.checked = items.length > 0 && included === items.length;
+    selectAllColumns.indeterminate = included > 0 && included < items.length;
   }
 
   function renderExisting() {
@@ -274,10 +311,15 @@ export function initImportTab(grist) {
       })
     );
 
+    renderSelectAll();
     renderFormulasOption(included.filter(isComputed).length);
     renderWarnings([...resolved.warnings, ...twoWayWarnings(batch)]);
     actionBtn.disabled = busy || !known || included.length === 0;
-    actionBtn.textContent = !known ? t("import.action.chooseTarget") : included.length === 0 ? t("import.action.noNewColumns") : tn("import.action.addColumns", included.length);
+    actionBtn.textContent = !known
+      ? t("import.action.chooseTarget")
+      : included.length === 0
+        ? t("import.action.noNewColumns")
+        : tn("import.action.addColumns", included.length, { table: target.tableId });
   }
 
   /** The checkbox that imports the formulas, offered when some of the columns to create have one. */

@@ -38,8 +38,9 @@ l'ajout de colonnes dans le document Grist courant, via l'API officielle du widg
      n'est jamais modifié. Les colonnes ajoutées apparaissent immédiatement dans les
      grilles déjà existantes de cette table, pas seulement dans « Données sources ».
 4. Vérifiez l'aperçu (types détectés, colonnes ignorées, remarques éventuelles) — chaque
-   colonne a sa propre case à cocher (cochée par défaut) pour l'exclure individuellement
-   de l'action, en plus de la sélection par table. Si le code contient des formules, la
+   colonne a sa propre case à cocher (cochée par défaut, la case de l'en-tête les coche ou
+   les décoche toutes) pour l'exclure individuellement de l'action, en plus de la sélection
+   par table ; une colonne décochée est grisée. Si le code contient des formules, la
    case **Reprendre aussi les formules** (décochée par défaut, voir plus bas) apparaît sous
    l'aperçu. Cliquez ensuite sur le bouton d'action.
    Le bouton **Effacer**, à côté d'Analyser, réinitialise entièrement l'onglet pour
