@@ -349,3 +349,21 @@ test("every text value survives the round trip, whatever characters it holds", (
     assert.deepEqual(resolved.widgetOptions, { choices: [texts[i], "other"], question: texts[i] });
   });
 });
+
+test("a formula column of type Any keeps its metadata, and stays plain when it has none", () => {
+  const text = generateCode([
+    {
+      tableId: "T",
+      columns: [
+        { colId: "Plain", type: "Any", isFormula: true, formula: "None" },
+        { colId: "Described", type: "Any", isFormula: true, formula: "None", description: "d", label: "L" },
+      ],
+    },
+  ]);
+  assert.doesNotMatch(text, /formulaType\(grist\.Any\(\)\)/);
+
+  const { tables } = parseGristSchema(text);
+  const described = tables[0].columns.find((col) => col.id === "Described");
+  const resolved = resolveColumnType(described.dslType, described.argsRaw, described.id, []);
+  assert.deepEqual([resolved.type, resolved.label, resolved.description], ["Any", "L", "d"]);
+});

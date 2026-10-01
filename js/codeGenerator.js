@@ -61,13 +61,15 @@ function tableBlockText(table) {
 }
 
 function fieldText(col) {
-  const typeExpr = buildTypeExpression(col.type, buildKwargs(col));
+  const kwargs = buildKwargs(col);
+  const typeExpr = buildTypeExpression(col.type, kwargs);
 
   if (!col.isFormula) {
     return `${INDENT}${col.colId} = ${typeExpr}\n`;
   }
 
-  const decorator = col.type !== "Any" ? `${INDENT}@grist.formulaType(${typeExpr})\n` : "";
+  const needsType = col.type !== "Any" || Object.keys(kwargs).length > 0;
+  const decorator = needsType ? `${INDENT}@grist.formulaType(${typeExpr})\n` : "";
   const decl = `${INDENT}def ${col.colId}(rec, table):\n`;
   const body = formulaBodyText(col.formula, defaultLiteralForType(col.type), INDENT + INDENT);
   return `\n${decorator}${decl}${body}\n`;
