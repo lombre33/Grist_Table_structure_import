@@ -29,6 +29,11 @@ Trois actions métier possibles, toutes via l'API officielle du widget
   avoir réécrits) et ne ciblent **jamais** que des colonnes créées par le premier appel —
   jamais une colonne préexistante. Un échec de ce second appel n'annule pas la création
   déjà faite ; il est signalé séparément à l'utilisateur.
+- **Import, formules (option)** : si l'utilisateur coche **Reprendre aussi les formules**
+  (décochée à chaque analyse), les colonnes de formule et les formules de déclenchement
+  du texte sont envoyées à Grist avec le même appel `AddTable` / `AddVisibleColumn`
+  (champs `isFormula` et `formula` de la définition de colonne). Voir « Le texte collé
+  n'est jamais exécuté » ci-dessous : le widget ne les évalue pas, Grist si.
 - **Export** : lecture seule. Le widget lit la structure des tables de ce document
   (`grist.docApi.fetchTable` sur les tables de métadonnées `_grist_Tables` et
   `_grist_Tables_column` — voir « Lecture des tables de métadonnées » ci-dessous) et
@@ -78,6 +83,18 @@ sans jamais faire échouer l'analyse ni être interprété comme du code. `test/
 interdit ces appels dans `js/` à chaque modification, et `test/parser.test.mjs` soumet le
 parseur à des milliers de textes d'entrée mutés au hasard (graine fixe) : il ne lève jamais
 d'exception et s'arrête toujours vite.
+
+Les **formules** sont le seul cas où du texte collé finit par s'exécuter, et ce n'est pas
+dans le widget : sans l'option **Reprendre aussi les formules**, aucune colonne n'est
+créée avec une formule (`isFormula: false`, `formula: ""` dans chaque définition envoyée ;
+`test/grist/importer.test.mjs` le vérifie dans un vrai document, même pour un texte qui
+contient du code). Avec l'option, le corps des fonctions est recopié tel quel dans le
+champ `formula` d'une colonne, que Grist évalue dans son propre bac à sable Python
+exactement comme une formule saisie dans une cellule : le widget n'ajoute ni ne retire
+aucun pouvoir à ce code, et ne l'interprète pas (`js/parser.js` n'en lit que l'indentation).
+La case est décochée par défaut, accompagnée d'une mise en garde (« n'activez cette option
+que pour du code de confiance »), précisément parce que l'origine d'un texte collé est
+inconnue.
 
 ## Métadonnées de colonne capturées à l'export (choix, styles, `widget_options`)
 

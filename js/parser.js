@@ -39,12 +39,29 @@ function classify(text) {
 }
 
 const indentOf = (line) => line.match(/^[ \t]*/)[0].length;
+const isCode = (line) => line.trim() !== "" && !line.trim().startsWith("#");
+
+/** The body of the function written at `parentIndent` whose header precedes line `from`: its code without the common indentation, and the index of the line after it. */
+function readBlock(lines, from, parentIndent) {
+  let end = from;
+  for (let i = from; i < lines.length; i++) {
+    if (lines[i].trim() === "") continue;
+    if (indentOf(lines[i]) > parentIndent) end = i + 1;
+    else if (isCode(lines[i])) break;
+  }
+  const body = lines.slice(from, end);
+  if (!body.some(isCode)) return { code: "", end };
+  const common = Math.min(...body.filter(isCode).map(indentOf));
+  const code = body.map((line) => line.slice(Math.min(common, indentOf(line)))).join("\n").trim();
+  return { code, end };
+}
 const truncate = (text) => (text.length > MAX_SNIPPET_LENGTH ? `${text.slice(0, MAX_SNIPPET_LENGTH)}…` : text);
 
 /**
  * @param {string} sourceText what the user pasted
- * @returns {{tables: {tableId: string, columns: {id: string, dslType: string, argsRaw: string, computed: boolean}[]}[], warnings: object[]}}
- *   `computed`: a formula or a trigger formula, which an import cannot reproduce.
+ * @returns {{tables: {tableId: string, columns: {id: string, dslType: string, argsRaw: string, kind: "data"|"formula"|"trigger", code: string}[]}[], warnings: object[]}}
+ *   `kind`: a data column, a formula column, or a data column with a trigger formula; `code`: that
+ *   formula's function body, as written (empty for a data column).
  */
 export function parseGristSchema(sourceText) {
   const lines = String(sourceText).replace(/\r\n?/g, "\n").split("\n");
@@ -74,7 +91,7 @@ export function parseGristSchema(sourceText) {
 function parseTableBody(lines, start, table) {
   const columns = [];
   const warnings = [];
-  const triggers = new Set();
+  const triggers = new Map();
   const seen = new Set();
   const warn = (key, params) => warnings.push({ key, params, table });
   let pendingType = null;
@@ -84,12 +101,12 @@ function parseTableBody(lines, start, table) {
   const bodyIndent = i < lines.length ? indentOf(lines[i]) : 0;
   if (bodyIndent === 0) return { columns, warnings, end: i };
 
-  const addColumn = (id, dslType, argsRaw, computed, line) => {
+  const addColumn = (id, dslType, argsRaw, kind, code, line) => {
     if (RESERVED_COLUMN_IDS.has(id)) warn("warn.reservedColumnId", { line, id });
     else if (seen.has(id.toLowerCase())) warn("warn.duplicateColumnId", { line, id });
     else {
       seen.add(id.toLowerCase());
-      columns.push({ id, dslType, argsRaw, computed });
+      columns.push({ id, dslType, argsRaw, kind, code });
     }
   };
 
@@ -104,21 +121,25 @@ function parseTableBody(lines, start, table) {
     if (found.kind === "formulaType") {
       if (pendingType) warn("warn.formulaTypeDuplicate", { line: pendingType.line });
       pendingType = { ...found, line };
-    } else if (found.kind === "formula") {
-      addColumn(found.id, pendingType?.dslType ?? "Any", pendingType?.argsRaw ?? "", true, line);
-      pendingType = null;
+    } else if (found.kind === "formula" || found.kind === "trigger") {
+      const block = readBlock(lines, i + 1, bodyIndent);
+      i = block.end - 1;
+      if (found.kind === "trigger") {
+        triggers.set(found.id, block.code);
+      } else {
+        addColumn(found.id, pendingType?.dslType ?? "Any", pendingType?.argsRaw ?? "", "formula", block.code, line);
+        pendingType = null;
+      }
     } else if (found.kind === "column") {
       if (pendingType) warn("warn.formulaTypeNoFunction", { line: pendingType.line });
       pendingType = null;
-      addColumn(found.id, found.dslType, found.argsRaw, false, line);
-    } else if (found.kind === "trigger") {
-      triggers.add(found.id);
+      addColumn(found.id, found.dslType, found.argsRaw, "data", "", line);
     } else if (found.kind !== "ignored") {
       warn(found.kind === "unknownDecorator" ? "warn.unknownDecorator" : "warn.unrecognizedContent", { line, snippet: truncate(text) });
     }
   }
   if (pendingType) warn("warn.formulaTypeNoFunction", { line: pendingType.line });
 
-  for (const col of columns) col.computed ||= triggers.has(col.id);
+  for (const col of columns) if (col.kind === "data" && triggers.has(col.id)) Object.assign(col, { kind: "trigger", code: triggers.get(col.id) });
   return { columns, warnings, end: i };
 }

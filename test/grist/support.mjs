@@ -28,18 +28,19 @@ import { createTables, resolveColumns, defaultTableId } from "../../js/importer.
 
 /**
  * Parses Code View text and creates its tables in `doc` as the Import tab does
- * with its defaults. `ids` renames tables, `exclude` lists unchecked columns.
+ * with its defaults. `ids` renames tables, `exclude` lists unchecked columns, `withFormulas`
+ * ticks the option that imports formulas.
  */
-export async function importText(doc, text, { ids = {}, exclude = {} } = {}) {
+export async function importText(doc, text, { ids = {}, exclude = {}, withFormulas = false } = {}) {
   const { tables } = parseGristSchema(text);
   const known = await doc.tableIds();
   const destination = new Map(tables.map((table) => [table.tableId, ids[table.tableId] ?? defaultTableId(table.tableId)]));
   const entries = tables.map((table) => {
     const left = new Set(exclude[table.tableId]);
-    const { columns } = resolveColumns(table, destination, known, left);
+    const { columns } = resolveColumns(table, destination, known, { excluded: left, withFormulas });
     return { id: destination.get(table.tableId), columns: columns.filter((col) => !left.has(col.id)) };
   });
-  return createTables(doc.grist, entries);
+  return createTables(doc.grist, entries, { withFormulas });
 }
 
 /**
@@ -63,6 +64,7 @@ export async function snapshot(doc) {
             id: col.colId,
             type: col.type,
             isFormula: Boolean(col.isFormula),
+            formula: col.formula,
             label: col.label,
             description: col.description,
             widgetOptions: col.widgetOptions ? JSON.parse(col.widgetOptions) : null,
@@ -81,8 +83,8 @@ import { generateCode } from "../../js/codeGenerator.js";
  * interface does: columns first, then descriptions and display columns.
  */
 export async function buildSource(doc, spec) {
-  const payload = ({ id, type, formula, label, widgetOptions }) =>
-    column(id, type, { isFormula: Boolean(formula), formula: formula ?? "", label, widgetOptions: widgetOptions && JSON.stringify(widgetOptions) });
+  const payload = ({ id, type, formula, trigger, label, widgetOptions }) =>
+    column(id, type, { isFormula: formula !== undefined, formula: formula ?? trigger ?? "", label, widgetOptions: widgetOptions && JSON.stringify(widgetOptions) });
   await doc.apply(Object.entries(spec).map(([tableId, columns]) => ["AddTable", tableId, columns.map(payload)]));
 
   const followUps = [];
@@ -104,13 +106,13 @@ export async function exportText(doc, tableIds) {
   return generateCode(buildExportSchema(tables, allColumns, tableIds));
 }
 
-/** Builds `spec` in a first document, exports it, imports the text in a second one. */
-export async function roundTrip(spec) {
+/** Builds `spec` in a first document, exports it, imports the text in a second one (with the formulas if `withFormulas`). */
+export async function roundTrip(spec, options) {
   const source = await instance.newDoc("round trip: source");
   await buildSource(source, spec);
   const text = await exportText(source, Object.keys(spec));
   const target = await instance.newDoc("round trip: target");
-  const { note } = await importText(target, text);
+  const { note } = await importText(target, text, options);
   const result = { text, note, before: await snapshot(source), after: await snapshot(target) };
   await instance.cleanup([source.id, target.id]);
   return result;
@@ -118,11 +120,11 @@ export async function roundTrip(spec) {
 
 /**
  * What an imported table must look like given the source's columns: data
- * columns first (as in Code View), formulas turned into data columns, and
- * the widgetOptions the widget agrees to carry (no rulesOptions, the
- * dropdown condition reduced to its text).
+ * columns first (as in Code View), formulas turned into empty data columns
+ * unless `withFormulas`, and the widgetOptions the widget agrees to carry (no
+ * rulesOptions, the dropdown condition reduced to its text).
  */
-export function expectedAfterImport(columns) {
+export function expectedAfterImport(columns, { withFormulas = false } = {}) {
   const carried = (options) => {
     if (!options) return null;
     const { rulesOptions, dropdownCondition, ...rest } = options;
@@ -131,7 +133,8 @@ export function expectedAfterImport(columns) {
   };
   return [...columns.filter((col) => !col.isFormula), ...columns.filter((col) => col.isFormula)].map((col) => ({
     ...col,
-    isFormula: false,
+    isFormula: withFormulas && col.isFormula,
+    formula: withFormulas ? col.formula : "",
     widgetOptions: carried(col.widgetOptions),
   }));
 }

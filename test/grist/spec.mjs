@@ -1,4 +1,7 @@
-/** One column of every kind, with every widget option, awkward texts and ids: what the round trip and the Code View recording are built from. */
+/**
+ * One column of every kind, with every widget option, awkward texts and ids: what the round trip and the Code View recording
+ * are built from. A `formula` makes a formula column (an empty one for ""), a `trigger` a data column with a trigger formula.
+ */
 export const NASTY = [
   "multi\nline", "it's", 'say "hi"', "back\\slash", "tab\there", "émoji 😀 é", "  padded  ", "(x) [y] {z}", "# hash",
   "a, b", "label = 'x'", "ends with \\", "literal \\n", "windows\r\nline",
@@ -91,13 +94,18 @@ export const SPEC = {
     col("Data2", "Int"),
     col("FNum", "Numeric", { formula: "$Data2 * 2", widgetOptions: { numMode: "currency" } }),
     col("FBool", "Bool", { formula: "True" }),
-    col("FDate", "Date", { formula: "None" }),
+    col("FDate", "Date", { formula: "DATE(2020, 1, 31)" }),
     col("FDateTime", "DateTime:Europe/Paris", { formula: "NOW()" }),
     col("FChoice", "Choice", { formula: "'a'", widgetOptions: { choices: ["a", "b"] } }),
     col("FList", "ChoiceList", { formula: "[]" }),
     col("FRef", "Ref:Texts", { formula: "Texts.lookupOne(Plain='x')" }),
     col("FRefList", "RefList:Texts", { formula: "Texts.lookupRecords()" }),
-    col("FAny", "Any", { formula: "None", description: "Formula with a description" }),
+    col("FAny", "Any", { formula: "$Data1", description: "Formula with a description" }),
+    col("FMulti", "Text", { formula: "x = $Data1\nx + '!'" }),
+    col("FRec", "Int", { formula: "rec.Data2 + 1" }),
+    col("FEmpty", "Numeric", { formula: "" }),
+    col("Stamp", "Text", { trigger: "'new'" }),
+    col("StampNum", "Int", { trigger: "$Data2 + 1", label: "Numéro" }),
     col("Data3", "Text"),
   ],
   Ids: ["a", "A_b", "x1", "X__Y", "L".repeat(60), "Select", "None_", "rec", "table", "value", "user", "SUM", "lowerUpper", "ALLCAPS", "trailing_"].map((id) => col(id, "Text")),

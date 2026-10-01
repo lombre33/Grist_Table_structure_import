@@ -3,7 +3,7 @@
  * Grist column definitions and apply them to the document. No DOM here.
  */
 
-import { resolveColumnType, splitType } from "./gristTypes.js";
+import { defaultLiteralForType, resolveColumnType, splitType } from "./gristTypes.js";
 import { fetchDocSchema, existingColumnIds } from "./schema.js";
 import { reportError } from "./util.js";
 import { t, tn } from "./i18n.js";
@@ -33,18 +33,32 @@ export function checkTableId(id, documentTableIds, otherIds) {
   return null;
 }
 
+/** A formula column, or a data column with a trigger formula: what an import cannot reproduce without `withFormulas`. */
+export const isComputed = (col) => col.kind !== "data";
+
+/**
+ * The formula Grist stores for a function body of Code View: a lone `return X` is X, and what a
+ * blank formula returns for the type (`return None`) means no formula at all.
+ */
+function formulaOf(code, type) {
+  const formula = code.replace(/^return(\s+|$)/, "").trim();
+  return formula === defaultLiteralForType(type) ? "" : formula;
+}
+
 /**
  * Grist column definitions for the parsed columns of `table`.
  * `tableIds` maps the source id of each table that receives columns to its id
  * in the document; `documentTableIds` (null if unknown) lists the tables already
  * there. A reference only stays one if its target is one of those, otherwise the
- * column becomes `Any`. Columns in `excluded` raise no warning.
+ * column becomes `Any`. Columns in `excluded` raise no warning; `withFormulas`
+ * says that formulas are imported, so that nothing is said about their loss.
  */
-export function resolveColumns(table, tableIds, documentTableIds, excluded = new Set()) {
+export function resolveColumns(table, tableIds, documentTableIds, { excluded = new Set(), withFormulas = false } = {}) {
   const warnings = [];
   const columns = table.columns.map((col) => {
     const colWarnings = excluded.has(col.id) ? [] : warnings;
     const resolved = resolveColumnType(col.dslType, col.argsRaw, col.id, colWarnings);
+    const formula = formulaOf(col.code, resolved.type);
     if (resolved.refTarget) {
       const inDocument = !documentTableIds || documentTableIds.includes(resolved.refTarget);
       const target = tableIds.get(resolved.refTarget) ?? (inDocument ? resolved.refTarget : null);
@@ -55,37 +69,38 @@ export function resolveColumns(table, tableIds, documentTableIds, excluded = new
         Object.assign(resolved, { type: "Any", widgetOptions: null, visibleColId: null });
       }
     }
-    return { id: col.id, computed: col.computed, ...resolved };
+    return { id: col.id, kind: col.kind, formula, ...resolved };
   });
 
   const named = (flagged) => columns.filter((col) => flagged(col) && !excluded.has(col.id)).map((col) => col.id).join(", ");
-  const computed = named((col) => col.computed);
+  const computed = withFormulas ? "" : named(isComputed);
   if (computed) warnings.push({ key: "warn.computedColumns", params: { columns: computed } });
   const twoWay = named((col) => col.reverseOf);
   if (twoWay) warnings.push({ key: "warn.twoWayColumns", params: { columns: twoWay } });
   return { columns, warnings };
 }
 
-const columnPayload = (col) => ({
+const columnPayload = (col, withFormulas) => ({
   id: col.id,
   type: col.type,
-  isFormula: false,
-  formula: "",
+  isFormula: withFormulas && col.kind === "formula",
+  formula: withFormulas ? col.formula : "",
   label: col.label || col.id,
   ...(col.widgetOptions && { widgetOptions: JSON.stringify(col.widgetOptions) }),
 });
 
 /**
- * Creates `tables` (`[{ id, columns }]`) in one atomic batch.
+ * Creates `tables` (`[{ id, columns }]`) in one atomic batch, with the formulas of their columns
+ * if `withFormulas`.
  * @returns {{tables: {id: string, columns: object[]}[], note: string}} the tables
  *   as Grist named them, and what could not be applied afterwards, if anything.
  */
-export async function createTables(grist, tables) {
+export async function createTables(grist, tables, { withFormulas = false } = {}) {
   const taken = new Set((await grist.docApi.listTables()).map((id) => id.toLowerCase()));
   const clashes = tables.filter(({ id }) => taken.has(id.toLowerCase())).map(({ id }) => id);
   if (clashes.length > 0) throw new Error(tn("import.error.tableCollision", clashes.length, { ids: clashes.join(", ") }));
 
-  const actions = tables.map(({ id, columns }) => ["AddTable", id, columns.map(columnPayload)]);
+  const actions = tables.map(({ id, columns }) => ["AddTable", id, columns.map((col) => columnPayload(col, withFormulas))]);
   const { retValues } = await grist.docApi.applyUserActions(actions);
   const created = tables.map(({ columns }, i) => ({
     id: retValues[i].table_id,
@@ -99,14 +114,14 @@ export async function createTables(grist, tables) {
  * like Grist does. AddVisibleColumn shows them in the table's views too.
  * @returns {{added: number, note: string}}
  */
-export async function addColumns(grist, table, columns) {
+export async function addColumns(grist, table, columns, { withFormulas = false } = {}) {
   const { allColumns } = await fetchDocSchema(grist);
   const known = existingColumnIds(allColumns, table.tableRef);
   const missing = columns.filter((col) => !known.has(col.id.toLowerCase()));
   if (missing.length === 0) return { added: 0, note: "" };
 
   const { retValues } = await grist.docApi.applyUserActions(
-    missing.map((col) => ["AddVisibleColumn", table.tableId, col.id, columnPayload(col)])
+    missing.map((col) => ["AddVisibleColumn", table.tableId, col.id, columnPayload(col, withFormulas)])
   );
   const added = missing.map((col, i) => ({ ...col, id: retValues[i].colId }));
   return { added: added.length, note: await refine(grist, [{ id: table.tableId, columns: added }]) };

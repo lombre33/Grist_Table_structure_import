@@ -455,6 +455,35 @@ table#columns-preview {
   margin-bottom: 3px;
 }
 
+.tag {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.option {
+  margin-top: 14px;
+}
+
+.option label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.option input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+
 .status-pill-skip {
   background: var(--surface-sunken);
   color: var(--muted);

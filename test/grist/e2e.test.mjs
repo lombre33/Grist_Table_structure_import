@@ -42,6 +42,23 @@ test("two linked tables are created together with their references", () =>
     assert.equal(await page.isHidden("#preview-section"), true, "done: no form left that contradicts the success message");
   }));
 
+test("a real Code View with formulas: left out by default, created and computed when the option is ticked", () =>
+  inWidget(async (page, doc) => {
+    const text = "@grist.UserTable\nclass Calc:\n  A = grist.Int()\n\n  def _default_Start(rec, table, value, user):\n    return rec.A + 100\n  Start = grist.Int()\n\n  @grist.formulaType(grist.Int())\n  def Double(rec, table):\n    return rec.A * 2\n";
+    await analyse(page, text);
+    assert.equal(await page.isChecked("#with-formulas"), false);
+    assert.deepEqual(await previewRows(page), ["AEntier", "StartEntier formule de déclenchement", "DoubleEntier formule"]);
+    assert.match((await warnings(page)).join(" "), /créées vides : Start, Double/);
+
+    await page.check("#with-formulas");
+    assert.deepEqual(await warnings(page), []);
+    await apply(page);
+    assert.deepEqual((await snapshot(doc)).Calc.map((col) => [col.id, col.isFormula, col.formula]), [["A", false, ""], ["Start", false, "rec.A + 100"], ["Double", true, "rec.A * 2"]]);
+    await doc.apply([["AddRecord", "Calc", null, { A: 4 }]]);
+    const row = await doc.fetchTable("Calc");
+    assert.deepEqual([row.Start[0], row.Double[0]], [104, 8]);
+  }));
+
 test("with every column unticked there is nothing to create", () =>
   inWidget(async (page) => {
     await analyse(page, "@grist.UserTable\nclass Only:\n  A = grist.Text()\n");

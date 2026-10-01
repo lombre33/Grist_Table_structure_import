@@ -45,6 +45,15 @@ export const STRINGS = {
     "import.preview.column": "Colonne",
     "import.preview.type": "Type Grist",
     "import.preview.status": "Statut",
+    "import.preview.formula": "formule",
+    "import.preview.trigger": "formule de déclenchement",
+    "import.formulas.option": {
+      one: "Reprendre aussi la formule de {n} colonne",
+      other: "Reprendre aussi les formules de {n} colonnes",
+    },
+    "import.formulas.hint":
+      "Les formules s'exécutent dans ce document dès leur création : n'activez cette option que pour du code de " +
+      "confiance. Sans elle, ces colonnes sont créées vides.",
     "import.warnings.eyebrow": "Remarques",
     "import.action.create": "Créer la table dans ce document",
     "export.step1.eyebrow": "1. Tables à exporter",
@@ -97,7 +106,7 @@ export const STRINGS = {
     "warn.unrecognizedContent": "Ligne {line} : contenu non reconnu ignoré ({snippet}).",
     "warn.reservedColumnId": "Ligne {line} : colonne « {id} » ignorée (identifiant réservé, déjà géré par Grist).",
     "warn.duplicateColumnId": "Ligne {line} : colonne « {id} » en double (Grist ignore la casse des identifiants), ignorée.",
-    "warn.computedColumns": "Colonnes calculées (formule ou valeur par défaut), créées vides : {columns}.",
+    "warn.computedColumns": "Colonnes calculées (formule ou formule de déclenchement), créées vides : {columns}.",
     "warn.twoWayColumns": "Références bidirectionnelles, créées comme références simples : {columns}.",
     "warn.tablePrefix": "Table « {tableId} » — {message}",
 
@@ -199,6 +208,15 @@ export const STRINGS = {
     "import.preview.column": "Column",
     "import.preview.type": "Grist type",
     "import.preview.status": "Status",
+    "import.preview.formula": "formula",
+    "import.preview.trigger": "trigger formula",
+    "import.formulas.option": {
+      one: "Also import the formula of {n} column",
+      other: "Also import the formulas of {n} columns",
+    },
+    "import.formulas.hint":
+      "Formulas run in this document as soon as they are created: only enable this for code you trust. " +
+      "Without it, these columns are created empty.",
     "import.warnings.eyebrow": "Notes",
     "import.action.create": "Create the table in this document",
     "export.step1.eyebrow": "1. Tables to export",
@@ -250,7 +268,7 @@ export const STRINGS = {
     "warn.unrecognizedContent": "Line {line}: unrecognized content ignored ({snippet}).",
     "warn.reservedColumnId": "Line {line}: column “{id}” ignored (reserved identifier, already handled by Grist).",
     "warn.duplicateColumnId": "Line {line}: duplicate column “{id}” (Grist ignores the case of identifiers), ignored.",
-    "warn.computedColumns": "Computed columns (formula or default value), created empty: {columns}.",
+    "warn.computedColumns": "Computed columns (formula or trigger formula), created empty: {columns}.",
     "warn.twoWayColumns": "Two-way references, created as plain references: {columns}.",
     "warn.tablePrefix": "Table “{tableId}” — {message}",
 

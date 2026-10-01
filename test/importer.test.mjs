@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { checkTableId, defaultTableId, resolveColumns } from "../js/importer.js";
 
-const table = (...columns) => ({ tableId: "Source", columns: columns.map(([id, dslType, argsRaw = ""]) => ({ id, dslType, argsRaw })) });
+const table = (...columns) => ({ tableId: "Source", columns: columns.map(([id, dslType, argsRaw = "", kind = "data", code = ""]) => ({ id, dslType, argsRaw, kind, code })) });
 const ids = (...pairs) => new Map(pairs);
 
 test("defaultTableId gives the id Grist would keep", () => {
@@ -67,23 +67,43 @@ test("without the document's table list, references are left alone", () => {
 });
 
 test("columns Grist computes or links both ways are said to be created plainly", () => {
-  const source = {
-    tableId: "Source",
-    columns: [
-      { id: "Calc", dslType: "Numeric", argsRaw: "", computed: true },
-      { id: "Pets", dslType: "ReferenceList", argsRaw: "'Pets', reverse_of='Owner'", computed: false },
-      { id: "Plain", dslType: "Text", argsRaw: "", computed: false },
-    ],
-  };
+  const source = table(["Calc", "Numeric", "", "formula", "return 1"], ["Pets", "ReferenceList", "'Pets', reverse_of='Owner'"], ["Stamp", "Text", "", "trigger", "return 'x'"], ["Plain", "Text"]);
   const { warnings } = resolveColumns(source, ids(["Pets", "Pets"]), []);
-  assert.deepEqual(warnings.map((w) => [w.key, w.params.columns]), [["warn.computedColumns", "Calc"], ["warn.twoWayColumns", "Pets"]]);
-  assert.deepEqual(resolveColumns(source, ids(["Pets", "Pets"]), [], new Set(["Calc", "Pets"])).warnings, []);
+  assert.deepEqual(warnings.map((w) => [w.key, w.params.columns]), [["warn.computedColumns", "Calc, Stamp"], ["warn.twoWayColumns", "Pets"]]);
+  assert.deepEqual(resolveColumns(source, ids(["Pets", "Pets"]), [], { excluded: new Set(["Calc", "Stamp", "Pets"]) }).warnings, []);
+});
+
+test("formulas that are imported are not said to be lost", () => {
+  const source = table(["Calc", "Numeric", "", "formula", "return 1"], ["Plain", "Text"]);
+  assert.deepEqual(resolveColumns(source, ids(), [], { withFormulas: true }).warnings, []);
+});
+
+test("a function body becomes the formula Grist stores", () => {
+  const formulaOf = (code, dslType = "Any", argsRaw = "") => resolveColumns(table(["F", dslType, argsRaw, "formula", code]), ids(), []).columns[0].formula;
+  assert.equal(formulaOf("return $A * 2"), "$A * 2", "a lone return is the formula");
+  assert.equal(formulaOf("return rec.A * 2"), "rec.A * 2", "rec.A is as valid as $A");
+  assert.equal(formulaOf("return (rec.A +\n  rec.B)"), "(rec.A +\n  rec.B)", "a statement over several lines");
+  assert.equal(formulaOf("x = $A\nreturn x + 1"), "x = $A\nreturn x + 1", "several statements stay as they are");
+  assert.equal(formulaOf("returned = 1\nreturned"), "returned = 1\nreturned", "a name that starts with return is not a return");
+});
+
+test("the blank formula of a type, or no value at all, is no formula", () => {
+  const formulaOf = (code, dslType, argsRaw = "") => resolveColumns(table(["F", dslType, argsRaw, "formula", code]), ids(), []).columns[0].formula;
+  assert.deepEqual(
+    [formulaOf("return None", "Any"), formulaOf("return ''", "Text"), formulaOf("return 0", "Int"), formulaOf("return 0.0", "Numeric"), formulaOf("return False", "Bool"), formulaOf("return", "Date"), formulaOf("", "Text")],
+    ["", "", "", "", "", "", ""]
+  );
+  assert.equal(formulaOf("return 0", "Text"), "0", "0 is a real formula for a text column");
+  assert.equal(formulaOf("return None", "Text"), "None");
+  assert.equal(resolveColumns(table(["R", "Reference", "'T'", "formula", "return 0"]), ids(), ["T"]).columns[0].formula, "", "a reference is blank at 0");
+  const downgraded = resolveColumns(table(["R", "Reference", "'Ghost'", "formula", "return 0"]), ids(), ["T"]).columns[0];
+  assert.deepEqual([downgraded.type, downgraded.formula], ["Any", ""], "blank for the type it was declared with, not the one it falls back to");
 });
 
 test("a column left out raises no warning", () => {
   const source = table(["A", "Reference", "'Ghost'"], ["B", "Mystery"]);
   assert.equal(resolveColumns(source, ids(), []).warnings.length, 2);
-  assert.deepEqual(resolveColumns(source, ids(), [], new Set(["A", "B"])).warnings, []);
+  assert.deepEqual(resolveColumns(source, ids(), [], { excluded: new Set(["A", "B"]) }).warnings, []);
 });
 
 test("resolved columns carry the id, the type and the extended metadata", () => {
@@ -94,7 +114,8 @@ test("resolved columns carry the id, the type and the extended metadata", () => 
   );
   assert.deepEqual(columns[0], {
     id: "Mood",
-    computed: undefined,
+    kind: "data",
+    formula: "",
     type: "Choice",
     widgetOptions: { choices: ["a"] },
     refTarget: null,

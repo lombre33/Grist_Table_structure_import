@@ -39,7 +39,9 @@ l'ajout de colonnes dans le document Grist courant, via l'API officielle du widg
      grilles déjà existantes de cette table, pas seulement dans « Données sources ».
 4. Vérifiez l'aperçu (types détectés, colonnes ignorées, remarques éventuelles) — chaque
    colonne a sa propre case à cocher (cochée par défaut) pour l'exclure individuellement
-   de l'action, en plus de la sélection par table — puis cliquez sur le bouton d'action.
+   de l'action, en plus de la sélection par table. Si le code contient des formules, la
+   case **Reprendre aussi les formules** (décochée par défaut, voir plus bas) apparaît sous
+   l'aperçu. Cliquez ensuite sur le bouton d'action.
    Le bouton **Effacer**, à côté d'Analyser, réinitialise entièrement l'onglet pour
    recommencer avec un autre texte.
 
@@ -103,12 +105,30 @@ Cette table sert dans les deux sens : à l'import, pour choisir le type de colon
 | `grist.Attachments()`                  | Pièces jointes                   |
 | tout le reste / type non reconnu       | Quelconque (`Any`)               |
 
-À l'import, toutes les colonnes sont créées comme colonnes de données (pas de formules),
-y compris celles écrites avec `@grist.formulaType(...)` dans le code source. Ce que le
-widget ne peut pas reproduire n'est pas perdu en silence : les colonnes calculées (formule
-ou valeur par défaut déclenchée, `def _default_...`) sont créées vides et les références
-bidirectionnelles (`reverse_of=`) comme références simples ; une remarque de l'aperçu
-les liste.
+Par défaut, toutes les colonnes sont créées comme colonnes de données, y compris celles
+écrites avec `@grist.formulaType(...)` dans le code source, et sans formule. Ce que
+l'import ne reprend pas n'est pas perdu en silence : une remarque de l'aperçu liste les
+colonnes calculées (formule, ou formule de déclenchement `def _default_...`), créées
+vides, et les références bidirectionnelles (`reverse_of=`), créées comme références
+simples.
+
+#### Reprendre les formules
+
+La case **Reprendre aussi les formules** crée les colonnes de formule avec leur formule,
+et les colonnes de données avec leur formule de déclenchement (`def _default_...`, valeur
+calculée à la création d'une ligne). Le texte de la fonction est lu tel qu'écrit : un
+`return X` seul devient la formule `X`, les fonctions de plusieurs lignes restent telles
+quelles, et la valeur que rend une formule vide (`return None`, `return ''`...) donne une
+colonne sans formule, comme dans Grist. La syntaxe `$Colonne` (écrite par l'onglet
+**Export**) et `rec.Colonne` (écrite par la vraie Code View) sont toutes deux valides pour
+Grist.
+
+La case est **décochée par défaut, volontairement** : une formule est du code Python que
+Grist exécute dans ce document dès sa création, et un texte collé peut venir de
+n'importe où. Le widget n'exécute lui-même jamais rien (voir SECURITY.md) ; en cochant
+la case, vous confiez ces formules à Grist, comme si vous les aviez saisies dans les
+cellules. Une formule qui renvoie une erreur (colonne absente de la nouvelle table, par
+exemple) ne fait pas échouer l'import : ses cellules affichent l'erreur dans Grist.
 
 ### Métadonnées de colonne restaurées à l'import
 
@@ -163,12 +183,14 @@ d'abord, puis colonnes de formule), mêmes lignes vides. Les tables système de 
 proposées : ce ne sont pas des tables qu'on recrée avec une simple action « nouvelle
 table ».
 
-Seule la structure (types de colonnes) est garantie fidèle. Pour une colonne de formule,
-la formule d'origine est recopiée quand elle existe, mais telle que Grist la stocke en
-interne (syntaxe `$Colonne`, sans traduire vers le `rec.Colonne` affiché par la vraie
-Code View) ; une formule vide est remplacée par la valeur par défaut du type, comme le
-fait Grist lui-même. Ceci n'affecte pas l'import : seul le type déclaré par
-`@grist.formulaType(...)` est utilisé, jamais le corps de la fonction.
+Seule la structure (types de colonnes) est garantie fidèle. Pour une colonne de formule
+(et pour la formule de déclenchement d'une colonne de données, écrite comme la fait
+Grist, par une fonction `_default_...` placée avant la colonne), la formule d'origine est
+recopiée quand elle existe, mais telle que Grist la stocke en interne (syntaxe
+`$Colonne`, sans traduire vers le `rec.Colonne` affiché par la vraie Code View) ; une
+formule vide est remplacée par la valeur par défaut du type, comme le fait Grist
+lui-même. À l'import, ces formules ne sont reprises que si la case **Reprendre aussi les
+formules** est cochée ; sinon seul le type déclaré compte.
 
 ### Métadonnées capturées à l'export
 

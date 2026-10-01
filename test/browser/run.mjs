@@ -24,6 +24,8 @@ class TableB:
 
 const TYPES = "@grist.UserTable\nclass X:\n  A = grist.Reference('Other_Table')\n  B = grist.Int()\n";
 
+const WITH_FORMULA = "@grist.UserTable\nclass X:\n  A = grist.Int()\n\n  @grist.formulaType(grist.Int())\n  def Double(rec, table):\n    return rec.A * 2\n";
+
 const hidden = (page, id) => page.evaluate((target) => document.getElementById(target).hidden, id);
 const count = (page, selector) => page.locator(selector).count();
 
@@ -117,6 +119,45 @@ const TESTS = [
     await page.selectOption("#target-table-select", { label: "Existing_Table" });
     assert.equal(await page.locator("#columns-preview-body input:disabled").count(), 1);
     assert.equal(await page.textContent("#action-btn"), "Ajouter 1 colonne à cette table");
+  }],
+
+  ["Import: formulas are offered only when there are some, off by default, and sent only once ticked", async (page, grist) => {
+    await analyse(page, TYPES);
+    assert.equal(await hidden(page, "formulas-row"), true);
+
+    await analyse(page, WITH_FORMULA);
+    assert.equal(await hidden(page, "formulas-row"), false);
+    assert.equal(await page.getByRole("checkbox", { name: /formule de 1 colonne/ }).isChecked(), false);
+    assert.match(await page.textContent("#warnings-list"), /créées vides : Double/);
+    assert.deepEqual(await previewRows(page), ["AEntier", "DoubleEntier formule"]);
+
+    await page.check("#with-formulas");
+    assert.equal(await hidden(page, "warnings-block"), true, "nothing is lost, so nothing is said");
+    await apply(page);
+    const [[, , columns]] = grist.calls[0];
+    assert.deepEqual(columns.map((col) => [col.id, col.isFormula, col.formula]), [["A", false, ""], ["Double", true, "rec.A * 2"]]);
+  }],
+
+  ["Import: formulas stay out of the payload when the option is not ticked, and leaving them out takes the option away", async (page, grist) => {
+    await analyse(page, WITH_FORMULA);
+    await apply(page);
+    const [[, , columns]] = grist.calls[0];
+    assert.deepEqual(columns.map((col) => [col.id, col.isFormula, col.formula]), [["A", false, ""], ["Double", false, ""]]);
+
+    await analyse(page, WITH_FORMULA);
+    await page.locator("#columns-preview-body tr", { hasText: "Double" }).locator("input").click();
+    assert.equal(await hidden(page, "formulas-row"), true);
+  }],
+
+  ["Import: the formulas of an existing table's new columns follow the same option", async (page, grist) => {
+    await analyse(page, WITH_FORMULA.replace("A = grist.Int()", "Fresh = grist.Int()"));
+    await page.click('label.mode-card:has(input[value="existing"])');
+    await page.selectOption("#target-table-select", { label: "Existing_Table" });
+    assert.equal(await hidden(page, "formulas-row"), false);
+    await page.check("#with-formulas");
+    await apply(page);
+    const added = grist.calls.flat().map(([name, , id, payload]) => [name, id, payload.isFormula, payload.formula]);
+    assert.deepEqual(added, [["AddVisibleColumn", "Fresh", false, ""], ["AddVisibleColumn", "Double", true, "rec.A * 2"]]);
   }],
 
   ["Import: the fields are named, linked to their error, and the result is announced", async (page) => {

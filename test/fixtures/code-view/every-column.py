@@ -44,6 +44,14 @@ class Flags:
 class Formulas:
   Data1 = grist.Text()
   Data2 = grist.Int()
+
+  def _default_Stamp(rec, table, value, user):
+    return 'new'
+  Stamp = grist.Text()
+
+  def _default_StampNum(rec, table, value, user):
+    return rec.Data2 + 1
+  StampNum = grist.Int()
   Data3 = grist.Text()
 
   @grist.formulaType(grist.Text())
@@ -60,7 +68,7 @@ class Formulas:
 
   @grist.formulaType(grist.Date())
   def FDate(rec, table):
-    return None
+    return DATE(2020, 1, 31)
 
   @grist.formulaType(grist.DateTime('Europe/Paris'))
   def FDateTime(rec, table):
@@ -83,7 +91,20 @@ class Formulas:
     return Texts.lookupRecords()
 
   def FAny(rec, table):
-    return None
+    return rec.Data1
+
+  @grist.formulaType(grist.Text())
+  def FMulti(rec, table):
+    x = rec.Data1
+    return x + '!'
+
+  @grist.formulaType(grist.Int())
+  def FRec(rec, table):
+    return rec.Data2 + 1
+
+  @grist.formulaType(grist.Numeric())
+  def FEmpty(rec, table):
+    return 0.0
 
 
 @grist.UserTable

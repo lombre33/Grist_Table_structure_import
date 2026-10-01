@@ -25,7 +25,7 @@ for (const file of readdirSync(DIR).filter((name) => name.endsWith(".py"))) {
 
   for (const table of tables) {
     test(`${name}: ${table.tableId.slice(0, 30)} has the same columns, types and computed flags`, () => {
-      const read = table.columns.map((col) => [col.id, resolveColumnType(col.dslType, col.argsRaw, col.id, []).type, col.computed]);
+      const read = table.columns.map((col) => [col.id, resolveColumnType(col.dslType, col.argsRaw, col.id, []).type, col.kind !== "data"]);
       assert.deepEqual(read, expected[table.tableId]);
     });
   }

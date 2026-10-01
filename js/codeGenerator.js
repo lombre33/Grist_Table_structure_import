@@ -1,7 +1,7 @@
 /**
  * Code View text from a table schema, in the format of Grist's gencode.py. Two differences: a
- * formula keeps Grist's `$col` syntax (translating it to `rec.col` takes a Python parser), and a
- * column's constructor may carry this widget's own arguments (see buildKwargs).
+ * formula (or a trigger formula) keeps Grist's `$col` syntax (translating it to `rec.col` takes a
+ * Python parser), and a column's constructor may carry this widget's own arguments (see buildKwargs).
  */
 
 import { buildTypeExpression, defaultLiteralForType } from "./gristTypes.js";
@@ -29,11 +29,15 @@ function tableText({ tableId, columns }) {
 function fieldText(col) {
   const kwargs = buildKwargs(col);
   const typeExpr = buildTypeExpression(col.type, kwargs);
-  if (!col.isFormula) return `${INDENT}${col.colId} = ${typeExpr}\n`;
+  const body = formulaBody(col.formula, defaultLiteralForType(col.type));
+  if (!col.isFormula) {
+    const trigger = col.formula?.trim() ? `\n${INDENT}def _default_${col.colId}(rec, table, value, user):\n${body}\n` : "";
+    return `${trigger}${INDENT}${col.colId} = ${typeExpr}\n`;
+  }
 
   const typed = col.type !== "Any" || Object.keys(kwargs).length > 0;
   const decorator = typed ? `${INDENT}@grist.formulaType(${typeExpr})\n` : "";
-  return `\n${decorator}${INDENT}def ${col.colId}(rec, table):\n${formulaBody(col.formula, defaultLiteralForType(col.type))}\n`;
+  return `\n${decorator}${INDENT}def ${col.colId}(rec, table):\n${body}\n`;
 }
 
 /** What a column has beyond its type, as Python source: only what there is to say. */

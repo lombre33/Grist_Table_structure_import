@@ -87,6 +87,8 @@
     "Formulas": [
       ["Data1","Text",false],
       ["Data2","Int",false],
+      ["Stamp","Text",true],
+      ["StampNum","Int",true],
       ["Data3","Text",false],
       ["FText","Text",true],
       ["FNum","Numeric",true],
@@ -97,7 +99,10 @@
       ["FList","ChoiceList",true],
       ["FRef","Ref:Texts",true],
       ["FRefList","RefList:Texts",true],
-      ["FAny","Any",true]
+      ["FAny","Any",true],
+      ["FMulti","Text",true],
+      ["FRec","Int",true],
+      ["FEmpty","Numeric",true]
     ],
     "Ids": [
       ["a","Text",false],

@@ -49,6 +49,16 @@ test("a multi-line formula is reproduced (dedented) rather than invented", () =>
   assert.match(text, /def X\(rec, table\):\n {4}if \$A:\n {6}return 1\n {4}return 0\n/);
 });
 
+test("a data column with a trigger formula gets its function before it, as in Code View, and none without", () => {
+  const trigger = gen(data("Stamp", "Text", { formula: "'new'" }), data("Plain", "Text", { formula: "" }), data("Other", "Int", { formula: undefined }));
+  assert.equal(trigger, `${HEADER}\n\n@grist.UserTable\nclass T:\n\n  def _default_Stamp(rec, table, value, user):\n    return 'new'\n  Stamp = grist.Text()\n  Plain = grist.Text()\n  Other = grist.Int()\n`);
+});
+
+test("a trigger formula reads back as the same code on the same column", () => {
+  const { tables } = parseGristSchema(gen(data("Stamp", "Text", { formula: "'a' + $B" }), data("B", "Text")));
+  assert.deepEqual(tables[0].columns.map((col) => [col.id, col.kind, col.code]), [["Stamp", "trigger", "return 'a' + $B"], ["B", "data", ""]]);
+});
+
 test("an empty table body is 'pass', like gencode.py", () => {
   assert.match(generateCode([{ tableId: "Empty", columns: [] }]), /class Empty:\n {2}pass\n/);
 });

@@ -231,3 +231,64 @@ test("addColumns reports the real id of a column Grist renamed", async () => {
   const [added] = (await snapshot(doc)).Contacts.slice(-1);
   assert.deepEqual([added.id, added.description], ["hidden", "d"]);
 });
+
+const CALC = `
+@grist.UserTable
+class Calc:
+  A = grist.Int()
+
+  def _default_Start(rec, table, value, user):
+    return rec.A + 100
+  Start = grist.Int()
+
+  @grist.formulaType(grist.Int())
+  def Double(rec, table):
+    return rec.A * 2
+
+  @grist.formulaType(grist.Text())
+  def Label(rec, table):
+    x = rec.A
+    return str(x) + '!'
+
+  @grist.formulaType(grist.Numeric())
+  def Blank(rec, table):
+    return 0.0
+
+  def Broken(rec, table):
+    return rec.Nope
+`;
+
+const formulas = async (doc, tableId) => (await snapshot(doc))[tableId].map((col) => [col.id, col.isFormula, col.formula]);
+
+test("formulas are left out unless asked for: no column of the table holds any", async () => {
+  const doc = await instance.newDoc();
+  await importText(doc, CALC);
+  assert.deepEqual(await formulas(doc, "Calc"), ["A", "Start", "Double", "Label", "Blank", "Broken"].map((id) => [id, false, ""]));
+});
+
+test("with the option, formulas and trigger formulas are created, and Grist computes them", async () => {
+  const doc = await instance.newDoc();
+  const { note } = await importText(doc, CALC, { withFormulas: true });
+  assert.equal(note, "");
+  assert.deepEqual(await formulas(doc, "Calc"), [
+    ["A", false, ""],
+    ["Start", false, "rec.A + 100"],
+    ["Double", true, "rec.A * 2"],
+    ["Label", true, "x = rec.A\nreturn str(x) + '!'"],
+    ["Blank", true, ""],
+    ["Broken", true, "rec.Nope"],
+  ]);
+  await doc.apply([["AddRecord", "Calc", null, { A: 5 }]]);
+  const row = await doc.fetchTable("Calc");
+  assert.deepEqual([row.Start[0], row.Double[0], row.Label[0], row.Blank[0], row.Broken[0]], [105, 10, "5!", 0, ["E", "AttributeError"]]);
+});
+
+test("a column added to an existing table can bring its formula", async () => {
+  const doc = await instance.newDoc();
+  const target = await contacts(doc);
+  const columns = parsedColumns("@grist.UserTable\nclass X:\n  @grist.formulaType(grist.Text())\n  def Shout(rec, table):\n    return rec.Name.upper()\n");
+  await addColumns(doc.grist, target, columns, { withFormulas: true });
+  assert.deepEqual((await formulas(doc, "Contacts")).at(-1), ["Shout", true, "rec.Name.upper()"]);
+  await doc.apply([["AddRecord", "Contacts", null, { Name: "ada" }]]);
+  assert.equal((await doc.fetchTable("Contacts")).Shout[0], "ADA");
+});

@@ -202,10 +202,10 @@ class Empty:
 `;
   const { tables, warnings } = parseGristSchema(source);
   assert.deepEqual(warnings, []);
-  assert.deepEqual(tables.map((t) => [t.tableId, t.columns.map((c) => [c.id, c.computed])]), [["People", [["Name", false], ["Stamp", true]]], ["Empty", []]]);
+  assert.deepEqual(tables.map((t) => [t.tableId, t.columns.map((c) => [c.id, c.kind])]), [["People", [["Name", "data"], ["Stamp", "trigger"]]], ["Empty", []]]);
 });
 
-test("a formula column is computed, and its decorator that has no function is reported with its own line", () => {
+test("a formula column is a formula, and its decorator that has no function is reported with its own line", () => {
   const source = `
 @grist.UserTable
 class T:
@@ -218,8 +218,58 @@ class T:
   A = grist.Text()
 `;
   const { tables, warnings } = parseGristSchema(source);
-  assert.deepEqual(tables[0].columns.map((c) => [c.id, c.dslType, c.computed]), [["F", "Int", true], ["A", "Text", false]]);
+  assert.deepEqual(tables[0].columns.map((c) => [c.id, c.dslType, c.kind]), [["F", "Int", "formula"], ["A", "Text", "data"]]);
   assert.deepEqual(warnings.map((w) => [w.key, w.params.line]), [["warn.formulaTypeNoFunction", 8]]);
+});
+
+test("a formula's code is kept as written, without its indentation, and stops where the next column starts", () => {
+  const source = `
+@grist.UserTable
+class T:
+  A = grist.Int()
+
+  @grist.formulaType(grist.Numeric())
+  def Double(rec, table):
+    x = rec.A
+    # inner comment
+    if x:
+      return x * 2
+    return 0
+
+  # about the next column
+  Next = grist.Int()
+
+  def Last(rec, table):
+    return rec.A`;
+  const { tables, warnings } = parseGristSchema(source);
+  assert.deepEqual(warnings, []);
+  assert.deepEqual(tables[0].columns.map((c) => [c.id, c.kind, c.code]), [
+    ["A", "data", ""],
+    ["Double", "formula", "x = rec.A\n# inner comment\nif x:\n  return x * 2\nreturn 0"],
+    ["Next", "data", ""],
+    ["Last", "formula", "return rec.A"],
+  ]);
+});
+
+test("a trigger formula belongs to the data column of the same id, wherever it is written", () => {
+  const source = `
+@grist.UserTable
+class T:
+  def _default_Stamp(rec, table, value, user):
+    return NOW()
+  Stamp = grist.DateTime('UTC')
+  Other = grist.Text()
+  def _default_Missing(rec, table, value, user):
+    return 1
+`;
+  const { tables, warnings } = parseGristSchema(source);
+  assert.deepEqual(warnings, []);
+  assert.deepEqual(tables[0].columns.map((c) => [c.id, c.kind, c.code]), [["Stamp", "trigger", "return NOW()"], ["Other", "data", ""]]);
+});
+
+test("a function without a body, or with comments only, has no code", () => {
+  const { tables } = parseGristSchema("@grist.UserTable\nclass T:\n  def A(rec, table):\n  B = grist.Int()\n  def C(rec, table):\n    # nothing\n");
+  assert.deepEqual(tables[0].columns.map((c) => [c.id, c.kind, c.code]), [["A", "formula", ""], ["B", "data", ""], ["C", "formula", ""]]);
 });
 
 test("input mutated at random never makes the parser throw or stall", () => {

@@ -1,9 +1,11 @@
 import { parseGristSchema } from "./parser.js";
 import { $, el, checklistItem, statusWriter, syncCheckedClass } from "./dom.js";
 import { fetchDocSchema, existingColumnIds } from "./schema.js";
-import { addColumns, checkTableId, createTables, defaultTableId, resolveColumns } from "./importer.js";
+import { addColumns, checkTableId, createTables, defaultTableId, isComputed, resolveColumns } from "./importer.js";
 import { callGrist, reportError } from "./util.js";
 import { t, tn, typeLabel, onLocaleChange } from "./i18n.js";
+
+const COMPUTED_TAGS = { formula: "import.preview.formula", trigger: "import.preview.trigger" };
 
 export function initImportTab(grist) {
   const sourceInput = $("source-input");
@@ -24,6 +26,9 @@ export function initImportTab(grist) {
   const columnsPreview = $("columns-preview");
   const statusHeader = $("status-column-header");
   const columnsBody = $("columns-preview-body");
+  const formulasRow = $("formulas-row");
+  const formulasOption = $("with-formulas");
+  const formulasLabel = $("with-formulas-label");
   const warningsBlock = $("warnings-block");
   const warningsList = $("warnings-list");
   const createActions = $("create-actions");
@@ -42,6 +47,7 @@ export function initImportTab(grist) {
   let docSchema; // this document's tables and columns, null when unreadable
   let entries; // "new table" mode, one per ticked table: { index, table, id, excluded, columns, input, error }
   let existing; // "existing table" mode: { index of the source table, excluded column ids, columns }
+  let withFormulas; // the formulas are imported too
   let busy = false;
   reset();
 
@@ -57,6 +63,10 @@ export function initImportTab(grist) {
     renderExisting();
   });
   checklist.addEventListener("change", onChecklistChange);
+  formulasOption.addEventListener("change", () => {
+    withFormulas = formulasOption.checked;
+    render();
+  });
   targetSelect.addEventListener("change", renderExisting);
   for (const radio of modeRadios) radio.addEventListener("change", onModeChange);
   actionBtn.addEventListener("click", onAction);
@@ -71,6 +81,7 @@ export function initImportTab(grist) {
     docSchema = null;
     entries = [];
     existing = { index: 0, excluded: new Set(), columns: [] };
+    withFormulas = false;
   }
 
   /** A button that was disabled has lost the keyboard focus: give it back once it is usable again. */
@@ -211,7 +222,8 @@ export function initImportTab(grist) {
       rerender();
       boxes()[position]?.focus();
     });
-    const cells = [el("td", { class: "col-checkbox" }, [checkbox]), el("td", { text: col.id }), el("td", { text: typeLabel(col.type) })];
+    const kind = isComputed(col) ? [" ", el("span", { class: "tag", text: t(COMPUTED_TAGS[col.kind]) })] : [];
+    const cells = [el("td", { class: "col-checkbox" }, [checkbox]), el("td", { text: col.id }), el("td", {}, [typeLabel(col.type), ...kind])];
     return el("tr", {}, statusCell ? [...cells, statusCell] : cells);
   }
 
@@ -223,16 +235,18 @@ export function initImportTab(grist) {
     const notes = [];
     let valid = entries.length > 0;
     let anyColumn = false;
+    let computed = 0;
 
     for (const entry of entries) {
       const id = entry.id.trim();
-      const resolved = resolveColumns(entry.table, destination, documentTableIds(), entry.excluded);
+      const resolved = resolveColumns(entry.table, destination, documentTableIds(), { excluded: entry.excluded, withFormulas });
       entry.columns = resolved.columns;
       notes.push(...resolved.warnings.map((warning) => ({ ...warning, table: id || entry.table.tableId })));
 
       if (several) rows.push(el("tr", { class: "table-separator" }, [el("td", { colspan: "3", text: id || entry.table.tableId })]));
       rows.push(...entry.columns.map((col) => columnRow(col, entry.excluded, null, renderCreate)));
       anyColumn ||= entry.columns.some((col) => !entry.excluded.has(col.id));
+      computed += entry.columns.filter((col) => isComputed(col) && !entry.excluded.has(col.id)).length;
 
       const others = entries.filter((other) => other !== entry).map((other) => other.id.trim());
       const problem = checkTableId(id, documentTableIds(), others);
@@ -243,6 +257,7 @@ export function initImportTab(grist) {
     }
 
     columnsBody.replaceChildren(...rows);
+    renderFormulasOption(computed);
     renderWarnings(notes);
     actionBtn.disabled = busy || !valid || !anyColumn;
     actionBtn.textContent = several ? tn("import.action.createTables", entries.length) : t("import.action.create");
@@ -253,7 +268,7 @@ export function initImportTab(grist) {
     if (!table) return;
     const target = targetTable();
     const known = target ? existingColumnIds(docSchema.allColumns, target.tableRef) : null;
-    const resolved = resolveColumns(table, new Map(target ? [[table.tableId, target.tableId]] : []), documentTableIds(), existing.excluded);
+    const resolved = resolveColumns(table, new Map(target ? [[table.tableId, target.tableId]] : []), documentTableIds(), { excluded: existing.excluded, withFormulas });
     existing.columns = resolved.columns.map((col) => ({ ...col, isNew: !known || !known.has(col.id.toLowerCase()) }));
 
     columnsBody.replaceChildren(
@@ -265,9 +280,18 @@ export function initImportTab(grist) {
     );
 
     renderWarnings(resolved.warnings);
-    const newCount = existing.columns.filter((col) => col.isNew && !existing.excluded.has(col.id)).length;
+    const included = existing.columns.filter((col) => col.isNew && !existing.excluded.has(col.id));
+    renderFormulasOption(included.filter(isComputed).length);
+    const newCount = included.length;
     actionBtn.disabled = busy || !known || newCount === 0;
     actionBtn.textContent = !known ? t("import.action.chooseTarget") : newCount === 0 ? t("import.action.noNewColumns") : tn("import.action.addColumns", newCount);
+  }
+
+  /** The checkbox that imports the formulas, offered when some of the columns to create have one. */
+  function renderFormulasOption(count) {
+    formulasRow.hidden = count === 0;
+    formulasOption.checked = withFormulas;
+    formulasLabel.textContent = tn("import.formulas.option", count);
   }
 
   function renderWarnings(more = []) {
@@ -295,7 +319,7 @@ export function initImportTab(grist) {
     const tables = entries.map((entry) => ({ id: entry.id.trim(), columns: entry.columns.filter((col) => !entry.excluded.has(col.id)) }));
     setStatus(tn("import.status.creating", tables.length));
     try {
-      const { tables: created, note } = await createTables(grist, tables);
+      const { tables: created, note } = await createTables(grist, tables, { withFormulas });
       const columnsPhrase = tn("common.columnsCount", created.reduce((total, table) => total + table.columns.length, 0));
       const summary =
         created.length > 1
@@ -313,7 +337,7 @@ export function initImportTab(grist) {
     if (!target) return;
     setStatus(t("import.status.addingColumns", { table: target.tableId }));
     try {
-      const { added, note } = await addColumns(grist, target, existing.columns.filter((col) => !existing.excluded.has(col.id)));
+      const { added, note } = await addColumns(grist, target, existing.columns.filter((col) => !existing.excluded.has(col.id)), { withFormulas });
       await loadSchema();
       if (added === 0) setStatus(t("import.info.noNewColumns", { table: target.tableId }));
       else setStatus(tn("import.success.columnsAdded", added, { table: target.tableId }) + note, "success");
