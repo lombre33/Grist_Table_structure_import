@@ -276,6 +276,16 @@ L'interface suit l'identité UI/UX commune aux widgets **Grist Factory** (grist-
   erreurs, ambre pour les remarques de l'analyse, vert pour les confirmations — jamais de
   couleur sans rôle sémantique. Coins arrondis partout (7 px / 11 px), ombres douces
   réservées aux éléments flottants (le panneau Réglages) et très légères sur les cartes.
+- **Accessibilité** : quatre valeurs de la charte (texte discret, rouge et vert des
+  messages, bleu des petits textes) sont légèrement assombries pour atteindre 4,5:1 (WCAG
+  AA, RGAA 3.2) là où elles donnaient 3,7 à 4,4, et les champs ont un contour à 3:1 ;
+  `test/style.test.mjs` mesure ces contrastes dans les deux thèmes. Les zones cliquables
+  font au moins 24 px, le focus reste visible et conservé après chaque action, les
+  champs, groupes et résultats ont un nom accessible et les fins d'analyse sont annoncées,
+  l'onglet sélectionné reste repérable en mode contraste élevé (`forced-colors`), la page
+  a un repère `main` et un titre par étape, et les onglets répondent aux flèches, à
+  Début et à Fin. Mesuré dans Chromium (arbre d'accessibilité, clavier, contrastes) :
+  pas encore passé au lecteur d'écran.
 - **Typographie** : **Manrope** (police variable) pour toute l'interface, vendorisée
   dans `fonts/manrope/` (police variable, licence SIL Open Font License jointe) plutôt
   que chargée depuis une CDN — voir SECURITY.md. Le code Python (collé ou généré) reste

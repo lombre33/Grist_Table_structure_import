@@ -224,6 +224,33 @@ const TESTS = [
     assert.equal(await page.getByRole("radiogroup", { name: /Que faire/ }).count(), 1);
   }],
 
+  ["Accessibility: a main landmark, a heading per step, and tabs that Home and End reach", async (page) => {
+    assert.equal(await page.getByRole("main").count(), 1);
+    assert.deepEqual(await page.getByRole("heading", { level: 2 }).allTextContents(), ["1. Code source"], "the steps shown on load");
+    await page.focus("#tab-import");
+    await page.keyboard.press("End");
+    assert.equal(await page.getAttribute("#tab-export", "aria-selected"), "true");
+    assert.equal(await page.evaluate(() => document.activeElement.id), "tab-export");
+    await page.keyboard.press("Home");
+    assert.equal(await page.getAttribute("#tab-import", "aria-selected"), "true");
+    await page.keyboard.press("ArrowLeft");
+    assert.equal(await page.getAttribute("#tab-export", "aria-selected"), "true", "the arrows still wrap around");
+  }],
+
+  ["Accessibility: every checkbox of the preview is a target of at least 24 px, whatever its row", async (page) => {
+    await analyse(page, MULTI);
+    const sizes = await page.$$eval(".col-checkbox label", (labels) => labels.map((label) => [label.offsetWidth, label.offsetHeight]));
+    assert.equal(sizes.length, 4, "the head and three columns");
+    for (const [width, height] of sizes) assert.ok(width >= 24 && height >= 24, `${width} x ${height}`);
+  }],
+
+  ["Accessibility: in forced colours the selected tab and the cards that background alone marked keep an outline", async (page) => {
+    await page.emulateMedia({ forcedColors: "active" });
+    const outline = await page.$eval("#tab-import", (tab) => [getComputedStyle(tab).outlineStyle, getComputedStyle(tab).outlineWidth]);
+    assert.deepEqual(outline, ["solid", "2px"]);
+    assert.equal(await page.$eval("#tab-export", (tab) => getComputedStyle(tab).outlineStyle), "none", "only the selected one");
+  }],
+
   ["Réglages: the licence links to the licence text, not to a personal account", async (page) => {
     assert.equal(await page.getAttribute('#settings-dialog a[href*="gpl"]', "href"), "https://www.gnu.org/licenses/gpl-3.0.html");
     assert.equal(await page.locator('a[href*="github.com"]').count(), 0);

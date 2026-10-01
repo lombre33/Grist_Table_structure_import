@@ -237,7 +237,7 @@ export function initImportTab(grist) {
     const tags = [isComputed(col) && COMPUTED_TAGS[col.kind], linked && "import.preview.twoWay"].filter(Boolean);
     const included = !locked && !excluded.has(col.id);
     const type = el("td", {}, [typeLabel(col.type), ...tags.flatMap((key) => [" ", el("span", { class: "tag", text: t(key) })])]);
-    const cells = [el("td", { class: "col-checkbox" }, [checkbox]), el("td", { text: col.id }), type];
+    const cells = [el("td", { class: "col-checkbox" }, [el("label", {}, [checkbox])]), el("td", { text: col.id }), type];
     return el("tr", { class: included ? "" : "is-excluded" }, status ? [...cells, status] : cells);
   }
 

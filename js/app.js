@@ -21,13 +21,22 @@ function activate(name) {
   if (name === "export") exportTab.activate();
 }
 
+/** The tab a key leads to (arrows wrap around, Home and End go to the ends), or undefined. */
+function tabAfter(key, tab) {
+  const index = TABS.indexOf(tab);
+  if (key === "Home") return TABS[0];
+  if (key === "End") return TABS.at(-1);
+  if (key === "ArrowLeft") return TABS[(index - 1 + TABS.length) % TABS.length];
+  if (key === "ArrowRight") return TABS[(index + 1) % TABS.length];
+}
+
 for (const tab of TABS) {
   $(`tab-${tab}`).addEventListener("click", () => activate(tab));
   $(`tab-${tab}`).addEventListener("keydown", (event) => {
-    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-    const other = TABS.find((name) => name !== tab);
+    const target = tabAfter(event.key, tab);
+    if (!target) return;
     event.preventDefault();
-    activate(other);
-    $(`tab-${other}`).focus();
+    activate(target);
+    $(`tab-${target}`).focus();
   });
 }

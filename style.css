@@ -6,6 +6,11 @@
   font-display: swap;
 }
 
+/*
+ * Grist Factory's palette, with four values darkened until their text reads at 4.5:1 (WCAG AA) where the charter's
+ * gave 3.7 to 4.4: --muted, --danger, --success and, for small text, --accent-text (the charter's --accent-hover).
+ * --field-border is the 3:1 outline a field needs to be seen at all. test/style.test.mjs measures all of it.
+ */
 :root {
   /* native controls follow the theme */
   color-scheme: light;
@@ -15,16 +20,18 @@
   --border: #dde2ea;
   --border-strong: #c3cad6;
   --ink: #1b2430;
-  --muted: #667085;
+  --muted: #5b6678;
+  --field-border: #7a8496;
   --accent: #2f6fed;
   --accent-hover: #2558c4;
+  --accent-text: var(--accent-hover);
   --accent-soft: #e8f0fe;
   --accent-ink: #ffffff;
-  --danger: #d84343;
+  --danger: #c13333;
   --danger-soft: #fbe9e9;
   --warning: #b45309;
   --warning-soft: #fffbeb;
-  --success: #1a7f45;
+  --success: #187a42;
   --success-soft: #e6f4ea;
   --info: #2b3947;
   --info-soft: #eef1f4;
@@ -47,7 +54,8 @@
     --border-strong: #3a4054;
     --ink: #eef1f6;
     --muted: #9aa3b2;
-      --accent: #5b8def;
+    --field-border: #6b7589;
+    --accent: #5b8def;
     --accent-hover: #7ca2f2;
     --accent-soft: #1d2c4d;
     --accent-ink: #0b1220;
@@ -73,6 +81,7 @@
   --border-strong: #3a4054;
   --ink: #eef1f6;
   --muted: #9aa3b2;
+  --field-border: #6b7589;
   --accent: #5b8def;
   --accent-hover: #7ca2f2;
   --accent-soft: #1d2c4d;
@@ -147,11 +156,11 @@ body {
 
 .eyebrow {
   margin: 0 0 6px;
-  font-size: 11px;
+  font-size: 0.75rem;
   font-weight: 800;
   letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 h1 {
@@ -226,6 +235,10 @@ h1 {
   cursor: pointer;
 }
 
+.tab:hover:not([aria-selected="true"]) {
+  background: var(--surface-sunken);
+}
+
 .tab[aria-selected="true"] {
   background: var(--accent);
   color: var(--accent-ink);
@@ -261,7 +274,7 @@ textarea,
 input[type="text"],
 select {
   width: 100%;
-  border: 1.5px solid var(--border);
+  border: 1.5px solid var(--field-border);
   border-radius: var(--radius-sm);
   background: var(--surface-sunken);
   color: var(--ink);
@@ -272,6 +285,15 @@ select {
 textarea {
   font-family: var(--font-mono);
   resize: vertical;
+}
+
+::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+
+input[aria-invalid="true"] {
+  border-color: var(--danger);
 }
 
 select,
@@ -326,7 +348,9 @@ button.btn-ghost {
 }
 
 button.btn:disabled {
-  opacity: 0.45;
+  background: var(--surface-sunken);
+  border-color: var(--border);
+  color: var(--muted);
   cursor: not-allowed;
 }
 
@@ -351,6 +375,10 @@ button.btn:disabled {
   padding: 12px;
   cursor: pointer;
   position: relative;
+}
+
+.mode-card:hover:not(.is-checked) {
+  border-color: var(--border-strong);
 }
 
 .mode-card.is-checked {
@@ -378,7 +406,7 @@ button.btn:disabled {
 .mode-card-desc {
   display: block;
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: 0.82rem;
   line-height: 1.35;
 }
 
@@ -390,16 +418,24 @@ table#columns-preview {
   margin-top: 4px;
 }
 
-.col-checkbox {
+#columns-preview th.col-checkbox,
+#columns-preview td.col-checkbox {
   width: 1%;
+  padding: 0;
   white-space: nowrap;
+}
+
+.col-checkbox label {
+  display: flex;
+  margin: 0;
+  padding: 8px 8px 8px 4px;
+  cursor: pointer;
 }
 
 .col-checkbox input[type="checkbox"] {
   width: 16px;
   height: 16px;
   accent-color: var(--accent);
-  display: block;
 }
 
 #columns-preview th,
@@ -411,7 +447,7 @@ table#columns-preview {
 }
 
 #columns-preview th {
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--muted);
@@ -420,7 +456,7 @@ table#columns-preview {
 
 .status-pill {
   display: inline-block;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 700;
   padding: 2px 8px;
   border-radius: 999px;
@@ -428,12 +464,12 @@ table#columns-preview {
 
 .status-pill-new {
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .table-separator td {
   padding-top: 12px;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -450,7 +486,7 @@ table#columns-preview {
 
 .table-id-entry label {
   font-weight: 600;
-  font-size: 0.78rem;
+  font-size: 0.82rem;
   color: var(--muted);
   margin-bottom: 3px;
 }
@@ -460,7 +496,7 @@ table#columns-preview {
   border-radius: 999px;
   background: var(--surface-sunken);
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 700;
   white-space: nowrap;
 }
@@ -507,7 +543,7 @@ label + .hint {
 
 .field-error {
   color: var(--danger);
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   margin: 6px 0 0;
   font-weight: 600;
 }
@@ -530,7 +566,7 @@ label + .hint {
 }
 
 #warnings-block li {
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   margin-bottom: 3px;
 }
 
@@ -550,6 +586,11 @@ label + .hint {
 .checklist li {
   border: 1.5px solid var(--border);
   border-radius: var(--radius-sm);
+}
+
+.checklist li:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-sunken);
 }
 
 .checklist label {
@@ -575,7 +616,7 @@ label + .hint {
 
 .hint {
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: 0.82rem;
   line-height: 1.4;
   margin: 8px 0 0;
 }
@@ -606,7 +647,7 @@ label + .hint {
 }
 
 .refs-list li {
-  font-size: 0.8rem;
+  font-size: 0.85rem;
 }
 
 .refs-banner .actions {
@@ -619,7 +660,7 @@ label + .hint {
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   padding: 10px 12px;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   font-weight: 600;
   margin: 0;
 }
@@ -747,7 +788,9 @@ dialog#settings-dialog::backdrop {
 }
 
 .credits-row dd a {
-  color: var(--accent);
+  display: inline-block;
+  padding: 3px 0;
+  color: var(--accent-text);
   text-decoration: none;
 }
 
@@ -764,4 +807,20 @@ dialog#settings-dialog::backdrop {
 .field-error,
 .refs-list li {
   overflow-wrap: anywhere;
+}
+
+/* High-contrast modes drop backgrounds: keep what they said (selected, framed) as outlines and borders. */
+@media (forced-colors: active) {
+  .tab[aria-selected="true"],
+  .segmented-option.is-checked,
+  .mode-card.is-checked {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+
+  dialog#settings-dialog,
+  .status,
+  #warnings-block {
+    border: 1px solid CanvasText;
+  }
 }

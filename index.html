@@ -11,7 +11,7 @@
 <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
 </head>
 <body>
-<div class="shell">
+<main class="shell">
 
   <header class="masthead">
     <div class="masthead-text">
@@ -105,7 +105,7 @@
   <section id="panel-import" class="panel" role="tabpanel" aria-labelledby="tab-import">
 
     <div class="block">
-      <p class="eyebrow" data-i18n="import.step1.eyebrow">1. Code source</p>
+      <h2 class="eyebrow" data-i18n="import.step1.eyebrow">1. Code source</h2>
       <label for="source-input" data-i18n="import.step1.label">Code Python d'une table</label>
       <p id="source-hint" class="hint" data-i18n="import.step1.hint">À copier depuis le menu &laquo;&nbsp;Code View&nbsp;&raquo; de la table, dans le document d'origine, ou depuis l'onglet Export de ce widget (qui garde en plus les choix détaillés).</p>
       <textarea id="source-input" rows="12" spellcheck="false" aria-describedby="source-hint"
@@ -118,7 +118,7 @@
     </div>
 
     <div id="mode-block" class="block" hidden>
-      <p class="eyebrow" id="mode-heading" data-i18n="import.step2.eyebrow">2. Que faire de ce code ?</p>
+      <h2 class="eyebrow" id="mode-heading" data-i18n="import.step2.eyebrow">2. Que faire de ce code ?</h2>
       <div class="mode-picker" role="radiogroup" aria-labelledby="mode-heading">
         <label class="mode-card">
           <input type="radio" name="import-mode" value="create" class="mode-radio" checked>
@@ -134,7 +134,7 @@
     </div>
 
     <section id="preview-section" class="block" hidden aria-labelledby="preview-heading">
-      <p class="eyebrow" id="preview-heading">3. Vérification avant application</p>
+      <h2 class="eyebrow" id="preview-heading">3. Vérification avant application</h2>
 
       <div id="table-picker-row" class="field" hidden>
         <label for="table-select" data-i18n="import.tablePicker.label">Table à importer (plusieurs trouvées)</label>
@@ -160,7 +160,7 @@
       <table id="columns-preview">
         <thead>
           <tr>
-            <th scope="col" class="col-checkbox"><input type="checkbox" id="columns-select-all" aria-label="Inclure toutes les colonnes" data-i18n-aria-label="import.preview.includeAll"></th>
+            <th scope="col" class="col-checkbox"><label><input type="checkbox" id="columns-select-all" aria-label="Inclure toutes les colonnes" data-i18n-aria-label="import.preview.includeAll"></label></th>
             <th scope="col" data-i18n="import.preview.column">Colonne</th>
             <th scope="col" data-i18n="import.preview.type">Type Grist</th>
             <th id="status-column-header" scope="col" hidden data-i18n="import.preview.status">Statut</th>
@@ -178,7 +178,7 @@
       </div>
 
       <div id="warnings-block" hidden>
-        <p class="eyebrow" data-i18n="import.warnings.eyebrow">Remarques</p>
+        <h3 class="eyebrow" data-i18n="import.warnings.eyebrow">Remarques</h3>
         <ul id="warnings-list"></ul>
       </div>
 
@@ -194,7 +194,7 @@
   <section id="panel-export" class="panel" role="tabpanel" aria-labelledby="tab-export" hidden>
 
     <div class="block">
-      <p class="eyebrow" id="export-tables-label" data-i18n="export.step1.eyebrow">1. Tables à exporter</p>
+      <h2 class="eyebrow" id="export-tables-label" data-i18n="export.step1.eyebrow">1. Tables à exporter</h2>
       <div id="export-select-all-row" class="option" hidden>
         <label>
           <input type="checkbox" id="export-select-all">
@@ -220,7 +220,7 @@
     </div>
 
     <div id="export-output-block" class="block" hidden>
-      <p class="eyebrow" id="export-output-label" data-i18n="export.step2.eyebrow">2. Code généré</p>
+      <h2 class="eyebrow" id="export-output-label" data-i18n="export.step2.eyebrow">2. Code généré</h2>
       <textarea id="export-output" rows="16" readonly spellcheck="false" aria-labelledby="export-output-label"></textarea>
       <div class="actions">
         <button id="copy-btn" type="button" class="btn" data-i18n="export.copy">Copier</button>
@@ -237,7 +237,7 @@
     <p id="export-announcement" class="sr-only" aria-live="polite"></p>
   </section>
 
-</div>
+</main>
 
 <script type="module" src="js/app.js"></script>
 </body>
