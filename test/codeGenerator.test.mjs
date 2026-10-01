@@ -156,3 +156,22 @@ test("a formula's multi-line string is not indented, as in Grist, and reads back
   assert.deepEqual(warnings, []);
   assert.deepEqual(tables[0].columns.map((col) => [col.id, col.code]), [["F", code], ["G", "return 1"]]);
 });
+
+test("a multi-line string as indented as the code is indented with it, so that it reads back as written", () => {
+  const code = 'x = """a\n      deep\n    four"""\nreturn x';
+  const text = gen(formula("F", "Text", code), formula("G", "Int", "1"));
+  assert.match(text, /def F\(rec, table\):\n {4}x = """a\n {10}deep\n {8}four"""\n {4}return x\n/);
+  const { tables, warnings } = parseGristSchema(text);
+  assert.deepEqual(warnings, []);
+  assert.deepEqual(tables[0].columns.map((col) => [col.id, col.code]), [["F", code], ["G", "return 1"]]);
+});
+
+test("the code of a formula is indented from its own margin, whatever a line of a string leaves", () => {
+  const text = gen(formula("F", "Text", '  note = """first\nsecond"""\n  return note'));
+  assert.match(text, /def F\(rec, table\):\n {4}note = """first\nsecond"""\n {4}return note\n/);
+});
+
+test("a formula of hundreds of thousands of lines is written like any other", () => {
+  const lines = gen(formula("F", "Int", `${"x = 1\n".repeat(300000)}return x`)).split("\n");
+  assert.ok(lines.length > 300000);
+});

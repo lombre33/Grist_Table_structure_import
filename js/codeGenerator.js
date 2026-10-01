@@ -61,8 +61,16 @@ function formulaBody(formula, blankLiteral) {
   const lines = text.replace(/\r\n?/g, "\n").split("\n");
   if (lines.length === 1) return body + (STATEMENT_START_RE.test(text.trim()) ? text.trim() : `return ${text.trim()}`);
 
-  // like Grist, indent the code but not the lines of a multi-line string, which are part of its text
+  // The lines of a multi-line string are part of its text: written as they are, like Grist since 1.7.20, when one is
+  // less indented than the code (which is how the parser tells that layout), else indented with it, like Grist before.
   const inString = stringLines(lines);
   const common = lines.reduce((least, line, i) => (inString[i] || line.trim() === "" ? least : Math.min(least, indentOf(line))), Infinity);
-  return lines.map((line, i) => (inString[i] ? line : line.trim() === "" ? "" : body + line.slice(common))).join("\n");
+  const asWritten = lines.some((line, i) => inString[i] && line.trim() !== "" && indentOf(line) < body.length);
+  return lines
+    .map((line, i) => {
+      if (inString[i] && asWritten) return line;
+      if (line.trim() === "") return "";
+      return body + (inString[i] ? line : line.slice(common));
+    })
+    .join("\n");
 }

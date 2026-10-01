@@ -335,3 +335,40 @@ test("a formula of hundreds of thousands of lines is read like any other", () =>
   assert.deepEqual(tables[0].columns.map((col) => col.id), ["F", "B"]);
   assert.equal(tables[0].columns[0].code.split("\n").length, 300001);
 });
+
+test("a string Grist leaves unindented without triple quotes costs no column, and one never closed costs no table", () => {
+  const body = (...lines) => ["@grist.UserTable", "class T:", "  A = grist.Text()", "", ...lines, "", "  B = grist.Text()", ""].join("\n");
+  for (const code of ['    x = ("abc"\n"def")\n    return x', "    x = 'abc\\\ndef'\n    return x"]) {
+    const { tables, warnings } = parseGristSchema(body("  def F(rec, table):", code));
+    assert.deepEqual(warnings, []);
+    assert.deepEqual(tables[0].columns.map((col) => col.id), ["A", "F", "B"]);
+  }
+  const { tables } = parseGristSchema(`${body("  def F(rec, table):", '    return """oops')}\n@grist.UserTable\nclass U:\n  C = grist.Text()\n`);
+  assert.deepEqual(tables.map((table) => [table.tableId, table.columns.map((col) => col.id)]), [["T", ["A", "F", "B"]], ["U", ["C"]]]);
+});
+
+test("the lines of a multi-line string are read back as written, whether Grist indents them with the code (before 1.7.20) or leaves them (after)", () => {
+  const formula = 'note = """first\n# not a comment\n  indented\n\nlast"""\nreturn note.strip()';
+  const before = '@grist.UserTable\nclass T:\n  def F(rec, table):\n    note = """first\n    # not a comment\n      indented\n\n    last"""\n    return note.strip()\n  B = grist.Text()\n';
+  const after = '@grist.UserTable\nclass T:\n  def F(rec, table):\n    note = """first\n# not a comment\n  indented\n\nlast"""\n    return note.strip()\n  B = grist.Text()\n';
+  for (const source of [before, after]) {
+    const { tables } = parseGristSchema(source);
+    assert.deepEqual(tables[0].columns.map((col) => [col.id, col.code]), [["F", formula], ["B", ""]]);
+  }
+});
+
+test("when every line of a multi-line string is as indented as the code, the layout cannot be told, and is taken for the older one", () => {
+  const source = '@grist.UserTable\nclass T:\n  def F(rec, table):\n    x = """a\n      deep\n    four"""\n    return x\n';
+  assert.equal(parseGristSchema(source).tables[0].columns[0].code, 'x = """a\n  deep\nfour"""\nreturn x');
+});
+
+test("a string at the top of the text or of a class, which holds what looks like a table, is only a string", () => {
+  const source = 'x = """\n@grist.UserTable\nclass Fake:\n  A = grist.Text()\n"""\n\n@grist.UserTable\nclass T:\n  """Doc\nof the table"""\n  B = grist.Text()\n';
+  const { tables } = parseGristSchema(source);
+  assert.deepEqual(tables.map((table) => [table.tableId, table.columns.map((col) => col.id)]), [["T", ["B"]]]);
+});
+
+test("a text of hundreds of thousands of unrecognized lines gives as many warnings, and no exception", () => {
+  const { warnings } = parseGristSchema(`@grist.UserTable\nclass T:\n${"  foo bar\n".repeat(200000)}`);
+  assert.equal(warnings.length, 200000);
+});

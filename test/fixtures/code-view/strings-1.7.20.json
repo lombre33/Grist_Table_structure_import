@@ -1,0 +1,16 @@
+{
+  "grist": "1.7.20",
+  "tables": {
+    "Table1": [
+      ["A","Any",true],
+      ["B","Any",true],
+      ["C","Any",true]
+    ],
+    "Strings": [
+      ["Triple","Text",true],
+      ["Quoted","Text",true],
+      ["Joined","Text",true],
+      ["Nested","Text",true]
+    ]
+  }
+}

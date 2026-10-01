@@ -67,3 +67,21 @@ test("stringLines flags the lines that start inside a triple-quoted string, and 
   assert.deepEqual(flags('x = """a \\""" still\nin""" + 1\nout'), [false, true, false], "an escaped quote does not close it");
   assert.deepEqual(flags('u = "unclosed\nnext'), [false, false], "a single-quoted string ends with its line");
 });
+
+test("stringLines also flags what Grist leaves unindented without triple quotes: a backslash-continued string, literals joined over lines", () => {
+  const flags = (text) => stringLines(text.split("\n"));
+  assert.deepEqual(flags("x = 'a\\\nb'\ny = 2"), [false, true, false]);
+  assert.deepEqual(flags('x = ("a"\n"b"\n  r"c")\ny = ("d"\n)\nz = "e"\n"f"'), [false, true, true, false, false, false, false], "literals are joined inside brackets only");
+  assert.deepEqual(flags('x = ("a"  # note\n# comment\n\n"b")\nz'), [false, true, true, true, false], "what lies between them belongs to the string");
+  assert.deepEqual(flags('x = "a" \\\n"b"\ny'), [false, true, false], "or after a backslash");
+  assert.deepEqual(flags('x = "a" + \\\n"b"'), [false, false], "but not over an operator");
+});
+
+test("stringLines takes a triple-quoted string that is never closed for no string, and reads the text after it", () => {
+  assert.deepEqual(stringLines('x = """oops\nnext\n'.split("\n")), [false, false, false]);
+  assert.deepEqual(stringLines('x = """oops\ny = "a\nb"\nz = "c"'.split("\n")), [false, false, false, false], "a later string ends with its line, never joined");
+});
+
+test("stringLines knows the prefixes of Python strings", () => {
+  for (const prefix of ["r", "b", "f", "u", "rb", "BR", "Rf", "fR"]) assert.deepEqual(stringLines(`x = ${prefix}"""a\nb"""\ny`.split("\n")), [false, true, false], prefix);
+});

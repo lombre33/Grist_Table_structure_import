@@ -41,9 +41,10 @@ function classify(text) {
 const isCode = (line) => line.trim() !== "" && !line.trim().startsWith("#");
 
 /**
- * The body of the function written at `parentIndent` whose header precedes line `from`: its code without
- * the common indentation, and the index of the line after it. A line inside a multi-line string
- * (`inString`) is part of the body, whatever its indentation, and is kept as it is.
+ * The body of the function written at `parentIndent` whose header precedes line `from`: its code without the
+ * common indentation, and the index of the line after it. The lines of a multi-line string (`inString`) belong
+ * to it whatever their indentation. Grist before 1.7.20 indents them with the code, later ones write them as the
+ * formula has them: so a line less indented than the code means they are left as they are, else they are dedented.
  */
 function readBlock(lines, inString, from, parentIndent) {
   let end = from;
@@ -54,12 +55,20 @@ function readBlock(lines, inString, from, parentIndent) {
     else if (isCode(lines[i])) break;
   }
   const layout = [];
-  for (let i = from; i < end; i++) if (isCode(lines[i]) && !inString[i]) layout.push(indentOf(lines[i]));
+  const strings = [];
+  for (let i = from; i < end; i++) {
+    if (!inString[i]) {
+      if (isCode(lines[i])) layout.push(indentOf(lines[i]));
+    } else if (lines[i].trim() !== "") {
+      strings.push(indentOf(lines[i]));
+    }
+  }
   if (layout.length === 0) return { code: "", end };
   const common = layout.reduce((least, indent) => Math.min(least, indent));
+  const asWritten = strings.some((indent) => indent < common);
   const code = lines
     .slice(from, end)
-    .map((line, k) => (inString[from + k] ? line : line.slice(Math.min(common, indentOf(line)))))
+    .map((line, k) => (asWritten && inString[from + k] ? line : line.slice(Math.min(common, indentOf(line)))))
     .join("\n")
     .trim();
   return { code, end };
@@ -89,7 +98,7 @@ export function parseGristSchema(sourceText) {
     }
     const body = parseTableBody(lines, inString, header + 1, match[1]);
     tables.push({ tableId: match[1], columns: body.columns });
-    warnings.push(...body.warnings);
+    for (const warning of body.warnings) warnings.push(warning); // not push(...): a text of hundreds of thousands of lines would overflow the call
     i = body.end - 1;
   }
 

@@ -119,6 +119,11 @@
       ["FAny","Any",true],
       ["FMulti","Text",true],
       ["FString","Text",true],
+      ["FStringTriple","Text",true],
+      ["FStringQuoted","Text",true],
+      ["FStringJoined","Text",true],
+      ["FStringNested","Text",true],
+      ["FStringDeep","Text",true],
       ["FRec","Int",true],
       ["FEmpty","Numeric",true]
     ],

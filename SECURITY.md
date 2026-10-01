@@ -98,7 +98,8 @@ créée avec une formule (`isFormula: false`, `formula: ""` dans chaque définit
 contient du code). Avec l'option, le corps des fonctions est recopié tel quel dans le
 champ `formula` d'une colonne, que Grist évalue dans son propre bac à sable Python
 exactement comme une formule saisie dans une cellule : le widget n'ajoute ni ne retire
-aucun pouvoir à ce code, et ne l'interprète pas (`js/parser.js` n'en lit que l'indentation).
+aucun pouvoir à ce code, et ne l'interprète pas (`js/parser.js` n'en lit que l'indentation et
+les chaînes, pour savoir où la fonction s'arrête).
 La case est décochée par défaut, accompagnée d'une mise en garde (« n'activez cette option
 que pour du code de confiance »), précisément parce que l'origine d'un texte collé est
 inconnue.

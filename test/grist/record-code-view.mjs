@@ -6,11 +6,14 @@
  *
  *   GRIST_SANDBOX_DIR=<grist-core>/sandbox/grist GRIST_PYTHON=<python> GRIST_VERSION=1.7.20 \
  *     node test/grist/record-code-view.mjs
+ *
+ * `node test/grist/record-code-view.mjs strings` records only strings-<GRIST_VERSION>: run it against each version of
+ * Grist that writes the strings of a formula in a way of its own.
  */
 import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { instance, buildSource, column, rows } from "./support.mjs";
-import { SPEC } from "./spec.mjs";
+import { SPEC, STRING_FORMULAS } from "./spec.mjs";
 
 const OUT = new URL("../fixtures/code-view/", import.meta.url);
 const HELPER = new URL("./code_view.py", import.meta.url).pathname;
@@ -33,6 +36,14 @@ async function record(name, doc) {
   );
   writeFileSync(new URL(`${name}.json`, OUT), `{\n  "grist": ${JSON.stringify(expected.grist)},\n  "tables": {\n${tableLines.join(",\n")}\n  }\n}\n`);
   console.log(`${name}: ${Object.keys(expected.tables).length} tables, ${text.split("\n").length} lines`);
+}
+
+if (process.argv[2] === "strings") {
+  const strings = await instance.newDoc("code view: strings");
+  await buildSource(strings, { Strings: Object.entries(STRING_FORMULAS).map(([id, formula]) => ({ id, type: "Text", formula })) });
+  await record(`strings-${process.env.GRIST_VERSION ?? "unknown"}`, strings);
+  await instance.cleanup();
+  process.exit(0);
 }
 
 const everything = await instance.newDoc("code view: every column");

@@ -7,6 +7,17 @@ export const NASTY = [
   "a, b", "label = 'x'", "ends with \\", "literal \\n", "windows\r\nline",
 ];
 const col = (id, type, rest = {}) => ({ id, type, ...rest });
+
+/**
+ * Formulas with strings over several lines, one for each way of writing them. Grist leaves their lines as they are
+ * from 1.7.20 on and indents them with the code before: the Code View fixtures strings-<version>.py hold both.
+ */
+export const STRING_FORMULAS = {
+  Triple: 'note = """first\n# not a comment\n  indented\n\nlast"""\nreturn note.strip()',
+  Quoted: "x = 'abc\\\ndef'\nreturn x",
+  Joined: 'x = ("abc"\n"def")\nreturn x',
+  Nested: 'if True:\n  x = """a\nb"""\nreturn x',
+};
 const styled = {
   textColor: "#FF0000", fillColor: "#00FF00", fontBold: true, fontItalic: true, fontUnderline: true, fontStrikethrough: true,
   headerTextColor: "#0000FF", headerFillColor: "#FFFF00", headerFontBold: true, headerFontItalic: true,
@@ -108,6 +119,8 @@ export const SPEC = {
     col("FAny", "Any", { formula: "$Data1", description: "Formula with a description" }),
     col("FMulti", "Text", { formula: "x = $Data1\nx + '!'" }),
     col("FString", "Text", { formula: 'note = """first\n# not a comment\n  indented\n\nlast"""\nnote.strip()' }),
+    ...Object.entries(STRING_FORMULAS).map(([id, formula]) => col(`FString${id}`, "Text", { formula })),
+    col("FStringDeep", "Text", { formula: 'x = """a\n      deep\n    four"""\nreturn x' }), // every line of the string as indented as the code: the generator indents them with it
     col("FRec", "Int", { formula: "rec.Data2 + 1" }),
     col("FEmpty", "Numeric", { formula: "" }),
     col("Stamp", "Text", { trigger: "'new'" }),

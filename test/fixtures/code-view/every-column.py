@@ -112,6 +112,41 @@ b"""
 last"""
     return note.strip()
 
+  @grist.formulaType(grist.Text())
+  def FStringTriple(rec, table):
+    note = """first
+# not a comment
+  indented
+
+last"""
+    return note.strip()
+
+  @grist.formulaType(grist.Text())
+  def FStringQuoted(rec, table):
+    x = 'abc\
+def'
+    return x
+
+  @grist.formulaType(grist.Text())
+  def FStringJoined(rec, table):
+    x = ("abc"
+"def")
+    return x
+
+  @grist.formulaType(grist.Text())
+  def FStringNested(rec, table):
+    if True:
+      x = """a
+b"""
+    return x
+
+  @grist.formulaType(grist.Text())
+  def FStringDeep(rec, table):
+    x = """a
+      deep
+    four"""
+    return x
+
   @grist.formulaType(grist.Int())
   def FRec(rec, table):
     return rec.Data2 + 1

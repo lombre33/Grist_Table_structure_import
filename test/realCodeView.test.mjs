@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { parseGristSchema } from "../js/parser.js";
 import { resolveColumnType } from "../js/gristTypes.js";
+import { STRING_FORMULAS } from "./grist/spec.mjs";
 
 const DIR = new URL("./fixtures/code-view/", import.meta.url);
 
@@ -29,4 +30,11 @@ for (const file of readdirSync(DIR).filter((name) => name.endsWith(".py"))) {
       assert.deepEqual(read, expected[table.tableId]);
     });
   }
+}
+
+for (const file of readdirSync(DIR).filter((name) => name.startsWith("strings-") && name.endsWith(".py"))) {
+  test(`${file}: the formulas with strings over several lines are read back as they were written, however that Grist writes them`, () => {
+    const table = parseGristSchema(readFileSync(new URL(file, DIR), "utf8")).tables.find((candidate) => candidate.tableId === "Strings");
+    assert.deepEqual(Object.fromEntries(table.columns.filter((col) => col.kind === "formula").map((col) => [col.id, col.code])), STRING_FORMULAS);
+  });
 }
