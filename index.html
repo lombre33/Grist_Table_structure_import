@@ -194,6 +194,12 @@
 
     <div class="block">
       <p class="eyebrow" id="export-tables-label" data-i18n="export.step1.eyebrow">1. Tables à exporter</p>
+      <div id="export-select-all-row" class="option" hidden>
+        <label>
+          <input type="checkbox" id="export-select-all">
+          <span data-i18n="export.selectAll">Tout cocher</span>
+        </label>
+      </div>
       <ul id="export-table-list" class="checklist" aria-labelledby="export-tables-label"></ul>
       <p id="export-tables-empty" class="hint" hidden data-i18n="export.tables.empty">Aucune table exportable trouvée dans ce document.</p>
 
@@ -201,8 +207,8 @@
         <p id="export-refs-banner-intro"></p>
         <ul id="export-refs-list" class="refs-list"></ul>
         <div class="actions">
-          <button id="refs-include-btn" type="button" class="btn btn-primary" data-i18n="export.refs.include">Inclure ces tables</button>
-          <button id="refs-dismiss-btn" type="button" class="btn btn-ghost" data-i18n="export.refs.dismiss">Continuer sans elles</button>
+          <button id="refs-include-btn" type="button" class="btn btn-primary">Inclure ces tables</button>
+          <button id="refs-dismiss-btn" type="button" class="btn btn-ghost">Continuer sans elles</button>
         </div>
       </div>
 
@@ -217,7 +223,7 @@
       <textarea id="export-output" rows="16" readonly spellcheck="false" aria-labelledby="export-output-label"></textarea>
       <div class="actions">
         <button id="copy-btn" type="button" class="btn" data-i18n="export.copy">Copier</button>
-        <span id="copy-status" class="hint" aria-live="polite"></span>
+        <span id="copy-status" aria-live="polite"></span>
       </div>
       <p class="hint">
         <span data-i18n="export.formulaHint.before">Seule la structure (types de colonnes) est garantie fidèle. Pour une colonne de formule,
@@ -227,6 +233,7 @@
     </div>
 
     <section id="export-status-region" aria-live="polite"></section>
+    <p id="export-announcement" class="sr-only" aria-live="polite"></p>
   </section>
 
 </div>

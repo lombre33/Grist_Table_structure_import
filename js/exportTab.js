@@ -1,4 +1,4 @@
-import { $, el, checklistItem, statusWriter } from "./dom.js";
+import { $, el, checklistItem, restoreFocus, statusWriter } from "./dom.js";
 import { fetchDocSchema, buildExportSchema, findReferencedTables } from "./schema.js";
 import { generateCode } from "./codeGenerator.js";
 import { callGrist, reportError } from "./util.js";
@@ -6,6 +6,8 @@ import { t, tn, onLocaleChange } from "./i18n.js";
 
 export function initExportTab(grist) {
   const tableList = $("export-table-list");
+  const selectAllRow = $("export-select-all-row");
+  const selectAll = $("export-select-all");
   const tablesEmpty = $("export-tables-empty");
   const refreshBtn = $("refresh-tables-btn");
   const generateBtn = $("generate-btn");
@@ -14,6 +16,9 @@ export function initExportTab(grist) {
   const copyBtn = $("copy-btn");
   const copyStatus = $("copy-status");
   const refsBanner = $("export-refs-banner");
+  const includeBtn = $("refs-include-btn");
+  const dismissBtn = $("refs-dismiss-btn");
+  const announcement = $("export-announcement");
   const setStatus = statusWriter($("export-status-region"));
 
   if (!grist) {
@@ -30,8 +35,12 @@ export function initExportTab(grist) {
   generateBtn.addEventListener("click", onGenerate);
   copyBtn.addEventListener("click", onCopy);
   tableList.addEventListener("change", refresh);
-  $("refs-include-btn").addEventListener("click", onInclude);
-  $("refs-dismiss-btn").addEventListener("click", () => {
+  selectAll.addEventListener("change", () => {
+    for (const input of tableList.querySelectorAll("input")) input.checked = selectAll.checked;
+    refresh();
+  });
+  includeBtn.addEventListener("click", onInclude);
+  dismissBtn.addEventListener("click", () => {
     dismissed = missingTables().key;
     updateRefsBanner();
   });
@@ -47,25 +56,34 @@ export function initExportTab(grist) {
   }
 
   function refresh() {
-    generateBtn.disabled = selected().length === 0;
+    const count = tableList.querySelectorAll("input").length;
+    const ticked = selected().length;
+    selectAll.checked = count > 0 && ticked === count;
+    selectAll.indeterminate = ticked > 0 && ticked < count;
+    generateBtn.disabled = ticked === 0;
     updateRefsBanner();
   }
 
+  /** Reads the document's tables again, keeping the ones that were ticked. */
   async function loadTables() {
-    setStatus(null);
-    outputBlock.hidden = tablesEmpty.hidden = true;
+    const kept = new Set(selected());
+    setStatus(t("export.status.loading"));
+    outputBlock.hidden = tablesEmpty.hidden = selectAllRow.hidden = true;
     refreshBtn.disabled = generateBtn.disabled = true;
     dismissed = null;
     tableList.replaceChildren();
     try {
       docSchema = await callGrist(fetchDocSchema(grist));
+      setStatus(null);
       tablesEmpty.hidden = docSchema.tables.length > 0;
-      tableList.replaceChildren(...docSchema.tables.map((table) => checklistItem(table.tableId, table.tableId)));
+      selectAllRow.hidden = docSchema.tables.length === 0;
+      tableList.replaceChildren(...docSchema.tables.map((table) => checklistItem(table.tableId, table.tableId, kept.has(table.tableId))));
     } catch (err) {
       setStatus(t("export.error.fetchTables", { error: reportError(err) }), "error");
     } finally {
       refreshBtn.disabled = false;
       refresh();
+      restoreFocus(refreshBtn);
     }
   }
 
@@ -73,8 +91,14 @@ export function initExportTab(grist) {
   function updateRefsBanner() {
     const { referencedBy, ids, key } = missingTables();
     refsBanner.hidden = ids.length === 0 || key === dismissed;
-    if (refsBanner.hidden) return;
-    $("export-refs-banner-intro").textContent = tn("export.refs.intro", ids.length);
+    if (refsBanner.hidden) {
+      announcement.textContent = "";
+      return;
+    }
+    const intro = tn("export.refs.intro", ids.length);
+    $("export-refs-banner-intro").textContent = announcement.textContent = intro;
+    includeBtn.textContent = tn("export.refs.include", ids.length);
+    dismissBtn.textContent = tn("export.refs.dismiss", ids.length);
     $("export-refs-list").replaceChildren(
       ...ids.map((tableId) => el("li", { text: t("export.refs.item", { tableId, columns: referencedBy.get(tableId).join(", ") }) }))
     );
@@ -95,14 +119,22 @@ export function initExportTab(grist) {
       const schema = buildExportSchema(docSchema.tables, docSchema.allColumns, selected());
       output.value = generateCode(schema);
       outputBlock.hidden = false;
-      copyStatus.textContent = "";
+      setCopyStatus("");
       const columns = schema.reduce((total, table) => total + table.columns.length, 0);
       setStatus(t("export.success.generated", { tablesPhrase: tn("common.tablesCount", schema.length), columnsPhrase: tn("common.columnsCount", columns) }), "success");
+      outputBlock.scrollIntoView({ block: "start" });
     } catch (err) {
       setStatus(t("export.error.generateFailed", { error: reportError(err) }), "error");
     } finally {
       generateBtn.disabled = selected().length === 0;
+      restoreFocus(generateBtn);
     }
+  }
+
+  /** The outcome of Copier: a short confirmation, or what to do instead (which deserves more than a hint's look). */
+  function setCopyStatus(message, level = "hint") {
+    copyStatus.className = level === "hint" ? "hint" : `status status-${level}`;
+    copyStatus.textContent = message;
   }
 
   async function onCopy() {
@@ -110,9 +142,9 @@ export function initExportTab(grist) {
     output.select();
     try {
       await navigator.clipboard.writeText(output.value);
-      copyStatus.textContent = t("export.copy.done");
+      setCopyStatus(t("export.copy.done"));
     } catch {
-      copyStatus.textContent = t("export.copy.fallback");
+      setCopyStatus(t("export.copy.fallback"), "info");
     }
   }
 

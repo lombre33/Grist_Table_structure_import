@@ -186,8 +186,10 @@ directement de Grist (sans ces arguments), ne donne que les types.
 ## Export
 
 1. Ouvrez l'onglet **Export**. La liste des tables de ce document se charge
-   automatiquement (bouton **Actualiser la liste** pour la rafraîchir).
-2. Cochez une ou plusieurs tables, puis cliquez sur **Générer le code**.
+   automatiquement (bouton **Actualiser la liste** pour la relire, sans perdre les tables
+   déjà cochées).
+2. Cochez une ou plusieurs tables (la case **Tout cocher** les sélectionne toutes), puis
+   cliquez sur **Générer le code**.
 3. Copiez le code affiché (bouton **Copier**, ou sélection manuelle du texte) et
    collez-le où vous en avez besoin — par exemple dans l'onglet **Import** de ce même
    widget, ouvert sur un autre document.

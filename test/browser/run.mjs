@@ -195,9 +195,39 @@ const TESTS = [
     assert.equal(await count(page, "#export-table-list input"), 3);
     await page.locator("#export-table-list li", { hasText: "Existing_Table" }).locator("input").check();
     assert.equal(await hidden(page, "export-refs-banner"), false);
+    assert.equal(await page.textContent("#refs-include-btn"), "Inclure cette table", "one table is missing: singular");
     await page.click("#refs-include-btn");
     assert.equal(await hidden(page, "export-refs-banner"), true);
     assert.equal(await count(page, "#export-table-list input:checked"), 2);
+  }],
+
+  ["Export: the list keeps its ticks when refreshed, and one box ticks them all", async (page) => {
+    await page.click("#tab-export");
+    await page.waitForSelector("#export-table-list input");
+    await page.locator("#export-table-list li", { hasText: "Standalone_Table" }).locator("input").check();
+    assert.equal(await page.evaluate(() => document.getElementById("export-select-all").indeterminate), true, "some are ticked");
+
+    await page.click("#refresh-tables-btn");
+    await page.waitForSelector("#export-table-list input:checked");
+    assert.deepEqual(await page.$$eval("#export-table-list input:checked", (boxes) => boxes.map((box) => box.value)), ["Standalone_Table"]);
+
+    await page.check("#export-select-all");
+    assert.equal(await count(page, "#export-table-list input:checked"), 3);
+    await page.uncheck("#export-select-all");
+    assert.equal(await count(page, "#export-table-list input:checked"), 0);
+    assert.equal(await page.isDisabled("#generate-btn"), true);
+  }],
+
+  ["Export: a failed copy says what to do instead, in a message of its own", async (page) => {
+    await page.click("#tab-export");
+    await page.waitForSelector("#export-table-list input");
+    await page.locator("#export-table-list li", { hasText: "Standalone_Table" }).locator("input").check();
+    await page.click("#generate-btn");
+    await page.waitForSelector("#export-output-block:not([hidden])");
+    await page.evaluate(() => Object.defineProperty(navigator, "clipboard", { value: { writeText: () => Promise.reject(new Error("denied")) } }));
+    await page.click("#copy-btn");
+    await page.waitForSelector("#copy-status.status-info");
+    assert.match(await page.textContent("#copy-status"), /Ctrl\+C/);
   }],
 
   ["Réglages: opens, persists the theme, switches the language", async (page) => {

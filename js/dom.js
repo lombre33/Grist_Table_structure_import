@@ -27,6 +27,11 @@ export function statusWriter(region) {
   };
 }
 
+/** A button that was disabled has lost the keyboard focus: give it back once it is usable again. */
+export function restoreFocus(button) {
+  if (document.activeElement === document.body && !button.disabled) button.focus();
+}
+
 /** Marks the wrapper of the checked radio with `is-checked`: the styles do not rely on :has(). */
 export function syncCheckedClass(radios, className, wrapperSelector) {
   for (const radio of radios) radio.closest(wrapperSelector)?.classList.toggle(className, radio.checked);

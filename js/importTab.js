@@ -1,5 +1,5 @@
 import { parseGristSchema } from "./parser.js";
-import { $, el, checklistItem, statusWriter, syncCheckedClass } from "./dom.js";
+import { $, el, checklistItem, restoreFocus, statusWriter, syncCheckedClass } from "./dom.js";
 import { fetchDocSchema, existingColumnIds } from "./schema.js";
 import { addColumns, checkTableId, createTables, defaultTableId, isComputed, resolveColumns, twoWayPairs, twoWayWarnings } from "./importer.js";
 import { callGrist, reportError } from "./util.js";
@@ -82,11 +82,6 @@ export function initImportTab(grist) {
     entries = [];
     existing = { index: 0, excluded: new Set(), columns: [] };
     withFormulas = false;
-  }
-
-  /** A button that was disabled has lost the keyboard focus: give it back once it is usable again. */
-  function restoreFocus(button) {
-    if (document.activeElement === document.body && !button.disabled) button.focus();
   }
 
   async function loadSchema() {
