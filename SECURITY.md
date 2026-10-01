@@ -5,8 +5,8 @@ simplement (revue de code manuelle ou outillée), en vue d'un audit.
 
 ## Ce que fait réellement le widget
 
-Trois actions métier possibles, toutes via l'API officielle du widget
-(`grist.docApi`), jamais davantage :
+Les actions possibles, toutes via l'API officielle du widget (`grist.docApi`), jamais
+davantage :
 
 - **Import, mode « Nouvelle table »** : crée les tables cochées (action `AddTable`, toutes
   dans un seul appel, donc tout ou rien) dans le document où le widget est ouvert, à

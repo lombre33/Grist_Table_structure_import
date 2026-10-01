@@ -183,6 +183,12 @@ directement de Grist (sans ces arguments), ne donne que les types.
   `cclass`) : le widget suit l'identifiant réellement créé. Une colonne nommée `grist`
   fait en revanche échouer Grist lui-même (le code généré du document masque alors son
   propre module `grist`) : l'erreur est affichée et rien n'est créé.
+- Une formule de déclenchement est reprise comme formule des nouvelles lignes : les
+  réglages « recalculer quand… » (`recalcWhen`, `recalcDeps`) ne figurent pas dans la Code
+  View et ne sont pas repris. Une formule qui s'appuie sur une colonne ou une table absente
+  du document de destination est créée telle quelle, et Grist en affiche l'erreur.
+- Le widget copie la **structure** d'une table : ni les données, ni les droits d'accès, ni
+  les vues et widgets de la page, ni les tables de synthèse ne sont repris ou proposés.
 
 ## Export
 
@@ -336,7 +342,8 @@ Trois suites de tests :
 
 ```sh
 npm test               # unitaires (node --test, aucune installation) : parseur,
-                       # génération, types, i18n, lint de sécurité, vrai Code View enregistré
+                       # génération, types, i18n et typographie, contrastes, lint de sécurité,
+                       # actions épinglées, site publié, vrai Code View enregistré
 npm run test:browser   # le vrai index.html dans Chromium (Playwright), faux `grist` en mémoire
 npm run test:grist     # le widget contre une vraie instance Grist (voir ci-dessous)
 ```
@@ -360,10 +367,11 @@ npx playwright install chromium
 chose que l'API d'un widget : `listTables`, `fetchTable`, `applyUserActions` avec ses
 `retValues`). Il vérifie ce que le widget attend du moteur (normalisation des identifiants,
 description ignorée à la création, lot atomique...), l'aller-retour Export → Import de
-chaque type de colonne avec toutes ses options, les identifiants contre le moteur, la
-logique d'import, et l'interface complète pilotée dans Chromium, et le widget monté comme widget personnalisé
-dans la vraie page de Grist (iframe, vrai script d'API, vraie autorisation d'accès). Pour
-en lancer une :
+chaque type de colonne avec toutes ses options (avec et sans formules, références
+bidirectionnelles comprises), les identifiants contre le moteur (tables, et colonnes
+déduites de leur libellé), la logique d'import, l'interface complète pilotée dans
+Chromium, et le widget monté comme widget personnalisé dans la vraie page de Grist
+(iframe, vrai script d'API, vraie autorisation d'accès). Pour en lancer une :
 
 ```sh
 docker run -d -p 8484:8484 -e APP_HOME_URL=http://localhost:8484 \
