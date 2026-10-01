@@ -143,6 +143,7 @@ test("Export then Import through the interface keeps what Grist drops on its own
     ["AddTable", "Members", [column("Team", "Ref:Teams"), column("Mood", "Choice", { widgetOptions: JSON.stringify({ choices: ["a'b", 'c"d', "Content (ok)"], alignment: "center" }) })]],
   ]);
   await source.apply([
+    ["ModifyColumn", "Teams", "Title", { untieColIdFromLabel: true }], // as Grist's interface does when an id is not its label's
     ["ModifyColumn", "Members", "Mood", { description: "Humeur\ndu jour" }],
     ["ModifyColumn", "Members", "Team", { reverseCol: await columnRef(source, "Teams", "Roster") }],
   ]);

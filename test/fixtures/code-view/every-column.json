@@ -13,6 +13,7 @@
       ["Markdown","Text",false],
       ["Styled","Text",false],
       ["Labelled","Text",false],
+      ["Tied_label","Text",false],
       ["Described","Text",false],
       ["Form","Text",false],
       ["Rules","Text",false],

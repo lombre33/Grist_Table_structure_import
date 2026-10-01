@@ -1,8 +1,8 @@
-/** The table ids the widget accepts are the ones Grist creates as typed. */
+/** The ids the widget expects Grist to create or derive: tables as typed, columns from their label. */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { checkTableId, defaultTableId } from "../../js/importer.js";
-import { instance, column } from "./support.mjs";
+import { checkTableId, defaultTableId, idFromLabel } from "../../js/importer.js";
+import { instance, column, rows } from "./support.mjs";
 import { seeded } from "../random.mjs";
 
 const random = seeded(2024);
@@ -33,4 +33,26 @@ test("the ids it rejects as invalid are the ones Grist would rewrite", async () 
     assert.notEqual(table_id, id);
     assert.equal(checkTableId(id, [], []), "import.validation.invalidId");
   }
+});
+
+const LABEL_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789__ éàçÉÖж😀-.$'\"#()";
+const LABELS = [
+  "Nom complet", "Prénom", "2e essai", "class", "None", "True", "def", "lambda", "async", "await", "yield", "self", "print", "__x", "_", "  spaced  ", "a-b", "é", "x1", "ÀÉÎÕÜ ç", "(x) [y] {z}", "multi\nline", "tab\there",
+  ...Array.from({ length: 300 }, () => Array.from({ length: 1 + Math.floor(random() * 10) }, () => [...LABEL_CHARS][Math.floor(random() * [...LABEL_CHARS].length)]).join("")),
+];
+
+test("the id derived from a label is the one Grist gives a column whose label is edited", async () => {
+  const doc = await instance.newDoc();
+  await doc.apply(LABELS.map((_, i) => ["AddTable", `L${i}`, [column("Zz_seed")]]));
+  const refs = new Map(rows(await doc.fetchTable("_grist_Tables_column")).filter((col) => col.colId === "Zz_seed").map((col) => [col.parentId, col.id]));
+  const tables = new Map(rows(await doc.fetchTable("_grist_Tables")).map((table) => [table.tableId, table.id]));
+  await doc.apply(LABELS.map((label, i) => ["UpdateRecord", "_grist_Tables_column", refs.get(tables.get(`L${i}`)), { label }]));
+
+  const ids = new Map(rows(await doc.fetchTable("_grist_Tables_column")).filter((col) => refs.has(col.parentId) && !["manualSort", "id"].includes(col.colId)).map((col) => [col.parentId, col.colId]));
+  LABELS.forEach((label, i) => {
+    const derived = idFromLabel(label);
+    const engine = ids.get(tables.get(`L${i}`));
+    if (derived) assert.equal(engine, derived, JSON.stringify(label));
+    else assert.match(engine, /^[A-Z]+$/, `${JSON.stringify(label)}: nothing to derive, Grist numbers the column`);
+  });
 });

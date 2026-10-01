@@ -382,3 +382,24 @@ test("a whole real Code View, recorded from Grist, is imported with its formulas
   assert.deepEqual([await links(doc, "Projects"), await links(doc, "People")], [[["Owner", "Projects"]], [["Projects", "Owner"]]]);
   assert.deepEqual(await links(doc, "Grid"), [["Left", "Right"], ["Right", "Left"], ["Parent", "Kids"], ["Kids", "Parent"]]);
 });
+
+test("a column whose id is its own keeps it when its label is edited, one whose id follows its label still follows it", async () => {
+  const doc = await instance.newDoc();
+  await importText(doc, "@grist.UserTable\nclass T:\n  Name = grist.Text(label='Nom')\n  Nom_complet = grist.Text(label='Nom complet')\n  Plain = grist.Text()\n");
+  assert.deepEqual((await snapshot(doc)).T.map((col) => [col.id, col.untied]), [["Name", true], ["Nom_complet", false], ["Plain", false]]);
+
+  const ref = async (id) => (await doc.columns("T")).find((col) => col.colId === id).id;
+  await doc.apply([
+    ["UpdateRecord", "_grist_Tables_column", await ref("Name"), { label: "Nom 2" }],
+    ["UpdateRecord", "_grist_Tables_column", await ref("Nom_complet"), { label: "Nom complet 2" }],
+  ]);
+  assert.deepEqual((await snapshot(doc)).T.map((col) => col.id), ["Name", "Nom_complet_2", "Plain"]);
+});
+
+test("addColumns keeps the id of a column apart from its label too", async () => {
+  const doc = await instance.newDoc();
+  const target = await contacts(doc);
+  await addColumns(doc.grist, target, parsedColumns("@grist.UserTable\nclass X:\n  Phone = grist.Text(label='Téléphone')\n"));
+  const phone = (await snapshot(doc)).Contacts.at(-1);
+  assert.deepEqual([phone.id, phone.label, phone.untied], ["Phone", "Téléphone", true]);
+});

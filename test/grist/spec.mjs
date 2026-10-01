@@ -21,6 +21,7 @@ export const SPEC = {
     col("Markdown", "Text", { widgetOptions: { widget: "Markdown" } }),
     col("Styled", "Text", { widgetOptions: styled }),
     col("Labelled", "Text", { label: "Un libellé" }),
+    col("Tied_label", "Text", { label: "Tied label", tied: true }),
     col("Described", "Text", { description: "A description" }),
     col("Form", "Text", { widgetOptions: { question: "Votre nom ?", formRequired: true, formTextLines: "3" } }),
     col("Rules", "Text", { widgetOptions: { rulesOptions: [{ fillColor: "#FF0000" }] } }),

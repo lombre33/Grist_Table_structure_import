@@ -13,6 +13,9 @@ import { t, tn } from "./i18n.js";
 // existing table, whatever the case, by adding a number.
 const TABLE_ID_RE = /^[A-Z][A-Za-z0-9_]*$/;
 const PYTHON_CONSTANTS = new Set(["None", "True", "False"]);
+const PYTHON_KEYWORDS = new Set(
+  "False None True and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with yield".split(" ")
+);
 
 /** The id Grist would keep for a table called `sourceId` in the source code. */
 export function defaultTableId(sourceId) {
@@ -32,6 +35,21 @@ export function checkTableId(id, documentTableIds, otherIds) {
   if (documentTableIds?.some(sameId)) return "import.validation.tableExists";
   return null;
 }
+
+/**
+ * The column id Grist derives from a label (`pick_col_ident` in its data engine, without the
+ * numbering of duplicates): accents dropped, other characters replaced by `_`, `c` before a
+ * digit or a keyword. A column whose id is not that one has been given its id apart from its label.
+ */
+export function idFromLabel(label) {
+  let id = label.normalize("NFKD").replace(/\p{M}/gu, "").replace(/[^A-Za-z0-9_]+/g, "_").replace(/^_+/, "");
+  if (/^\d/.test(id)) id = `c${id}`;
+  while (PYTHON_KEYWORDS.has(id)) id = `c${id}`;
+  return id;
+}
+
+/** Grist renames a column when its label changes, unless told its id is its own: which a label that is not the id's says. */
+const isUntied = (col) => Boolean(col.label) && idFromLabel(col.label) !== col.id;
 
 /** A formula column, or a data column with a trigger formula: what an import cannot reproduce without `withFormulas`. */
 export const isComputed = (col) => col.kind !== "data";
@@ -129,9 +147,7 @@ export async function createTables(grist, tables, { withFormulas = false } = {})
     id: retValues[i].table_id,
     columns: columns.map((col, j) => ({ ...col, id: retValues[i].columns[j] })),
   }));
-  const actual = new Map(created.flatMap(({ id, columns }, i) => tables[i].columns.map((col, j) => [col, { tableId: id, id: columns[j].id }])));
-  const pairs = twoWayPairs(tables).map((pair) => pair.map(({ col }) => actual.get(col)));
-  return { tables: created, note: (await refine(grist, created)) + (await linkTwoWay(grist, pairs)) };
+  return { tables: created, note: await finish(grist, tables, created) };
 }
 
 /**
@@ -149,19 +165,29 @@ export async function addColumns(grist, table, columns, { withFormulas = false }
     missing.map((col) => ["AddVisibleColumn", table.tableId, col.id, columnPayload(col, withFormulas)])
   );
   const added = missing.map((col, i) => ({ ...col, id: retValues[i].colId }));
-  const actual = new Map(missing.map((col, i) => [col, { tableId: table.tableId, id: added[i].id }]));
-  const pairs = twoWayPairs([{ id: table.tableId, columns: missing }]).map((pair) => pair.map(({ col }) => actual.get(col)));
-  return { added: added.length, note: (await refine(grist, [{ id: table.tableId, columns: added }])) + (await linkTwoWay(grist, pairs)) };
+  const note = await finish(grist, [{ id: table.tableId, columns: missing }], [{ id: table.tableId, columns: added }]);
+  return { added: added.length, note };
+}
+
+/**
+ * What follows a creation: the details (see refine), then the two-way links. `requested` holds the
+ * columns as they were asked for, `created` the same as Grist named them.
+ */
+async function finish(grist, requested, created) {
+  const placed = new Map(requested.flatMap(({ columns }, i) => columns.map((col, j) => [col, { tableId: created[i].id, id: created[i].columns[j].id }])));
+  const pairs = twoWayPairs(requested).map((pair) => pair.map(({ col }) => placed.get(col)));
+  return (await refine(grist, created)) + (await linkTwoWay(grist, pairs));
 }
 
 /**
  * Applies what the creation actions cannot: AddTable and AddVisibleColumn drop
- * descriptions, and a display column needs the row id of a column that only
- * exists once the tables do. Returns a note about whatever was not applied.
+ * descriptions and the independence of an id from its label, and a display column
+ * needs the row id of a column that only exists once the tables do. Returns a note
+ * about whatever was not applied.
  */
 async function refine(grist, tables) {
   const pending = tables.flatMap(({ id, columns }) =>
-    columns.filter((col) => col.description || col.visibleColId).map((col) => ({ ...col, tableId: id }))
+    columns.filter((col) => col.description || col.visibleColId || isUntied(col)).map((col) => ({ ...col, tableId: id }))
   );
   if (pending.length === 0) return "";
 
@@ -172,7 +198,11 @@ async function refine(grist, tables) {
     for (const col of pending) {
       const displayRef = col.visibleColId ? displayColumnRef(schema, col) : null;
       if (col.visibleColId && !displayRef) unfound.push(col);
-      const changes = { ...(col.description && { description: col.description }), ...(displayRef && { visibleCol: displayRef }) };
+      const changes = {
+        ...(col.description && { description: col.description }),
+        ...(displayRef && { visibleCol: displayRef }),
+        ...(isUntied(col) && { untieColIdFromLabel: true }),
+      };
       if (Object.keys(changes).length > 0) actions.push(["ModifyColumn", col.tableId, col.id, changes]);
       if (displayRef) actions.push(["SetDisplayFormula", col.tableId, null, col.id, `$${col.id}.${col.visibleColId}`]);
     }

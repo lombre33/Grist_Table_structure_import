@@ -23,8 +23,10 @@ Trois actions métier possibles, toutes via l'API officielle du widget
   d'une colonne, et une « colonne d'affichage » (`visible_col`) a besoin de l'identifiant
   interne d'une colonne qui n'existe qu'une fois les tables créées. Le widget envoie donc
   un second appel `applyUserActions` juste après : `ModifyColumn` (description, référence
-  de la colonne d'affichage) puis `SetDisplayFormula` (fait afficher la valeur cible),
-  exactement les actions que l'interface Grist envoie pour « SHOW COLUMN ». Elles
+  de la colonne d'affichage, indépendance de l'identifiant vis-à-vis du libellé —
+  `untieColIdFromLabel`, que `AddTable` ignore aussi) puis `SetDisplayFormula` (fait
+  afficher la valeur cible), exactement les actions que l'interface Grist envoie pour
+  « SHOW COLUMN ». Elles
   utilisent les identifiants que Grist a réellement créés (ceux qu'il renvoie, qu'il peut
   avoir réécrits) et ne ciblent **jamais** que des colonnes créées par le premier appel —
   jamais une colonne préexistante. Un échec de ce second appel n'annule pas la création

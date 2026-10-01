@@ -210,6 +210,7 @@ class Texts:
   Markdown = grist.Text()
   Styled = grist.Text()
   Labelled = grist.Text()
+  Tied_label = grist.Text()
   Described = grist.Text()
   Form = grist.Text()
   Rules = grist.Text()

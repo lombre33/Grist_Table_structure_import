@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { checkTableId, defaultTableId, resolveColumns, twoWayPairs, twoWayWarnings } from "../js/importer.js";
+import { checkTableId, defaultTableId, idFromLabel, resolveColumns, twoWayPairs, twoWayWarnings } from "../js/importer.js";
 
 const table = (...columns) => ({ tableId: "Source", columns: columns.map(([id, dslType, argsRaw = "", kind = "data", code = ""]) => ({ id, dslType, argsRaw, kind, code })) });
 const ids = (...pairs) => new Map(pairs);
@@ -27,6 +27,16 @@ test("checkTableId compares ignoring case, against the document and the other ne
   assert.equal(checkTableId("People", ["PEOPLE"], []), "import.validation.tableExists");
   assert.equal(checkTableId("People", [], ["people"]), "import.validation.duplicateId");
   assert.equal(checkTableId("People", null, []), null, "an unknown document list is not an error");
+});
+
+test("idFromLabel drops accents, replaces other characters by _ and protects digits and keywords", () => {
+  const derived = (label) => idFromLabel(label);
+  assert.deepEqual(
+    ["Nom complet", "Prénom", "ÀÉÎÕÜ ç", "a-b", "(x) [y] {z}", "  spaced  ", "__x", "x1", "émoji 😀 é"].map(derived),
+    ["Nom_complet", "Prenom", "AEIOU_c", "a_b", "x_y_z_", "spaced_", "x", "x1", "emoji_e"]
+  );
+  assert.deepEqual(["2e essai", "class", "None", "True", "async"].map(derived), ["c2e_essai", "cclass", "cNone", "cTrue", "casync"]);
+  assert.deepEqual(["", "_", "日本"].map(derived), ["", "", ""], "nothing left: Grist numbers the column");
 });
 
 test("a reference to a table created together follows its new id", () => {

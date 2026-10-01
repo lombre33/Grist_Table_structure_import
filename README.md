@@ -151,7 +151,10 @@ capturées à l'export ») — le libellé (`label`), la description, la liste d
 son style (couleurs, gras...) pour Choix/Choix multiples, et le reste des options
 d'affichage de la colonne (`widgetOptions` : alignement, retour à la ligne, format
 numérique/date, etc.). Grist ignore la description quand on crée une colonne : le
-widget l'applique juste après, dans une seconde étape. Un texte Code View réel, issu
+widget l'applique juste après, dans une seconde étape. Un identifiant qui n'est pas celui
+que Grist déduirait du libellé (`Name` pour le libellé « Nom ») est resté indépendant de
+lui dans le document d'origine : l'import le fait de même, pour qu'une modification
+ultérieure du libellé ne renomme pas la colonne. Un texte Code View réel, issu
 directement de Grist (sans ces arguments), ne donne que les types.
 
 ### Limites connues

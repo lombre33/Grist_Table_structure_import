@@ -66,6 +66,7 @@ export async function snapshot(doc) {
             isFormula: Boolean(col.isFormula),
             formula: col.formula,
             label: col.label,
+            untied: Boolean(col.untieColIdFromLabel),
             description: col.description,
             widgetOptions: col.widgetOptions ? JSON.parse(col.widgetOptions) : null,
             visibleCol: byRef.get(col.visibleCol)?.colId ?? null,
@@ -80,9 +81,10 @@ import { generateCode } from "../../js/codeGenerator.js";
 
 /**
  * Creates in `doc` the tables of `spec` (`{ TableId: [{ id, type, formula?,
- * label?, description?, widgetOptions?, visibleCol?, reverse? }] }`) the way Grist's own
+ * label?, tied?, description?, widgetOptions?, visibleCol?, reverse? }] }`) the way Grist's own
  * interface does: columns first, then descriptions, display columns and two-way links
- * (`reverse`: the column of the target table this one is the counterpart of).
+ * (`reverse`: the column of the target table this one is the counterpart of). A column with a
+ * label has its id apart from it, unless `tied`.
  */
 export async function buildSource(doc, spec) {
   const payload = ({ id, type, formula, trigger, label, widgetOptions }) =>
@@ -91,7 +93,8 @@ export async function buildSource(doc, spec) {
 
   const followUps = [];
   for (const [tableId, columns] of Object.entries(spec)) {
-    for (const { id, type, description, visibleCol, reverse } of columns) {
+    for (const { id, type, label, tied, description, visibleCol, reverse } of columns) {
+      if (label && !tied) followUps.push(["ModifyColumn", tableId, id, { untieColIdFromLabel: true }]);
       if (description) followUps.push(["ModifyColumn", tableId, id, { description }]);
       if (reverse) followUps.push(["ModifyColumn", tableId, id, { reverseCol: await columnRef(doc, type.split(":")[1], reverse) }]);
       if (visibleCol) {
