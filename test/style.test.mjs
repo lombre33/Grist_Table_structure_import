@@ -32,6 +32,12 @@ test("every custom property is used somewhere", () => {
   assert.deepEqual(defined.filter((name) => !used.has(name)), []);
 });
 
+test("the tab icon is drawn in the accent of the charter, the only colour the widget's own marks have", () => {
+  const accent = light.find((declaration) => declaration.startsWith("--accent:")).split(":")[1].trim();
+  const fills = [...readFileSync(new URL("../favicon.svg", import.meta.url), "utf8").matchAll(/fill="(#[0-9a-f]{6})"/gi)].map((match) => match[1].toLowerCase());
+  assert.deepEqual(fills, [accent]);
+});
+
 const valuesOf = (list) => Object.fromEntries(list.map((declaration) => [declaration.slice(0, declaration.indexOf(":")), declaration.slice(declaration.indexOf(":") + 1).trim()]));
 const THEMES = { light: valuesOf(light), dark: { ...valuesOf(light), ...valuesOf(darkByChoice) } };
 
