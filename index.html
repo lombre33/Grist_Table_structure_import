@@ -46,8 +46,8 @@
     </div>
     <div class="settings-body">
       <section class="settings-section">
-        <p class="eyebrow" data-i18n="settings.appearance">Apparence</p>
-        <div class="segmented" role="radiogroup" aria-label="Thème">
+        <p class="eyebrow" id="settings-appearance" data-i18n="settings.appearance">Apparence</p>
+        <div class="segmented" role="radiogroup" aria-labelledby="settings-appearance">
           <label class="segmented-option">
             <input type="radio" name="theme-choice" value="system" checked>
             <span data-i18n="settings.theme.system">Système</span>
@@ -64,8 +64,8 @@
       </section>
 
       <section class="settings-section">
-        <p class="eyebrow" data-i18n="settings.language">Langue</p>
-        <div class="segmented" role="radiogroup" aria-label="Langue">
+        <p class="eyebrow" id="settings-language" data-i18n="settings.language">Langue</p>
+        <div class="segmented" role="radiogroup" aria-labelledby="settings-language">
           <label class="segmented-option">
             <input type="radio" name="locale-choice" value="fr" checked>
             <span>Français</span>
@@ -90,7 +90,7 @@
           </div>
           <div class="credits-row">
             <dt data-i18n="settings.credits.license">Licence</dt>
-            <dd><a href="https://github.com/lombre33/grist_table_structure_import/blob/main/LICENSE" target="_blank" rel="noopener">GNU GPL v3.0</a></dd>
+            <dd><a href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" rel="noopener">GNU GPL v3.0</a></dd>
           </div>
         </dl>
       </section>
@@ -117,8 +117,8 @@
     </div>
 
     <div id="mode-block" class="block" hidden>
-      <p class="eyebrow" data-i18n="import.step2.eyebrow">2. Que faire de ce code ?</p>
-      <div class="mode-picker">
+      <p class="eyebrow" id="mode-heading" data-i18n="import.step2.eyebrow">2. Que faire de ce code ?</p>
+      <div class="mode-picker" role="radiogroup" aria-labelledby="mode-heading">
         <label class="mode-card">
           <input type="radio" name="import-mode" value="create" class="mode-radio" checked>
           <span class="mode-card-title" data-i18n="import.mode.create.title">Nouvelle table</span>
@@ -141,13 +141,13 @@
       </div>
 
       <div id="table-multi-picker-row" class="field" hidden>
-        <label data-i18n="import.tableMultiPicker.label">Tables à créer (plusieurs trouvées)</label>
-        <ul id="table-multi-select" class="checklist"></ul>
+        <label id="multi-picker-label" data-i18n="import.tableMultiPicker.label">Tables à créer (plusieurs trouvées)</label>
+        <ul id="table-multi-select" class="checklist" aria-labelledby="multi-picker-label"></ul>
       </div>
 
       <div id="table-id-row" class="field">
-        <label data-i18n="import.tableId.label">Identifiant(s) de la nouvelle table</label>
-        <div id="table-ids-list"></div>
+        <p class="label" id="table-ids-label" data-i18n="import.tableId.label">Identifiant(s) de la nouvelle table</p>
+        <div id="table-ids-list" role="group" aria-labelledby="table-ids-label"></div>
       </div>
 
       <div id="target-table-row" class="field" hidden>
@@ -174,18 +174,19 @@
       </div>
 
       <div id="create-actions" class="actions">
-        <button id="action-btn" type="button" class="btn btn-primary" disabled data-i18n="import.action.create">Créer la table dans ce document</button>
+        <button id="action-btn" type="button" class="btn btn-primary" disabled>Créer la table dans ce document</button>
       </div>
     </section>
 
     <section id="import-status-region" aria-live="polite"></section>
+    <p id="import-announcement" class="sr-only" aria-live="polite"></p>
   </section>
 
   <section id="panel-export" class="panel" role="tabpanel" aria-labelledby="tab-export" hidden>
 
     <div class="block">
-      <p class="eyebrow" data-i18n="export.step1.eyebrow">1. Tables à exporter</p>
-      <ul id="export-table-list" class="checklist"></ul>
+      <p class="eyebrow" id="export-tables-label" data-i18n="export.step1.eyebrow">1. Tables à exporter</p>
+      <ul id="export-table-list" class="checklist" aria-labelledby="export-tables-label"></ul>
       <p id="export-tables-empty" class="hint" hidden data-i18n="export.tables.empty">Aucune table exportable trouvée dans ce document.</p>
 
       <div id="export-refs-banner" class="status status-info refs-banner" hidden>
@@ -204,8 +205,8 @@
     </div>
 
     <div id="export-output-block" class="block" hidden>
-      <p class="eyebrow" data-i18n="export.step2.eyebrow">2. Code généré</p>
-      <textarea id="export-output" rows="16" readonly spellcheck="false"></textarea>
+      <p class="eyebrow" id="export-output-label" data-i18n="export.step2.eyebrow">2. Code généré</p>
+      <textarea id="export-output" rows="16" readonly spellcheck="false" aria-labelledby="export-output-label"></textarea>
       <div class="actions">
         <button id="copy-btn" type="button" class="btn" data-i18n="export.copy">Copier</button>
         <span id="copy-status" class="hint" aria-live="polite"></span>

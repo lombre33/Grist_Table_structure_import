@@ -43,7 +43,7 @@ const echo = (action) => {
   return name === "AddVisibleColumn" ? { colId: second } : null;
 };
 
-export function fakeGrist() {
+export function fakeGrist({ delay = 0 } = {}) {
   const calls = [];
   const metadata = { _grist_Tables: TABLES, _grist_Tables_column: COLUMNS };
   return {
@@ -53,6 +53,7 @@ export function fakeGrist() {
       fetchTable: async (tableId) => metadata[tableId] ?? Promise.reject(new Error(`unstubbed fetchTable(${tableId})`)),
       applyUserActions: async (actions) => {
         calls.push(actions);
+        await new Promise((resolve) => setTimeout(resolve, delay));
         return { retValues: actions.map(echo) };
       },
     },

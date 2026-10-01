@@ -76,6 +76,65 @@ const TESTS = [
     assert.deepEqual(await previewRows(page), ["AReference to “Other_Table”", "BInteger"]);
   }, { locale: "en" }],
 
+  ["Import: a long identifier wraps instead of overflowing a narrow pane", async (page) => {
+    await page.setViewportSize({ width: 360, height: 640 });
+    await analyse(page, `@grist.UserTable\nclass ${"Very_long_table_name_".repeat(6)}:\n  ${"column_with_a_long_name_".repeat(5)} = grist.Reference('${"Other_".repeat(12)}')\n`);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true);
+  }],
+
+  ["Import: editing the text drops the preview it no longer matches", async (page) => {
+    await analyse(page, MULTI);
+    await page.fill("#source-input", "@grist.UserTable\nclass Other:\n  X = grist.Text()\n");
+    assert.equal(await hidden(page, "preview-section"), true);
+    assert.equal(await page.isDisabled("#action-btn"), true);
+  }],
+
+  ["Import: a double click creates once", async (page, grist) => {
+    await analyse(page, MULTI);
+    await page.dblclick("#action-btn");
+    await page.waitForSelector("#import-status-region .status-success");
+    assert.equal(grist.calls.length, 1);
+  }, { delay: 300 }],
+
+  ["Import: switching language rebuilds the preview, the notes and the button", async (page) => {
+    await analyse(page, "@grist.UserTable\nclass X:\n  A = grist.Reference('Ghost')\n");
+    await page.click("#settings-btn");
+    await page.click('label.segmented-option:has(input[value="en"])');
+    assert.deepEqual(await previewRows(page), ["AAny"]);
+    assert.match(await page.textContent("#warnings-list"), /target table/);
+    assert.equal(await page.textContent("#action-btn"), "Create the table in this document");
+  }],
+
+  ["Import: toggling a column keeps the keyboard where it was", async (page) => {
+    await analyse(page, MULTI);
+    await page.locator("#columns-preview-body input").nth(1).press("Space");
+    assert.equal(await page.evaluate(() => [...document.querySelectorAll("#columns-preview-body input")].indexOf(document.activeElement)), 1);
+  }],
+
+  ["Import: a column already in the table cannot be ticked, and is not counted", async (page) => {
+    await analyse(page, "@grist.UserTable\nclass X:\n  Name = grist.Text()\n  Fresh = grist.Text()\n");
+    await page.click('label.mode-card:has(input[value="existing"])');
+    await page.selectOption("#target-table-select", { label: "Existing_Table" });
+    assert.equal(await page.locator("#columns-preview-body input:disabled").count(), 1);
+    assert.equal(await page.textContent("#action-btn"), "Ajouter 1 colonne à cette table");
+  }],
+
+  ["Import: the fields are named, linked to their error, and the result is announced", async (page) => {
+    await analyse(page, MULTI);
+    assert.equal(await page.getByRole("textbox", { name: "TableA" }).count(), 1);
+    await page.getByRole("textbox", { name: "TableB" }).fill("TableA");
+    assert.equal(await page.getByRole("textbox", { name: "TableB" }).getAttribute("aria-invalid"), "true");
+    const error = await page.getByRole("textbox", { name: "TableB" }).getAttribute("aria-describedby");
+    assert.match(await page.textContent(`#${error}`), /plusieurs fois/);
+    assert.equal(await page.textContent("#import-announcement"), "Analyse terminée : 2 tables, 3 colonnes au total.");
+    assert.equal(await page.getByRole("radiogroup", { name: /Que faire/ }).count(), 1);
+  }],
+
+  ["Réglages: the licence links to the licence text, not to a personal account", async (page) => {
+    assert.equal(await page.getAttribute('#settings-dialog a[href*="gpl"]', "href"), "https://www.gnu.org/licenses/gpl-3.0.html");
+    assert.equal(await page.locator('a[href*="github.com"]').count(), 0);
+  }],
+
   ["Export: the table list loads and the referenced-table banner can include its tables", async (page) => {
     await page.click("#tab-export");
     await page.waitForSelector("#export-table-list input");
@@ -104,7 +163,7 @@ const TESTS = [
 const widget = await launchWidget();
 let failed = 0;
 for (const [name, check, options] of TESTS) {
-  const grist = fakeGrist();
+  const grist = fakeGrist(options);
   const page = await widget.open(grist, options);
   try {
     await check(page, grist);

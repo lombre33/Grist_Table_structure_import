@@ -276,11 +276,12 @@ h1 {
   margin-bottom: 0;
 }
 
-label {
+label,
+.label {
   display: block;
   font-weight: 700;
   font-size: 0.85rem;
-  margin-bottom: 6px;
+  margin: 0 0 6px;
 }
 
 textarea,
@@ -477,7 +478,7 @@ table#columns-preview {
 }
 
 /* One destination-id field per table to create, in "Nouvelle table" mode. */
-.table-ids-list {
+#table-ids-list {
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -533,13 +534,13 @@ table#columns-preview {
 .checklist li {
   border: 1.5px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 9px 11px;
 }
 
 .checklist label {
   display: flex;
   align-items: center;
   gap: 9px;
+  padding: 9px 11px;
   font-weight: 600;
   font-size: 0.85rem;
   margin: 0;
@@ -743,4 +744,15 @@ dialog#settings-dialog::backdrop {
 
 .credits-row dd a:hover {
   text-decoration: underline;
+}
+
+/* Long identifiers have no break opportunity: wrap them instead of overflowing narrow panes. */
+#columns-preview td,
+#columns-preview th,
+.table-id-entry label,
+.checklist span,
+#warnings-list li,
+.field-error,
+.refs-list li {
+  overflow-wrap: anywhere;
 }

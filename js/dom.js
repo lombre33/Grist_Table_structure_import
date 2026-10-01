@@ -27,11 +27,13 @@ export function clear(node) {
   while (node.firstChild) node.removeChild(node.firstChild);
 }
 
-/** A function that shows one message (or nothing, for a falsy one) in `region`. */
+/** A function that shows one message (or nothing, for a falsy one) in `region`, scrolled into view. */
 export function statusWriter(region) {
   return (message, level = "info") => {
     clear(region);
-    if (message) region.appendChild(el("p", { class: `status status-${level}`, text: message }));
+    if (!message) return;
+    region.appendChild(el("p", { class: `status status-${level}`, text: message }));
+    region.scrollIntoView({ block: "nearest" });
   };
 }
 

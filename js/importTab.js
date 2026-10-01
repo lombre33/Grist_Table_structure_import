@@ -3,7 +3,7 @@ import { el, clear, syncCheckedClass, statusWriter } from "./dom.js";
 import { fetchDocSchema, existingColumnIds } from "./schema.js";
 import { addColumns, checkTableId, createTables, defaultTableId, resolveColumns } from "./importer.js";
 import { withTimeout, errorMessage, GRIST_CALL_TIMEOUT_MS } from "./util.js";
-import { t, tn, typeLabel } from "./i18n.js";
+import { t, tn, typeLabel, onLocaleChange } from "./i18n.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -30,6 +30,7 @@ export function initImportTab(grist, gristAvailable) {
   const warningsList = $("warnings-list");
   const createActions = $("create-actions");
   const actionBtn = $("action-btn");
+  const announcement = $("import-announcement");
   const setStatus = statusWriter($("import-status-region"));
 
   if (!gristAvailable) {
@@ -45,6 +46,7 @@ export function initImportTab(grist, gristAvailable) {
   let existingIndex; // "existing table" mode: which parsed table is the source
   let existingExcluded; // ... which of its columns are unticked
   let existingColumns; // ... and its resolved columns, each flagged isNew
+  let busy = false;
   reset();
 
   const mode = () => modeRadios.find((radio) => radio.checked)?.value ?? "create";
@@ -62,6 +64,8 @@ export function initImportTab(grist, gristAvailable) {
   targetSelect.addEventListener("change", renderExisting);
   for (const radio of modeRadios) radio.addEventListener("change", onModeChange);
   actionBtn.addEventListener("click", onAction);
+  sourceInput.addEventListener("input", () => parsed.length > 0 && !busy && clearResults());
+  onLocaleChange(render);
 
   syncCheckedClass(modeRadios, "is-checked", ".mode-card");
   updateModeUI();
@@ -76,6 +80,11 @@ export function initImportTab(grist, gristAvailable) {
     existingColumns = [];
   }
 
+  /** A disabled button drops the keyboard focus: give it back once the button is usable again. */
+  function restoreFocus(button) {
+    if (document.activeElement === document.body && !button.disabled) button.focus();
+  }
+
   async function loadSchema() {
     analyzeBtn.disabled = true;
     try {
@@ -85,6 +94,7 @@ export function initImportTab(grist, gristAvailable) {
       warnings = [...warnings, { key: "import.error.fetchDocInfo", params: { error: errorMessage(err) } }];
     } finally {
       analyzeBtn.disabled = false;
+      restoreFocus(analyzeBtn);
     }
   }
 
@@ -99,12 +109,11 @@ export function initImportTab(grist, gristAvailable) {
     modeBlock.hidden = columnsPreview.hidden = createActions.hidden = !found;
     previewSection.hidden = false;
     if (!found) {
-      clear(columnsBody);
-      clear(tableIdsList);
-      clear(checklist);
-      sourcePickerRow.hidden = checklistRow.hidden = true;
+      for (const node of [columnsBody, tableIdsList, checklist]) clear(node);
+      sourcePickerRow.hidden = checklistRow.hidden = tableIdRow.hidden = targetRow.hidden = true;
       actionBtn.disabled = true;
       renderWarnings();
+      announcement.textContent = t("import.announce.none");
       return;
     }
 
@@ -117,18 +126,30 @@ export function initImportTab(grist, gristAvailable) {
     fillTargetSelect();
     updateModeUI();
     createEntries = parsed.map((table, index) => newEntry(table, index));
-    onChecklistChange();
+    renderTableIds();
+    render();
+    announcement.textContent = t("import.announce.found", {
+      tablesPhrase: tn("common.tablesCount", parsed.length),
+      columnsPhrase: tn("common.columnsCount", parsed.reduce((total, table) => total + table.columns.length, 0)),
+    });
+    previewSection.scrollIntoView({ block: "nearest" });
   }
 
-  function onClear() {
+  /** Back to before Analyser, keeping the text and the mode chosen. */
+  function clearResults() {
     reset();
-    sourceInput.value = "";
-    for (const radio of modeRadios) radio.checked = radio.value === "create";
-    syncCheckedClass(modeRadios, "is-checked", ".mode-card");
     modeBlock.hidden = previewSection.hidden = warningsBlock.hidden = true;
     for (const node of [columnsBody, tableIdsList, checklist, warningsList]) clear(node);
     actionBtn.disabled = true;
+    announcement.textContent = "";
     setStatus(null);
+  }
+
+  function onClear() {
+    sourceInput.value = "";
+    for (const radio of modeRadios) radio.checked = radio.value === "create";
+    syncCheckedClass(modeRadios, "is-checked", ".mode-card");
+    clearResults();
     sourceInput.focus();
   }
 
@@ -188,28 +209,33 @@ export function initImportTab(grist, gristAvailable) {
 
   function renderTableIds() {
     clear(tableIdsList);
-    for (const entry of createEntries) {
-      entry.input = el("input", { type: "text", autocomplete: "off", value: entry.id });
-      entry.error = el("p", { class: "field-error", hidden: true });
+    createEntries.forEach((entry, position) => {
+      const inputId = `table-id-${position}`;
+      entry.input = el("input", { type: "text", id: inputId, autocomplete: "off", value: entry.id, "aria-describedby": `${inputId}-error` });
+      entry.error = el("p", { class: "field-error", id: `${inputId}-error`, hidden: true });
       entry.input.addEventListener("input", () => {
         entry.id = entry.input.value;
         renderCreate();
       });
-      tableIdsList.appendChild(el("div", { class: "table-id-entry" }, [el("label", { text: entry.table.tableId }), entry.input, entry.error]));
-    }
+      tableIdsList.appendChild(el("div", { class: "table-id-entry" }, [el("label", { text: entry.table.tableId, for: inputId }), entry.input, entry.error]));
+    });
   }
 
-  /** One row per column, with a checkbox that takes it out of (or back into) what will be applied. */
-  function columnRow(col, excluded, statusCell, rerender) {
+  /** One row per column, with a checkbox that takes it out of (or back into) what will be applied; `locked` for a column that is there already. */
+  function columnRow(col, excluded, statusCell, rerender, locked = false) {
     const checkbox = el("input", {
       type: "checkbox",
-      checked: !excluded.has(col.id),
+      checked: !locked && !excluded.has(col.id),
+      disabled: locked,
       "aria-label": t("import.preview.includeColumn", { colId: col.id }),
     });
     checkbox.addEventListener("change", () => {
       if (checkbox.checked) excluded.delete(col.id);
       else excluded.add(col.id);
+      const boxes = () => Array.from(columnsBody.querySelectorAll("input[type=checkbox]"));
+      const position = boxes().indexOf(checkbox);
       rerender();
+      boxes()[position]?.focus();
     });
     const cells = [el("td", { class: "col-checkbox" }, [checkbox]), el("td", { text: col.id }), el("td", { text: typeLabel(col.type) })];
     return el("tr", {}, statusCell ? [...cells, statusCell] : cells);
@@ -238,11 +264,12 @@ export function initImportTab(grist, gristAvailable) {
       const problem = checkTableId(id, documentTableIds(), others);
       entry.error.hidden = !problem;
       entry.error.textContent = problem ? t(problem, { id }) : "";
+      entry.input.setAttribute("aria-invalid", String(Boolean(problem)));
       valid &&= !problem;
     }
 
     renderWarnings(notes);
-    actionBtn.disabled = !valid || !anyColumn;
+    actionBtn.disabled = busy || !valid || !anyColumn;
     actionBtn.textContent = several ? tn("import.action.createTables", createEntries.length) : t("import.action.create");
   }
 
@@ -258,12 +285,12 @@ export function initImportTab(grist, gristAvailable) {
     for (const col of existingColumns) {
       const pill = col.isNew ? ["new", t("import.status.new")] : ["skip", t("import.status.existing")];
       const status = el("td", {}, [el("span", { class: `status-pill status-pill-${pill[0]}`, text: pill[1] })]);
-      columnsBody.appendChild(columnRow(col, existingExcluded, status, renderExisting));
+      columnsBody.appendChild(columnRow(col, existingExcluded, status, renderExisting, !col.isNew));
     }
 
     renderWarnings(resolved.warnings);
     const newCount = existingColumns.filter((col) => col.isNew && !existingExcluded.has(col.id)).length;
-    actionBtn.disabled = !known || newCount === 0;
+    actionBtn.disabled = busy || !known || newCount === 0;
     actionBtn.textContent = !known
       ? t("import.action.chooseTarget")
       : newCount === 0
@@ -282,12 +309,14 @@ export function initImportTab(grist, gristAvailable) {
   }
 
   async function onAction() {
-    analyzeBtn.disabled = actionBtn.disabled = true;
+    busy = analyzeBtn.disabled = actionBtn.disabled = true;
     try {
       await (mode() === "create" ? runCreate() : runAddColumns());
     } finally {
+      busy = false;
       analyzeBtn.disabled = false;
       render();
+      restoreFocus(actionBtn);
     }
   }
 

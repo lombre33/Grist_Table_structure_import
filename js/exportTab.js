@@ -2,7 +2,7 @@ import { el, clear } from "./dom.js";
 import { fetchDocSchema, buildExportSchema, findReferencedTables } from "./schema.js";
 import { generateCode } from "./codeGenerator.js";
 import { withTimeout, errorMessage, GRIST_CALL_TIMEOUT_MS } from "./util.js";
-import { t, tn } from "./i18n.js";
+import { t, tn, onLocaleChange } from "./i18n.js";
 
 export function initExportTab(grist, gristAvailable) {
   const tableList = document.getElementById("export-table-list");
@@ -43,6 +43,7 @@ export function initExportTab(grist, gristAvailable) {
   });
   refsIncludeBtn.addEventListener("click", onIncludeReferencedTables);
   refsDismissBtn.addEventListener("click", onDismissRefsBanner);
+  onLocaleChange(updateRefsBanner);
 
   async function loadTables() {
     setStatus(null);

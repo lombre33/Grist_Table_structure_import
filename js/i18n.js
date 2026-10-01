@@ -157,6 +157,8 @@ const STRINGS = {
     },
     "import.error.addColumnsFailed": "Échec de l'ajout des colonnes : {error}",
     "import.preview.includeColumn": "Inclure la colonne « {colId} »",
+    "import.announce.found": "Analyse terminée : {tablesPhrase}, {columnsPhrase} au total.",
+    "import.announce.none": "Analyse terminée : aucune table trouvée.",
 
     "export.error.fetchTables": "Impossible de lire les tables de ce document : {error}.",
     "export.refs.intro": {
@@ -307,6 +309,8 @@ const STRINGS = {
     },
     "import.error.addColumnsFailed": "Failed to add columns: {error}",
     "import.preview.includeColumn": "Include column “{colId}”",
+    "import.announce.found": "Analysis done: {tablesPhrase}, {columnsPhrase} in total.",
+    "import.announce.none": "Analysis done: no table found.",
 
     "export.error.fetchTables": "Could not read this document's tables: {error}.",
     "export.refs.intro": {
@@ -328,6 +332,7 @@ const STRINGS = {
 
 const STORAGE_KEY = "gristFactory.locale";
 let currentLocale = "fr";
+const listeners = [];
 
 function readStored() {
   try {
@@ -363,7 +368,7 @@ function interpolate(text, params) {
  * original behavior, used for static chrome strings via data-i18n.
  */
 export function t(key, params) {
-  const raw = (STRINGS[currentLocale] && STRINGS[currentLocale][key]) || STRINGS.fr[key] || key;
+  const raw = STRINGS[currentLocale][key] ?? key;
   return interpolate(raw, params);
 }
 
@@ -376,9 +381,8 @@ export function t(key, params) {
  * (tables, columns...), never a language with more plural categories.
  */
 export function tn(key, count, params) {
-  const entry = (STRINGS[currentLocale] && STRINGS[currentLocale][key]) || STRINGS.fr[key];
-  const form = entry && typeof entry === "object" ? (count === 1 ? entry.one : entry.other) : key;
-  return interpolate(form, { n: count, ...params });
+  const entry = STRINGS[currentLocale][key];
+  return interpolate(entry[new Intl.PluralRules(currentLocale).select(count)] ?? entry.other, { n: count, ...params });
 }
 
 /** Readable name of a Grist column type such as "Ref:People" or "DateTime:UTC". */
@@ -424,8 +428,14 @@ export function initLocale() {
   return currentLocale;
 }
 
+/** Calls `listener` after every language change, so that text built at runtime can be rebuilt. */
+export function onLocaleChange(listener) {
+  listeners.push(listener);
+}
+
 export function setLocale(value) {
   currentLocale = STRINGS[value] ? value : "fr";
   writeStored(currentLocale);
   applyI18n();
+  for (const listener of listeners) listener();
 }
