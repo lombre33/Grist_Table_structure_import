@@ -11,6 +11,7 @@
     "test:grist": "node --test test/grist/*.test.mjs"
   },
   "devDependencies": {
+    "axe-core": "^4.13.0",
     "playwright": "^1.63.0"
   }
 }

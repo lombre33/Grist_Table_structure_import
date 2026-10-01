@@ -20,7 +20,7 @@ jobs:
           node-version: "22"
       - name: Unit tests and security lint
         run: npm test
-      - name: Install the dev dependencies (Playwright)
+      - name: Install the dev dependencies (Playwright, axe-core)
         run: npm ci
       - name: Install Chromium
         run: npx playwright install --with-deps chromium

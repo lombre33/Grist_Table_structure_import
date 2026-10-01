@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import { launchWidget } from "./widgetPage.mjs";
 import { fakeGrist } from "./fakeGrist.mjs";
 import { analyse, apply, previewRows, textOf, warnings } from "./driver.mjs";
+import { violations } from "./a11y.mjs";
 
 const MULTI = `import grist
 
@@ -25,6 +26,12 @@ class TableB:
 const TYPES = "@grist.UserTable\nclass X:\n  A = grist.Reference('Other_Table')\n  B = grist.Int()\n";
 
 const WITH_FORMULA = "@grist.UserTable\nclass X:\n  A = grist.Int()\n\n  @grist.formulaType(grist.Int())\n  def Double(rec, table):\n    return rec.A * 2\n";
+
+const RICH_SOURCE = (() => {
+  const twoWay = "@grist.UserTable\nclass Pets:\n  Owner = grist.Reference('People', reverse_of='Pets')\n\n@grist.UserTable\nclass People:\n  Pets = grist.ReferenceList('Pets', reverse_of='Owner')\n";
+  const formula = "\n@grist.UserTable\nclass X:\n  A = grist.Int()\n\n  @grist.formulaType(grist.Int())\n  def Double(rec, table):\n    return rec.A * 2\n";
+  return twoWay + formula;
+})();
 
 const TWO_WAY =
   "@grist.UserTable\nclass Pets:\n  Owner = grist.Reference('People', reverse_of='Pets')\n\n@grist.UserTable\nclass People:\n  Pets = grist.ReferenceList('Pets', reverse_of='Owner')\n";
@@ -82,7 +89,7 @@ const TESTS = [
   }, { locale: "en" }],
 
   ["Import: a long identifier wraps instead of overflowing a narrow pane", async (page) => {
-    await page.setViewportSize({ width: 360, height: 640 });
+    await page.setViewportSize({ width: 320, height: 640 });
     await analyse(page, `@grist.UserTable\nclass ${"Very_long_table_name_".repeat(6)}:\n  ${"column_with_a_long_name_".repeat(5)} = grist.Reference('${"Other_".repeat(12)}')\n`);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true);
   }],
@@ -237,6 +244,23 @@ const TESTS = [
     assert.equal(await page.getAttribute("#tab-export", "aria-selected"), "true", "the arrows still wrap around");
   }],
 
+  ["Accessibility: no screen scrolls sideways at 320 px, the width WCAG asks content to reflow to", async (page) => {
+    await page.setViewportSize({ width: 320, height: 700 });
+    const overflows = () => page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
+    assert.equal(await overflows(), false, "empty");
+    await analyse(page, RICH_SOURCE);
+    assert.equal(await overflows(), false, "preview");
+    await page.click('label.mode-card:has(input[value="existing"])');
+    await page.selectOption("#target-table-select", { label: "Existing_Table" });
+    assert.equal(await overflows(), false, "existing table");
+    await page.click("#tab-export");
+    await page.waitForSelector("#export-table-list input");
+    await page.locator("#export-table-list li", { hasText: "Existing_Table" }).locator("input").check();
+    await page.click("#generate-btn");
+    await page.waitForSelector("#export-output-block:not([hidden])");
+    assert.equal(await overflows(), false, "export");
+  }],
+
   ["Accessibility: every checkbox of the preview is a target of at least 24 px, whatever its row", async (page) => {
     await analyse(page, MULTI);
     const sizes = await page.$$eval(".col-checkbox label", (labels) => labels.map((label) => [label.offsetWidth, label.offsetHeight]));
@@ -344,6 +368,47 @@ test("an English reader never sees the French markup: the page waits for its tra
   await stuck.waitForFunction(() => getComputedStyle(document.body).visibility === "visible", null, { timeout: 5000 });
   await stuck.close();
 });
+
+const SCREENS = [
+  ["the empty Import tab", async () => {}],
+  ["the Import preview", async (page) => analyse(page, RICH_SOURCE)],
+  [
+    "the Import preview of an existing table",
+    async (page) => {
+      await analyse(page, RICH_SOURCE);
+      await page.click('label.mode-card:has(input[value="existing"])');
+      await page.selectOption("#target-table-select", { label: "Existing_Table" });
+    },
+  ],
+  [
+    "the Export tab with its code",
+    async (page) => {
+      await page.click("#tab-export");
+      await page.waitForSelector("#export-table-list input");
+      await page.locator("#export-table-list li", { hasText: "Existing_Table" }).locator("input").check();
+      await page.click("#generate-btn");
+      await page.waitForSelector("#export-output-block:not([hidden])");
+    },
+  ],
+  ["the Réglages dialog", async (page) => page.click("#settings-btn")],
+];
+
+for (const theme of ["light", "dark"]) {
+  for (const locale of ["fr", "en"]) {
+    test(`axe-core finds nothing to fix on the main screens (${theme}, ${locale})`, async () => {
+      for (const [name, setup] of SCREENS) {
+        const page = await widget.open(fakeGrist(), { locale, bypassCSP: true });
+        try {
+          await page.evaluate((value) => (document.documentElement.dataset.theme = value), theme);
+          await setup(page);
+          assert.deepEqual(await violations(page), [], name);
+        } finally {
+          await page.close();
+        }
+      }
+    });
+  }
+}
 
 test("a short pane keeps the buttons in view: the title and the code box shrink", async () => {
   const page = await widget.open(fakeGrist());

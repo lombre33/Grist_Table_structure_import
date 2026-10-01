@@ -290,8 +290,10 @@ L'interface suit l'identité UI/UX commune aux widgets **Grist Factory** (grist-
   champs, groupes et résultats ont un nom accessible et les fins d'analyse sont annoncées,
   l'onglet sélectionné reste repérable en mode contraste élevé (`forced-colors`), la page
   a un repère `main` et un titre par étape, et les onglets répondent aux flèches, à
-  Début et à Fin. Mesuré dans Chromium (arbre d'accessibilité, clavier, contrastes) :
-  pas encore passé au lecteur d'écran.
+  Début et à Fin. Vérifié dans Chromium à chaque lancement de `npm run test:browser` par
+  axe-core (WCAG 2.2 A et AA, bonnes pratiques : aucune violation sur les cinq écrans
+  principaux, thèmes clair et sombre, français et anglais) et par des contrôles de
+  clavier, de taille et de nom accessible ; pas encore passé au lecteur d'écran.
 - **Typographie** : **Manrope** (police variable) pour toute l'interface, vendorisée
   dans `fonts/manrope/` (police variable réduite à l'alphabet latin, 28 Ko, licence SIL
   Open Font License jointe) plutôt que chargée depuis une CDN — voir SECURITY.md. Le code Python (collé ou généré) reste
@@ -353,8 +355,8 @@ sécurité (`test/security.test.mjs`) y interdit dans `js/` `eval`, le construct
 `innerHTML`/`outerHTML`, `document.write`, `import()`, `fetch`, `WebSocket`..., et vérifie
 que `index.html` ne charge que l'API officielle de Grist et sa CSP.
 
-Playwright, seule dépendance du dépôt (`devDependencies`, jamais publiée avec le widget),
-sert aux deux autres suites :
+Playwright (et axe-core, qui y vérifie l'accessibilité), seules dépendances du dépôt
+(`devDependencies`, jamais publiées avec le widget), servent aux deux autres suites :
 
 ```sh
 npm ci

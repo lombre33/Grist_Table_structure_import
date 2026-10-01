@@ -213,7 +213,7 @@ Les actions GitHub utilisées sont référencées par l'empreinte du commit d'un
 précise (`actions/checkout@<40 caractères> # v4.4.0`...), non par une étiquette qu'un
 dépôt peut déplacer ; `test/security.test.mjs` refuse toute action qui ne l'est pas, et
 `.github/dependabot.yml` demande chaque semaine la mise à jour de ces empreintes (et
-chaque mois celle de Playwright, la seule dépendance de développement).
+chaque mois celle des deux dépendances de développement, Playwright et axe-core).
 
 ## Dépendances
 
@@ -233,13 +233,14 @@ depuis ce même dépôt plutôt que depuis une CDN (ex. Google Fonts) : aucun ap
 supplémentaire au chargement, aucun tiers à ajouter à la CSP (`font-src 'self'`
 suffit), fichier entièrement auditable dans le dépôt au même titre que le reste du code.
 
-**Playwright** (`devDependencies`) est la seule vraie dépendance npm du dépôt : elle pilote
-un navigateur pour `test/browser` et `test/grist` (voir README.md, « Développement »), en
-local et en CI, et n'est déclarée que là. Elle n'apparaît dans aucun fichier publié (voir
-`.github/workflows/pages.yml`, dont la liste de copie n'inclut ni `node_modules/` ni
-`package.json`) et n'est jamais chargée par le widget lui-même : l'affirmation « aucune
-dépendance d'exécution » ci-dessus reste exacte. L'image Docker de Grist ne sert qu'aux
-tests, jamais au widget publié.
+**Playwright** et **axe-core** (`devDependencies`) sont les seules vraies dépendances npm du
+dépôt : la première pilote un navigateur pour `test/browser` et `test/grist` (voir README.md,
+« Développement »), la seconde y contrôle l'accessibilité de la page (licence MPL-2.0, jamais
+redistribuée). Toutes deux, en local et en CI, ne sont déclarées que là : elles n'apparaissent
+dans aucun fichier publié (voir `.github/workflows/pages.yml`, dont la liste de copie n'inclut
+ni `node_modules/` ni `package.json`) et ne sont jamais chargées par le widget lui-même :
+l'affirmation « aucune dépendance d'exécution » ci-dessus reste exacte. L'image Docker de
+Grist ne sert qu'aux tests, jamais au widget publié.
 
 ## Logo Grist Factory
 

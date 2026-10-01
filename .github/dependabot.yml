@@ -1,4 +1,4 @@
-# Keeps the pinned actions (by commit, see SECURITY.md) and the one dev dependency current.
+# Keeps the pinned actions (by commit, see SECURITY.md) and the dev dependencies current.
 version: 2
 updates:
   - package-ecosystem: github-actions
