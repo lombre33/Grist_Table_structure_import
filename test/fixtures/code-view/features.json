@@ -1,0 +1,24 @@
+{
+  "grist": "1.7.20",
+  "tables": {
+    "Table1": [
+      ["A","Any",true],
+      ["B","Any",true],
+      ["C","Any",true]
+    ],
+    "People": [
+      ["Name","Text",false],
+      ["Age","Int",false],
+      ["Born","DateTime:Europe/Paris",false],
+      ["Stamp","Text",true],
+      ["Pets","RefList:Pets",false],
+      ["Double","Numeric",true],
+      ["Anything","Any",true]
+    ],
+    "Pets": [
+      ["Owner","Ref:People",false],
+      ["Friends","RefList:People",false],
+      ["Photo","Attachments",false]
+    ]
+  }
+}

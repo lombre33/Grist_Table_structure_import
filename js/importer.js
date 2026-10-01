@@ -51,12 +51,17 @@ export function resolveColumns(table, tableIds, documentTableIds, excluded = new
       if (target) {
         resolved.type = `${resolved.type.split(":")[0]}:${target}`;
       } else {
-        colWarnings.push(t("warn.refTargetMissingInDoc", { colId: col.id, target: resolved.refTarget }));
+        colWarnings.push({ key: "warn.refTargetMissingInDoc", params: { colId: col.id, target: resolved.refTarget } });
         Object.assign(resolved, { type: "Any", widgetOptions: null, visibleColId: null });
       }
     }
-    return { id: col.id, ...resolved };
+    return { id: col.id, computed: col.computed, ...resolved };
   });
+
+  for (const [key, flagged] of [["warn.computedColumns", (col) => col.computed], ["warn.twoWayColumns", (col) => col.reverseOf]]) {
+    const ids = columns.filter((col) => flagged(col) && !excluded.has(col.id)).map((col) => col.id);
+    if (ids.length > 0) warnings.push({ key, params: { columns: ids.join(", ") } });
+  }
   return { columns, warnings };
 }
 

@@ -1,0 +1,132 @@
+{
+  "grist": "1.7.20",
+  "tables": {
+    "Table1": [
+      ["A","Any",true],
+      ["B","Any",true],
+      ["C","Any",true]
+    ],
+    "Texts": [
+      ["Plain","Text",false],
+      ["Aligned","Text",false],
+      ["Link","Text",false],
+      ["Markdown","Text",false],
+      ["Styled","Text",false],
+      ["Labelled","Text",false],
+      ["Described","Text",false],
+      ["Form","Text",false],
+      ["Rules","Text",false],
+      ["Nasty0","Text",false],
+      ["Nasty1","Text",false],
+      ["Nasty2","Text",false],
+      ["Nasty3","Text",false],
+      ["Nasty4","Text",false],
+      ["Nasty5","Text",false],
+      ["Nasty6","Text",false],
+      ["Nasty7","Text",false],
+      ["Nasty8","Text",false],
+      ["Nasty9","Text",false],
+      ["Nasty10","Text",false],
+      ["Nasty11","Text",false],
+      ["Nasty12","Text",false],
+      ["Nasty13","Text",false]
+    ],
+    "Numbers": [
+      ["Plain","Numeric",false],
+      ["Eur","Numeric",false],
+      ["Pct","Numeric",false],
+      ["Sci","Numeric",false],
+      ["Dec","Numeric",false],
+      ["Spin","Numeric",false],
+      ["Whole","Int",false],
+      ["WholeUsd","Int",false],
+      ["WholeSpin","Int",false],
+      ["BackToLinks","Ref:Links",false]
+    ],
+    "Dates": [
+      ["Day","Date",false],
+      ["French","Date",false],
+      ["Iso","Date",false],
+      ["Paris","DateTime:Europe/Paris",false],
+      ["Utc","DateTime:UTC",false],
+      ["NewYork","DateTime:America/New_York",false],
+      ["Kolkata","DateTime:Asia/Kolkata",false],
+      ["BuenosAires","DateTime:America/Argentina/Buenos_Aires",false]
+    ],
+    "Choices": [
+      ["Pick","Choice",false],
+      ["NoChoices","Choice",false],
+      ["Styled","Choice",false],
+      ["Nasty","Choice",false],
+      ["Many","ChoiceList",false],
+      ["Tags","ChoiceList",false],
+      ["Conditional","Choice",false],
+      ["Aligned","Choice",false],
+      ["Form","ChoiceList",false]
+    ],
+    "Flags": [
+      ["Plain","Bool",false],
+      ["Box","Bool",false],
+      ["Switch","Bool",false]
+    ],
+    "Links": [
+      ["Text","Text",false],
+      ["ToTexts","Ref:Texts",false],
+      ["Shown","Ref:Texts",false],
+      ["Many","RefList:Texts",false],
+      ["Self","Ref:Links",false],
+      ["SelfList","RefList:Links",false],
+      ["ToNumbers","Ref:Numbers",false],
+      ["Styled","Ref:Texts",false]
+    ],
+    "Misc": [
+      ["Files","Attachments",false],
+      ["FilesTall","Attachments",false],
+      ["Anything","Any",false]
+    ],
+    "Formulas": [
+      ["Data1","Text",false],
+      ["Data2","Int",false],
+      ["Data3","Text",false],
+      ["FText","Text",true],
+      ["FNum","Numeric",true],
+      ["FBool","Bool",true],
+      ["FDate","Date",true],
+      ["FDateTime","DateTime:Europe/Paris",true],
+      ["FChoice","Choice",true],
+      ["FList","ChoiceList",true],
+      ["FRef","Ref:Texts",true],
+      ["FRefList","RefList:Texts",true],
+      ["FAny","Any",true]
+    ],
+    "Ids": [
+      ["a","Text",false],
+      ["A_b","Text",false],
+      ["x1","Text",false],
+      ["X__Y","Text",false],
+      ["LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL","Text",false],
+      ["Select","Text",false],
+      ["None_","Text",false],
+      ["rec","Text",false],
+      ["table","Text",false],
+      ["value","Text",false],
+      ["user","Text",false],
+      ["SUM","Text",false],
+      ["lowerUpper","Text",false],
+      ["ALLCAPS","Text",false],
+      ["trailing_","Text",false]
+    ],
+    "T": [
+      ["A","Text",false]
+    ],
+    "With_Under": [
+      ["A","Text",false]
+    ],
+    "ALLCAPS": [
+      ["A","Text",false]
+    ],
+    "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL": [
+      ["A","Text",false]
+    ]
+  }
+}

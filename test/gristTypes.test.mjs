@@ -166,7 +166,7 @@ test("a malformed widget_options= JSON payload is ignored (with a warning), not 
   const { widgetOptions, warnings } = resolve("Text", "widget_options='{not valid json'");
   assert.equal(widgetOptions, null);
   assert.equal(warnings.length, 1);
-  assert.match(warnings[0], /widget_options/);
+  assert.equal(warnings[0].key, "warn.invalidWidgetOptions");
 });
 
 test("all extended kwargs together on a Reference column", () => {

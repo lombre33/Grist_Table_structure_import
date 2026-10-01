@@ -113,7 +113,9 @@ const STRINGS = {
     "warn.unknownDecorator": "Ligne {line} : décorateur non reconnu ignoré ({snippet}).",
     "warn.unrecognizedContent": "Ligne {line} : contenu non reconnu ignoré ({snippet}).",
     "warn.reservedColumnId": "Ligne {line} : colonne « {id} » ignorée (identifiant réservé, déjà géré par Grist).",
-    "warn.duplicateColumnId": "Ligne {line} : colonne « {id} » en double, Grist ajoutera un suffixe automatiquement.",
+    "warn.duplicateColumnId": "Ligne {line} : colonne « {id} » en double (Grist ignore la casse des identifiants), ignorée.",
+    "warn.computedColumns": "Colonnes calculées (formule ou valeur par défaut), créées vides : {columns}.",
+    "warn.twoWayColumns": "Références bidirectionnelles, créées comme références simples : {columns}.",
     "warn.tablePrefix": "Table « {tableId} » — {message}",
 
     "import.error.fetchDocInfo": "Impossible de récupérer les informations de ce document : {error}.",
@@ -262,7 +264,9 @@ const STRINGS = {
     "warn.unknownDecorator": "Line {line}: unrecognized decorator ignored ({snippet}).",
     "warn.unrecognizedContent": "Line {line}: unrecognized content ignored ({snippet}).",
     "warn.reservedColumnId": "Line {line}: column “{id}” ignored (reserved identifier, already handled by Grist).",
-    "warn.duplicateColumnId": "Line {line}: duplicate column “{id}”, Grist will automatically add a suffix.",
+    "warn.duplicateColumnId": "Line {line}: duplicate column “{id}” (Grist ignores the case of identifiers), ignored.",
+    "warn.computedColumns": "Computed columns (formula or default value), created empty: {columns}.",
+    "warn.twoWayColumns": "Two-way references, created as plain references: {columns}.",
     "warn.tablePrefix": "Table “{tableId}” — {message}",
 
     "import.error.fetchDocInfo": "Could not retrieve this document's information: {error}.",

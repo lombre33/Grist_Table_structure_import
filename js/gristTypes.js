@@ -50,7 +50,6 @@
 
 import { findMatchingClose } from "./parser.js";
 import { quotePython, unquotePython } from "./pyString.js";
-import { t } from "./i18n.js";
 
 const FIRST_STRING_ARG_RE = /^\s*['"]([^'"]*)['"]/;
 const QUOTED_ITEM_RE = /'((?:\\.|[^'\\])*)'|"((?:\\.|[^"\\])*)"/g;
@@ -207,6 +206,7 @@ function extractCommonKwargs(argsRaw, columnId, warnings) {
   const label = extractQuotedKwarg(argsRaw, "label");
   const description = extractQuotedKwarg(argsRaw, "description");
   const visibleColId = extractQuotedKwarg(argsRaw, "visible_col");
+  const reverseOf = extractQuotedKwarg(argsRaw, "reverse_of");
   const widgetOptionsRaw = extractQuotedKwarg(argsRaw, "widget_options");
 
   let widgetOptions = null;
@@ -216,11 +216,11 @@ function extractCommonKwargs(argsRaw, columnId, warnings) {
     } catch {
       // Malformed JSON: ignored, never evaluated — just reported so it
       // isn't silently lost.
-      warnings.push(t("warn.invalidWidgetOptions", { columnId }));
+      warnings.push({ key: "warn.invalidWidgetOptions", params: { columnId } });
     }
   }
 
-  return { label, description, visibleColId, widgetOptions };
+  return { label, description, visibleColId, reverseOf, widgetOptions };
 }
 
 function mergeWidgetOptions(typeSpecific, restored) {
@@ -247,6 +247,7 @@ export function resolveColumnType(dslType, argsRaw, columnId, warnings) {
     label: meta.label,
     description: meta.description,
     visibleColId: meta.visibleColId,
+    reverseOf: meta.reverseOf,
   };
 }
 
@@ -269,7 +270,7 @@ function resolveBareType(dslType, argsRaw, columnId, warnings) {
     case "DateTime": {
       const timezone = extractFirstStringArg(argsRaw);
       if (!timezone) {
-        warnings.push(t("warn.dateTimeNoTimezone", { columnId, timezone: DEFAULT_TIMEZONE }));
+        warnings.push({ key: "warn.dateTimeNoTimezone", params: { columnId, timezone: DEFAULT_TIMEZONE } });
       }
       return { type: `DateTime:${timezone || DEFAULT_TIMEZONE}`, widgetOptions: null, refTarget: null };
     }
@@ -279,7 +280,7 @@ function resolveBareType(dslType, argsRaw, columnId, warnings) {
       const target = extractFirstStringArg(argsRaw);
       const prefix = dslType === "Reference" ? "Ref" : "RefList";
       if (!target || !TABLE_ID_RE.test(target)) {
-        warnings.push(t("warn.refTargetMissingSyntax", { columnId, dslType }));
+        warnings.push({ key: "warn.refTargetMissingSyntax", params: { columnId, dslType } });
         return { type: "Any", widgetOptions: null, refTarget: null };
       }
       return { type: `${prefix}:${target}`, widgetOptions: null, refTarget: target };
@@ -296,7 +297,7 @@ function resolveBareType(dslType, argsRaw, columnId, warnings) {
       return { type: "Blob", widgetOptions: null, refTarget: null };
 
     default:
-      warnings.push(t("warn.unknownType", { columnId, dslType }));
+      warnings.push({ key: "warn.unknownType", params: { columnId, dslType } });
       return { type: "Any", widgetOptions: null, refTarget: null };
   }
 }

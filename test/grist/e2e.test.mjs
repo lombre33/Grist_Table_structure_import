@@ -163,10 +163,10 @@ test("an existing table: columns are matched ignoring case, and only the new one
 
 test("hand-written ids that Grist rewrites still get their description", () =>
   inWidget(async (page, doc) => {
-    await analyse(page, "@grist.UserTable\nclass Hand:\n  _x = grist.Text(description='kept')\n  a = grist.Text()\n  A = grist.Text()\n");
+    await analyse(page, "@grist.UserTable\nclass Hand:\n  _x = grist.Text(description='first')\n  None = grist.Text(description='second')\n  Plain = grist.Text()\n");
     assert.match(await apply(page), /^Table « Hand » créée avec 3 colonnes\.$/);
     const cols = (await snapshot(doc)).Hand;
-    assert.deepEqual(cols.map((col) => [col.id, col.description]), [["x", "kept"], ["a", ""], ["A2", ""]]);
+    assert.deepEqual(cols.map((col) => [col.id, col.description]), [["x", "first"], ["cNone", "second"], ["Plain", ""]]);
   }));
 
 test("the interface works the same in English", () =>

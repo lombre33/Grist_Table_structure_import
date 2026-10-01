@@ -84,24 +84,21 @@ x = 1
 `;
   const { tables, warnings } = parseGristSchema(source);
   assert.equal(tables.length, 0);
-  assert.match(warnings[0], /classe valide/);
+  assert.equal(warnings[0].key, "warn.decoratorNoClass");
 });
 
-test("filters reserved column ids and flags duplicates", () => {
+test("skips reserved column ids and duplicates, ignoring the case of ids like Grist does", () => {
   const source = `
 @grist.UserTable
 class T:
   id = grist.Text()
   A = grist.Text()
-  A = grist.Int()
+  a = grist.Int()
+  B = grist.Int()
 `;
   const { tables, warnings } = parseGristSchema(source);
-  assert.deepEqual(
-    tables[0].columns.map((c) => c.id),
-    ["A", "A"]
-  );
-  assert.ok(warnings.some((w) => /réservé/.test(w)));
-  assert.ok(warnings.some((w) => /double/.test(w)));
+  assert.deepEqual(tables[0].columns.map((c) => c.id), ["A", "B"]);
+  assert.deepEqual(warnings.map((w) => w.key), ["warn.reservedColumnId", "warn.duplicateColumnId"]);
 });
 
 test("ignores comments and unrecognized decorators without crashing", () => {
@@ -117,7 +114,7 @@ class T:
     tables[0].columns.map((c) => c.id),
     ["A"]
   );
-  assert.ok(warnings.some((w) => /décorateur non reconnu/.test(w)));
+  assert.deepEqual(warnings.map((w) => w.key), ["warn.unknownDecorator"]);
 });
 
 test("findMatchingClose skips brackets inside quoted strings", () => {
@@ -173,7 +170,7 @@ class T:
 `;
   const { tables, warnings } = parseGristSchema(source);
   assert.deepEqual(tables[0].columns, []);
-  assert.ok(warnings.some((w) => /contenu non reconnu/.test(w)));
+  assert.deepEqual(warnings.map((w) => w.key), ["warn.unrecognizedContent"]);
 });
 
 test("never throws on arbitrary/malicious-looking input", () => {
@@ -187,4 +184,51 @@ test("never throws on arbitrary/malicious-looking input", () => {
   for (const input of trickyInputs) {
     assert.doesNotThrow(() => parseGristSchema(input));
   }
+});
+
+test("a warning names its table and line", () => {
+  const { warnings } = parseGristSchema("@grist.UserTable\nclass T:\n  A = grist.Text()\n  oops\n");
+  assert.deepEqual(warnings, [{ key: "warn.unrecognizedContent", params: { line: 4, snippet: "oops" }, table: "T" }]);
+});
+
+test("trigger formulas, summary blocks and `pass` of a real Code View raise no warning", () => {
+  const source = `
+@grist.UserTable
+class People:
+  Name = grist.Text()
+
+  def _default_Stamp(rec, table, value, user):
+    return 'hello'
+  Stamp = grist.Text()
+
+  class _Summary:
+
+    @grist.formulaType(grist.Int())
+    def count(rec, table):
+      return len(rec.group)
+
+@grist.UserTable
+class Empty:
+  pass
+`;
+  const { tables, warnings } = parseGristSchema(source);
+  assert.deepEqual(warnings, []);
+  assert.deepEqual(tables.map((t) => [t.tableId, t.columns.map((c) => [c.id, c.computed])]), [["People", [["Name", false], ["Stamp", true]]], ["Empty", []]]);
+});
+
+test("a formula column is computed, and its decorator that has no function is reported with its own line", () => {
+  const source = `
+@grist.UserTable
+class T:
+  @grist.formulaType(grist.Int())
+  def F(rec, table):
+    return 1
+
+  @grist.formulaType(grist.Text())
+
+  A = grist.Text()
+`;
+  const { tables, warnings } = parseGristSchema(source);
+  assert.deepEqual(tables[0].columns.map((c) => [c.id, c.dslType, c.computed]), [["F", "Int", true], ["A", "Text", false]]);
+  assert.deepEqual(warnings.map((w) => [w.key, w.params.line]), [["warn.formulaTypeNoFunction", 8]]);
 });

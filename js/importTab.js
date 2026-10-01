@@ -82,7 +82,7 @@ export function initImportTab(grist, gristAvailable) {
       docSchema = await withTimeout(fetchDocSchema(grist), GRIST_CALL_TIMEOUT_MS, t("error.timeout"));
     } catch (err) {
       docSchema = null;
-      warnings = [...warnings, t("import.error.fetchDocInfo", { error: errorMessage(err) })];
+      warnings = [...warnings, { key: "import.error.fetchDocInfo", params: { error: errorMessage(err) } }];
     } finally {
       analyzeBtn.disabled = false;
     }
@@ -228,7 +228,7 @@ export function initImportTab(grist, gristAvailable) {
       const id = entry.id.trim();
       const resolved = resolveColumns(entry.table, destination, documentTableIds(), entry.excluded);
       entry.columns = resolved.columns;
-      notes.push(...(several ? resolved.warnings.map((message) => t("warn.tablePrefix", { tableId: id || entry.table.tableId, message })) : resolved.warnings));
+      notes.push(...resolved.warnings.map((warning) => ({ ...warning, table: id || entry.table.tableId })));
 
       if (several) columnsBody.appendChild(el("tr", { class: "table-separator" }, [el("td", { colspan: "3", text: id || entry.table.tableId })]));
       for (const col of entry.columns) columnsBody.appendChild(columnRow(col, entry.excluded, null, renderCreate));
@@ -272,10 +272,13 @@ export function initImportTab(grist, gristAvailable) {
   }
 
   function renderWarnings(more = []) {
-    const all = [...warnings, ...more];
+    const all = [...warnings, ...more].map(({ key, params, table }) => {
+      const message = t(key, params);
+      return table && parsed.length > 1 ? t("warn.tablePrefix", { tableId: table, message }) : message;
+    });
     clear(warningsList);
     warningsBlock.hidden = all.length === 0;
-    for (const warning of all) warningsList.appendChild(el("li", { text: warning }));
+    for (const text of all) warningsList.appendChild(el("li", { text }));
   }
 
   async function onAction() {

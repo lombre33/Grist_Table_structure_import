@@ -66,6 +66,20 @@ test("without the document's table list, references are left alone", () => {
   assert.deepEqual(warnings, []);
 });
 
+test("columns Grist computes or links both ways are said to be created plainly", () => {
+  const source = {
+    tableId: "Source",
+    columns: [
+      { id: "Calc", dslType: "Numeric", argsRaw: "", computed: true },
+      { id: "Pets", dslType: "ReferenceList", argsRaw: "'Pets', reverse_of='Owner'", computed: false },
+      { id: "Plain", dslType: "Text", argsRaw: "", computed: false },
+    ],
+  };
+  const { warnings } = resolveColumns(source, ids(["Pets", "Pets"]), []);
+  assert.deepEqual(warnings.map((w) => [w.key, w.params.columns]), [["warn.computedColumns", "Calc"], ["warn.twoWayColumns", "Pets"]]);
+  assert.deepEqual(resolveColumns(source, ids(["Pets", "Pets"]), [], new Set(["Calc", "Pets"])).warnings, []);
+});
+
 test("a column left out raises no warning", () => {
   const source = table(["A", "Reference", "'Ghost'"], ["B", "Mystery"]);
   assert.equal(resolveColumns(source, ids(), []).warnings.length, 2);
@@ -80,12 +94,14 @@ test("resolved columns carry the id, the type and the extended metadata", () => 
   );
   assert.deepEqual(columns[0], {
     id: "Mood",
+    computed: undefined,
     type: "Choice",
     widgetOptions: { choices: ["a"] },
     refTarget: null,
     label: "Humeur",
     description: "d",
     visibleColId: null,
+    reverseOf: null,
   });
   assert.equal(columns[1].label, null);
 });
