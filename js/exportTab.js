@@ -116,7 +116,7 @@ export function initExportTab(grist) {
     const { ids } = missingTables();
     for (const input of tableList.querySelectorAll("input")) if (ids.includes(input.value)) input.checked = true;
     refresh(); // the tables just included may refer to others
-    generateBtn.focus({ preventScroll: true }); // the button that had the focus may be gone with the banner
+    if (refsBanner.hidden) generateBtn.focus({ preventScroll: true }); // the button that had the focus is gone with the banner
   }
 
   async function onGenerate() {

@@ -221,8 +221,8 @@ test("a display column is set through the row ids of both columns, the one form 
 });
 
 test("isTied accepts the id Grist derives from a label, numbered or lettered, and no other", () => {
-  const tied = [["Nom", "Nom"], ["Prénom", "Prenom"], ["ID", "ID2"], ["id", "id3"], ["manualSort", "manualSort2"], ["Col1", "Col1_2"], ["Nom", "Nom3"], ["日本", "A"], ["日本", "BC"]];
-  const own = [["Nom complet", "Nom"], ["Nom", "Nom_x"], ["Nom", "Nomade"], ["Nom", "Nom_"], ["日本", "a"], ["日本", "Nom"]];
+  const tied = [["Nom", "Nom"], ["Prénom", "Prenom"], ["ID", "ID2"], ["id", "id3"], ["manualSort", "manualSort2"], ["Col1", "Col1_2"], ["Nom", "Nom3"], ["Nom", "Nom10"], ["Col1", "Col1_10"], ["日本", "A"], ["日本", "BC"]];
+  const own = [["Nom complet", "Nom"], ["Nom", "Nom_x"], ["Nom", "Nomade"], ["Nom", "Nom_"], ["日本", "a"], ["日本", "Nom"], ["Nom", "Nom1"], ["Nom", "Nom_2"], ["Nom", "Nom02"], ["Col1", "Col12"], ["Col1", "Col1_1"]];
   assert.deepEqual(tied.map(([label, id]) => isTied(label, id)), tied.map(() => true));
   assert.deepEqual(own.map(([label, id]) => isTied(label, id)), own.map(() => false));
 });

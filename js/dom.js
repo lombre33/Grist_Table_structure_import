@@ -27,9 +27,9 @@ export function statusWriter(region) {
   };
 }
 
-/** A button that was disabled has lost the keyboard focus: give it back once it is usable again, without scrolling to it. */
-export function restoreFocus(button) {
-  if (document.activeElement === document.body && !button.disabled) button.focus({ preventScroll: true });
+/** A control that was disabled has lost the keyboard focus: give it back once it is usable again, without scrolling to it. */
+export function restoreFocus(control) {
+  if (document.activeElement === document.body && !control.disabled) control.focus({ preventScroll: true });
 }
 
 /** A checkbox standing for a group: ticked when all of its `total` are, in between when only some are. */

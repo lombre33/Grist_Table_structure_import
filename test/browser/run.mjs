@@ -437,6 +437,24 @@ const TESTS = [
     assert.equal(await page.evaluate(() => document.activeElement.id), "generate-btn");
   }],
 
+  ["Export: when the banner stays after its button was pressed, the keyboard stays on that button", async (page, grist) => {
+    const fetchTable = grist.docApi.fetchTable;
+    grist.docApi.fetchTable = async (name) => {
+      const data = await fetchTable(name);
+      if (name !== "_grist_Tables_column") return data;
+      const link = { id: 11, parentId: 2, colId: "Link", type: "Ref:Standalone_Table", isFormula: false, formula: "", parentPos: 3, label: "Link", description: "", widgetOptions: "", visibleCol: 0 };
+      return Object.fromEntries(Object.entries(data).map(([key, values]) => [key, [...values, link[key]]]));
+    };
+    await page.click("#tab-export");
+    await page.waitForSelector("#export-table-list input");
+    await page.locator("#export-table-list li", { hasText: "Existing_Table" }).locator("input").check();
+    await page.click("#refs-include-btn");
+    assert.equal(await hidden(page, "export-refs-banner"), false, "Other_Table refers to Standalone_Table in turn");
+    assert.equal(await page.evaluate(() => document.activeElement.id), "refs-include-btn");
+    await page.click("#refs-include-btn");
+    assert.equal(await page.evaluate(() => document.activeElement.id), "generate-btn");
+  }],
+
   ["Export: a tick that changes nothing in the banner does not have a screen reader say it again", async (page) => {
     await page.click("#tab-export");
     await page.waitForSelector("#export-table-list input");
@@ -453,6 +471,35 @@ const TESTS = [
   ["Import: Analyser has the keyboard back once the document has been read", async (page) => {
     await analyse(page, MULTI);
     assert.equal(await page.evaluate(() => document.activeElement.id), "analyze-btn");
+  }],
+
+  ["Import: while the document is read again, the button of the previous analysis cannot be pressed", async (page, grist) => {
+    await analyse(page, MULTI);
+    const fetchTable = grist.docApi.fetchTable;
+    grist.docApi.fetchTable = async (...args) => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      return fetchTable(...args);
+    };
+    await page.click("#analyze-btn");
+    assert.equal(await page.isDisabled("#action-btn"), true);
+    await page.waitForFunction(() => !document.getElementById("analyze-btn").disabled);
+    assert.equal(await page.isDisabled("#action-btn"), false);
+  }],
+
+  ["Import: once the columns are added, nothing is left to press and the keyboard goes back to the text", async (page, grist) => {
+    const fetchTable = grist.docApi.fetchTable;
+    grist.docApi.fetchTable = async (name) => {
+      const data = await fetchTable(name);
+      if (name !== "_grist_Tables_column" || grist.calls.length === 0) return data;
+      const fresh = { id: 11, parentId: 1, colId: "Fresh", type: "Text", isFormula: false, formula: "", parentPos: 7, label: "Fresh", description: "", widgetOptions: "", visibleCol: 0 };
+      return Object.fromEntries(Object.entries(data).map(([key, values]) => [key, [...values, fresh[key]]]));
+    };
+    await analyse(page, "@grist.UserTable\nclass X:\n  Fresh = grist.Text()\n");
+    await page.click('label.mode-card:has(input[value="existing"])');
+    await page.selectOption("#target-table-select", { label: "Existing_Table" });
+    await apply(page);
+    assert.equal(await page.isDisabled("#action-btn"), true);
+    assert.equal(await page.evaluate(() => document.activeElement.id), "source-input");
   }],
 
   ["Import: once the table is created, the keyboard goes back to the text, since the button is gone", async (page) => {

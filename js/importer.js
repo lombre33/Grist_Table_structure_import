@@ -49,13 +49,15 @@ export function idFromLabel(label) {
 }
 
 /**
- * Whether `id` is what Grist derived from `label`: that id, numbered when it was taken (`ID` is, `id` being
- * reserved: `ID2`), or letters (`A`, `B`...) when nothing is left of the label. Any other id was given to the
- * column apart from its label, and Grist then no longer renames it when the label changes.
+ * Whether `id` is what Grist derived from `label`: that id, numbered from 2 when it was taken (`ID` is, `id` being
+ * reserved: `ID2`, `Col1_2` after a digit), or letters (`A`, `B`...) when nothing is left of the label. Any other id
+ * was given to the column apart from its label, and Grist then no longer renames it when the label changes.
  */
 export function isTied(label, id) {
   const base = idFromLabel(label);
-  return base ? id.startsWith(base) && /^(?:_?\d+)?$/.test(id.slice(base.length)) : /^[A-Z]+$/.test(id);
+  if (!base) return /^[A-Z]+$/.test(id);
+  const number = /\d$/.test(base) ? /^_(?:[2-9]|[1-9]\d+)$/ : /^(?:[2-9]|[1-9]\d+)$/;
+  return id.startsWith(base) && (id === base || number.test(id.slice(base.length)));
 }
 
 const isUntied = (col) => Boolean(col.label) && !isTied(col.label, col.id);

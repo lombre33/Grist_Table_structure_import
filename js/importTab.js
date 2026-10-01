@@ -114,7 +114,6 @@ export function initImportTab(grist) {
       warnings = [...warnings, { key: "import.error.fetchDocInfo", params: { error: reportError(err) } }];
     } finally {
       analyzeBtn.disabled = false;
-      restoreFocus(analyzeBtn);
     }
   }
 
@@ -139,7 +138,9 @@ export function initImportTab(grist) {
     }
 
     setStatus(t("import.status.analyzing"));
+    actionBtn.disabled = true; // the button of the previous analysis, its tables gone
     await loadSchema();
+    restoreFocus(analyzeBtn);
     if (parsed !== analysed) return; // the text was edited, or cleared, while the document was being read
     setStatus(null);
 
@@ -371,7 +372,7 @@ export function initImportTab(grist) {
       busy = false;
       analyzeBtn.disabled = false;
       render();
-      restoreFocus(actionBtn);
+      restoreFocus(actionBtn.disabled ? sourceInput : actionBtn); // done, nothing left to press: the next text goes in the box
     }
   }
 
@@ -386,7 +387,6 @@ export function initImportTab(grist) {
           ? t("import.success.createdMulti", { count: created.length, ids: created.map((table) => table.id).join(", "), columnsPhrase })
           : t("import.success.createdSingle", { tableId: created[0].id, columnsPhrase });
       clearResults();
-      sourceInput.focus({ preventScroll: true }); // the button that had the focus is gone with the preview: the next paste goes here
       setStatus(summary + note, "success");
     } catch (err) {
       setStatus(t("import.error.createFailed", { error: reportError(err) }), "error");
