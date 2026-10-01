@@ -114,3 +114,11 @@ test("buildTypeExpression escapes a quote in its argument and appends further ar
   assert.equal(buildTypeExpression("Ref:Other", { visible_col: "'Name'", label: "'Owner'" }), "grist.Reference('Other', visible_col='Name', label='Owner')");
   assert.equal(buildTypeExpression("Text", { label: "'Full name'" }), "grist.Text(label='Full name')");
 });
+
+test("a constructor named like a property of every object is an unknown type, not a crash", () => {
+  for (const dsl of ["constructor", "toString", "__proto__", "hasOwnProperty", "valueOf"]) {
+    const warnings = [];
+    assert.equal(resolveColumnType(dsl, "", "Col", warnings).type, "Any", dsl);
+    assert.deepEqual(warnings.map((warning) => warning.key), ["warn.unknownType"], dsl);
+  }
+});

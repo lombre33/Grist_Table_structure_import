@@ -393,7 +393,7 @@ function applyI18n() {
 }
 
 export function initLocale() {
-  currentLocale = load(LOCALE_KEY, (value) => value in STRINGS, "fr");
+  currentLocale = load(LOCALE_KEY, (value) => Object.hasOwn(STRINGS, value), "fr");
   applyI18n();
   return currentLocale;
 }
@@ -404,7 +404,7 @@ export function onLocaleChange(listener) {
 }
 
 export function setLocale(value) {
-  currentLocale = value in STRINGS ? value : "fr";
+  currentLocale = Object.hasOwn(STRINGS, value) ? value : "fr";
   save(LOCALE_KEY, currentLocale);
   applyI18n();
   for (const listener of listeners) listener();

@@ -109,6 +109,10 @@ const TESTS = [
     created: "Table “Fresh” created with 1 column.",
   }), { locale: "en" }],
 
+  ["Language: a saved language the widget does not have is ignored, whatever its name", async (page) => {
+    assert.deepEqual(await page.evaluate(() => [document.documentElement.lang, document.querySelector("h1").textContent]), ["fr", "Structure de table"]);
+  }, { locale: "constructor" }],
+
   ["Import: a long identifier wraps instead of overflowing a narrow pane", async (page) => {
     await page.setViewportSize({ width: 320, height: 640 });
     await analyse(page, `@grist.UserTable\nclass ${"Very_long_table_name_".repeat(6)}:\n  ${"column_with_a_long_name_".repeat(5)} = grist.Reference('${"Other_".repeat(12)}')\n`);

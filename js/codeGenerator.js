@@ -5,7 +5,7 @@
  */
 
 import { buildTypeExpression, defaultLiteralForType } from "./gristTypes.js";
-import { quotePython } from "./pyText.js";
+import { indentOf, quotePython, stringLines } from "./pyText.js";
 import { isPlainObject, sanitizeWidgetOptions } from "./widgetOptions.js";
 
 const HEADER =
@@ -59,13 +59,11 @@ function formulaBody(formula, blankLiteral) {
   const body = INDENT + INDENT;
   if (!text.trim()) return `${body}return ${blankLiteral}`;
 
-  const lines = dedent(text.replace(/\r\n?/g, "\n").split("\n"));
-  if (lines.length > 1) return lines.map((line) => (line ? body + line : "")).join("\n");
-  return body + (STATEMENT_START_RE.test(text.trim()) ? text.trim() : `return ${text.trim()}`);
-}
+  const lines = text.replace(/\r\n?/g, "\n").split("\n");
+  if (lines.length === 1) return body + (STATEMENT_START_RE.test(text.trim()) ? text.trim() : `return ${text.trim()}`);
 
-function dedent(lines) {
-  const indents = lines.filter((line) => line.trim() !== "").map((line) => line.match(/^[ \t]*/)[0].length);
-  const common = Math.min(...indents);
-  return common > 0 && Number.isFinite(common) ? lines.map((line) => (line.trim() === "" ? line : line.slice(common))) : lines;
+  // like Grist, indent the code but not the lines of a multi-line string, which are part of its text
+  const inString = stringLines(lines);
+  const common = lines.reduce((least, line, i) => (inString[i] || line.trim() === "" ? least : Math.min(least, indentOf(line))), Infinity);
+  return lines.map((line, i) => (inString[i] ? line : line.trim() === "" ? "" : body + line.slice(common))).join("\n");
 }

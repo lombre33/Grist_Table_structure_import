@@ -294,3 +294,44 @@ test("input mutated at random never makes the parser throw or stall", () => {
   }
   assert.ok(Date.now() - started < 15000, "3000 mutated texts parse quickly");
 });
+
+test("a formula's multi-line string, which Grist writes unindented, stays in the formula and costs no column", () => {
+  const source = [
+    "@grist.UserTable",
+    "class T:",
+    "  A = grist.Text()",
+    "",
+    "  def _default_Stamp(rec, table, value, user):",
+    '    return """a',
+    'b"""',
+    "  Stamp = grist.Text()",
+    "",
+    "  @grist.formulaType(grist.Text())",
+    "  def F(rec, table):",
+    '    note = """first',
+    "# not a comment",
+    "  indented",
+    "",
+    "@grist.UserTable",
+    'after blank"""',
+    "    return note.strip()",
+    "",
+    "  @grist.formulaType(grist.Int())",
+    "  def G(rec, table):",
+    "    return 1",
+  ].join("\n");
+  const { tables, warnings } = parseGristSchema(source);
+  assert.deepEqual(warnings, []);
+  assert.deepEqual(tables.map((table) => table.tableId), ["T"], "a line of the string that looks like a decorator starts no table");
+  assert.deepEqual(tables[0].columns.map((col) => [col.id, col.kind]), [["A", "data"], ["Stamp", "trigger"], ["F", "formula"], ["G", "formula"]]);
+  assert.equal(tables[0].columns[1].code, 'return """a\nb"""');
+  assert.equal(tables[0].columns[2].code, 'note = """first\n# not a comment\n  indented\n\n@grist.UserTable\nafter blank"""\nreturn note.strip()');
+});
+
+test("a formula of hundreds of thousands of lines is read like any other", () => {
+  const source = `@grist.UserTable\nclass T:\n  def F(rec, table):\n${"    x = 1\n".repeat(300000)}    return x\n  B = grist.Text()\n`;
+  const { tables, warnings } = parseGristSchema(source);
+  assert.deepEqual(warnings, []);
+  assert.deepEqual(tables[0].columns.map((col) => col.id), ["F", "B"]);
+  assert.equal(tables[0].columns[0].code.split("\n").length, 300001);
+});

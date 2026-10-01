@@ -15,6 +15,45 @@ export function parseString(source) {
   return match ? (match[1] ?? match[2]).replace(/\\(.)/g, (_, ch) => UNESCAPED[ch] ?? ch) : null;
 }
 
+/** The number of spaces and tabs a line starts with. */
+export const indentOf = (line) => line.match(/^[ \t]*/)[0].length;
+
+/** Index after the `delimiter` that closes the string whose contents begin at `from`, or -1 when the line does not close it. */
+function stringEnd(line, from, delimiter) {
+  for (let i = from; i < line.length; i++) {
+    if (line[i] === "\\") i++;
+    else if (line.startsWith(delimiter, i)) return i + delimiter.length;
+  }
+  return -1;
+}
+
+/**
+ * Whether each line starts inside a triple-quoted string. Grist writes the lines of such a string in a
+ * formula as they are, unindented, so their indentation says nothing about the layout around them.
+ */
+export function stringLines(lines) {
+  const inside = [];
+  let open = null;
+  for (const line of lines) {
+    inside.push(open !== null);
+    let at = open ? stringEnd(line, 0, open) : 0;
+    if (at === -1) continue;
+    open = null;
+    for (; at < line.length && line[at] !== "#"; at++) {
+      if (line[at] !== "'" && line[at] !== '"') continue;
+      const triple = line[at].repeat(3);
+      const delimiter = line.startsWith(triple, at) ? triple : line[at];
+      const end = stringEnd(line, at + delimiter.length, delimiter);
+      if (end === -1) {
+        if (delimiter === triple) open = triple;
+        break;
+      }
+      at = end - 1;
+    }
+  }
+  return inside;
+}
+
 /** [index, character, depth] of every character outside a string literal; depth counts the brackets open around it. */
 function* codeChars(text, from = 0) {
   let depth = 0;

@@ -4,7 +4,7 @@
  * warning, `{ key, params, table }`, rendered by the interface.
  */
 
-import { findMatchingClose } from "./pyText.js";
+import { findMatchingClose, indentOf, stringLines } from "./pyText.js";
 import { RESERVED_COLUMN_IDS } from "./gristTypes.js";
 
 const CLASS_RE = /^class\s+([A-Za-z_]\w*)\s*(?:\([^)]*\))?\s*:\s*$/;
@@ -38,21 +38,30 @@ function classify(text) {
   return { kind: text.startsWith("@") ? "unknownDecorator" : "unknown" };
 }
 
-const indentOf = (line) => line.match(/^[ \t]*/)[0].length;
 const isCode = (line) => line.trim() !== "" && !line.trim().startsWith("#");
 
-/** The body of the function written at `parentIndent` whose header precedes line `from`: its code without the common indentation, and the index of the line after it. */
-function readBlock(lines, from, parentIndent) {
+/**
+ * The body of the function written at `parentIndent` whose header precedes line `from`: its code without
+ * the common indentation, and the index of the line after it. A line inside a multi-line string
+ * (`inString`) is part of the body, whatever its indentation, and is kept as it is.
+ */
+function readBlock(lines, inString, from, parentIndent) {
   let end = from;
   for (let i = from; i < lines.length; i++) {
-    if (lines[i].trim() === "") continue;
-    if (indentOf(lines[i]) > parentIndent) end = i + 1;
+    if (inString[i]) end = i + 1;
+    else if (lines[i].trim() === "") continue;
+    else if (indentOf(lines[i]) > parentIndent) end = i + 1;
     else if (isCode(lines[i])) break;
   }
-  const body = lines.slice(from, end);
-  if (!body.some(isCode)) return { code: "", end };
-  const common = Math.min(...body.filter(isCode).map(indentOf));
-  const code = body.map((line) => line.slice(Math.min(common, indentOf(line)))).join("\n").trim();
+  const layout = [];
+  for (let i = from; i < end; i++) if (isCode(lines[i]) && !inString[i]) layout.push(indentOf(lines[i]));
+  if (layout.length === 0) return { code: "", end };
+  const common = layout.reduce((least, indent) => Math.min(least, indent));
+  const code = lines
+    .slice(from, end)
+    .map((line, k) => (inString[from + k] ? line : line.slice(Math.min(common, indentOf(line)))))
+    .join("\n")
+    .trim();
   return { code, end };
 }
 const truncate = (text) => (text.length > MAX_SNIPPET_LENGTH ? `${text.slice(0, MAX_SNIPPET_LENGTH)}…` : text);
@@ -65,11 +74,12 @@ const truncate = (text) => (text.length > MAX_SNIPPET_LENGTH ? `${text.slice(0, 
  */
 export function parseGristSchema(sourceText) {
   const lines = String(sourceText).replace(/\r\n?/g, "\n").split("\n");
+  const inString = stringLines(lines);
   const tables = [];
   const warnings = [];
 
   for (let i = 0; i < lines.length; i++) {
-    if (lines[i].trim() !== "@grist.UserTable") continue;
+    if (inString[i] || lines[i].trim() !== "@grist.UserTable") continue;
     let header = i + 1;
     while (header < lines.length && lines[header].trim() === "") header++;
     const match = lines[header]?.match(CLASS_RE);
@@ -77,7 +87,7 @@ export function parseGristSchema(sourceText) {
       warnings.push({ key: "warn.decoratorNoClass", params: { line: i + 1 } });
       continue;
     }
-    const body = parseTableBody(lines, header + 1, match[1]);
+    const body = parseTableBody(lines, inString, header + 1, match[1]);
     tables.push({ tableId: match[1], columns: body.columns });
     warnings.push(...body.warnings);
     i = body.end - 1;
@@ -88,7 +98,7 @@ export function parseGristSchema(sourceText) {
 }
 
 /** The columns of the class body starting at `start`, which ends at the first line indented less than it. */
-function parseTableBody(lines, start, table) {
+function parseTableBody(lines, inString, start, table) {
   const columns = [];
   const warnings = [];
   const triggers = new Map();
@@ -113,7 +123,7 @@ function parseTableBody(lines, start, table) {
   for (; i < lines.length; i++) {
     const text = lines[i].trim();
     const indent = indentOf(lines[i]);
-    if (text === "" || text.startsWith("#") || indent > bodyIndent) continue;
+    if (inString[i] || text === "" || text.startsWith("#") || indent > bodyIndent) continue;
     if (indent < bodyIndent) break;
 
     const line = i + 1;
@@ -122,7 +132,7 @@ function parseTableBody(lines, start, table) {
       if (pendingType) warn("warn.formulaTypeDuplicate", { line: pendingType.line });
       pendingType = { ...found, line };
     } else if (found.kind === "formula" || found.kind === "trigger") {
-      const block = readBlock(lines, i + 1, bodyIndent);
+      const block = readBlock(lines, inString, i + 1, bodyIndent);
       i = block.end - 1;
       if (found.kind === "trigger") {
         triggers.set(found.id, block.code);

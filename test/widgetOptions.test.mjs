@@ -59,3 +59,8 @@ test("sanitizeWidgetOptions keeps __proto__ out of its result", () => {
   assert.equal(Object.getPrototypeOf(kept), Object.prototype);
   assert.equal({}.polluted, undefined);
 });
+
+test("sanitizeWidgetOptions does not mistake the names of the properties of every object for styles", () => {
+  const options = JSON.parse('{"__defineGetter__": 3, "valueOf": 4, "wrap": "no", "choiceOptions": {"A": {"constructor": 1, "__defineGetter__": 2, "fillColor": "#112233"}}}');
+  assert.deepEqual(sanitizeWidgetOptions(options), { __defineGetter__: 3, valueOf: 4, choiceOptions: { A: { fillColor: "#112233" } } });
+});

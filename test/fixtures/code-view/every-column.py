@@ -49,6 +49,11 @@ class Formulas:
     return 'new'
   Stamp = grist.Text()
 
+  def _default_StampNote(rec, table, value, user):
+    return """a
+b"""
+  StampNote = grist.Text()
+
   def _default_StampNum(rec, table, value, user):
     return rec.Data2 + 1
   StampNum = grist.Int()
@@ -97,6 +102,15 @@ class Formulas:
   def FMulti(rec, table):
     x = rec.Data1
     return x + '!'
+
+  @grist.formulaType(grist.Text())
+  def FString(rec, table):
+    note = """first
+# not a comment
+  indented
+
+last"""
+    return note.strip()
 
   @grist.formulaType(grist.Int())
   def FRec(rec, table):

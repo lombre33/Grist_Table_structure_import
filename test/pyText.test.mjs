@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { findMatchingClose, parseArguments, parseString, parseStringList, quotePython } from "../js/pyText.js";
+import { findMatchingClose, parseArguments, parseString, parseStringList, quotePython, stringLines } from "../js/pyText.js";
 
 test("quotePython escapes what would end the literal or break the line", () => {
   assert.equal(quotePython("it's"), "'it\\'s'");
@@ -56,4 +56,14 @@ test("parseArguments copes with nothing, a trailing comma and spaces around =", 
 test("parseStringList reads the strings of a list, whatever they contain", () => {
   assert.deepEqual(parseStringList("['a', \"b\", 'it\\'s', 'x, y', '']"), ["a", "b", "it's", "x, y", ""]);
   for (const source of ["[]", "['a'", "'a'", "('a', 'b')", undefined]) assert.equal(parseStringList(source), null, String(source));
+});
+
+test("stringLines flags the lines that start inside a triple-quoted string, and only those", () => {
+  const flags = (text) => stringLines(text.split("\n"));
+  assert.deepEqual(flags('a = 1\nx = """first\n# not a comment\n  indented\n\nlast"""\ny = 2'), [false, false, true, true, true, true, false]);
+  assert.deepEqual(flags("s = '''a\"\"\"b\nc''' + 'd'\nz = 1"), [false, true, false], "the other kind of triple quote is part of the text");
+  assert.deepEqual(flags('x = "it\'s" # """ not a string\ny = 3'), [false, false], "a quote in a comment or in another string opens nothing");
+  assert.deepEqual(flags('e = ""\nf = """"""\ng = 1'), [false, false, false], "empty strings are closed");
+  assert.deepEqual(flags('x = """a \\""" still\nin""" + 1\nout'), [false, true, false], "an escaped quote does not close it");
+  assert.deepEqual(flags('u = "unclosed\nnext'), [false, false], "a single-quoted string ends with its line");
 });

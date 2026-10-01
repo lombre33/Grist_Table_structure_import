@@ -147,3 +147,12 @@ test("every text value survives the round trip, whatever characters it holds", (
     assert.deepEqual(col.widgetOptions, { choices: [text, "other"], question: text });
   });
 });
+
+test("a formula's multi-line string is not indented, as in Grist, and reads back as written", () => {
+  const code = 'note = """first\n# not a comment\n  indented\n\nlast"""\nreturn note.strip()';
+  const text = gen(formula("F", "Text", code), formula("G", "Int", "1"));
+  assert.match(text, /def F\(rec, table\):\n {4}note = """first\n# not a comment\n {2}indented\n\nlast"""\n {4}return note.strip\(\)\n/);
+  const { tables, warnings } = parseGristSchema(text);
+  assert.deepEqual(warnings, []);
+  assert.deepEqual(tables[0].columns.map((col) => [col.id, col.code]), [["F", code], ["G", "return 1"]]);
+});

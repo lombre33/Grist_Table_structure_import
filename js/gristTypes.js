@@ -25,7 +25,7 @@ const TYPES = {
   Blob: { dsl: "Blob", blank: "None" },
   Any: { dsl: "Any", blank: "None" },
 };
-const TYPE_OF_DSL = Object.fromEntries(Object.entries(TYPES).map(([type, { dsl }]) => [dsl, type]));
+const TYPE_OF_DSL = new Map(Object.entries(TYPES).map(([type, { dsl }]) => [dsl, type])); // a Map: `constructor` is no type
 
 /** "Ref:People" gives { name: "Ref", arg: "People" }. */
 export function splitType(type) {
@@ -42,7 +42,7 @@ export function splitType(type) {
 export function resolveColumnType(dslType, argsRaw, colId, warnings) {
   const { positional, kwargs } = parseArguments(argsRaw);
   const warn = (key, params) => warnings.push({ key, params: { colId, ...params } });
-  const name = TYPE_OF_DSL[dslType];
+  const name = TYPE_OF_DSL.get(dslType);
   const spec = TYPES[name];
   let type = name ?? "Any";
   let refTarget = null;
