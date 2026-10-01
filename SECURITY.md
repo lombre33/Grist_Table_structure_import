@@ -8,29 +8,27 @@ simplement (revue de code manuelle ou outillée), en vue d'un audit.
 Trois actions métier possibles, toutes via l'API officielle du widget
 (`grist.docApi`), jamais davantage :
 
-- **Import, mode « Nouvelle table »** : crée une table (action `AddTable`) dans le
-  document où le widget est ouvert, à partir du texte collé et analysé.
+- **Import, mode « Nouvelle table »** : crée les tables cochées (action `AddTable`, toutes
+  dans un seul appel, donc tout ou rien) dans le document où le widget est ouvert, à
+  partir du texte collé et analysé.
 - **Import, mode « Table existante »** : ajoute des colonnes (actions
   `AddVisibleColumn`, envoyées groupées en un seul appel) à une table déjà présente
   dans ce document — uniquement celles dont l'identifiant n'existe pas déjà sur cette
-  table. `AddVisibleColumn` (plutôt que `AddColumn`, plus permissive mais qui laisse la
-  colonne invisible dans les grilles déjà existantes, visible seulement via « Données
-  sources ») est l'action que Grist lui-même utilise pour que la colonne apparaisse
-  immédiatement dans les vues de la table, exactement comme avec le bouton « + » natif
-  d'une grille.
-- **Import, `visible_col` (colonne d'affichage)** : quand le texte analysé précise,
-  pour une colonne de référence, quelle colonne de la table cible utiliser comme
-  « colonne d'affichage » (voir « Métadonnées de colonne capturées à l'export » plus
-  bas), le widget envoie, dans un second appel `applyUserActions` juste après la
-  création, exactement les deux actions que l'interface Grist elle-même envoie quand
-  un utilisateur choisit « SHOW COLUMN » : `ModifyColumn` (enregistre la référence)
-  puis `SetDisplayFormula` (fait effectivement afficher la valeur cible plutôt que la
-  référence brute). Ces deux actions ne ciblent **jamais** que la colonne qui vient
-  d'être créée par ce même appel — jamais une colonne préexistante — donc l'invariant
-  « le widget n'ajoute, ne modifie ni ne supprime jamais une colonne existante » n'est
-  pas affecté. Un échec de ce second appel (par ex. table cible entre-temps
-  supprimée) n'annule pas la création déjà effectuée ; il est signalé séparément à
-  l'utilisateur.
+  table (sans tenir compte des majuscules, comme Grist). `AddVisibleColumn` (plutôt que
+  `AddColumn`, qui laisse la colonne invisible dans les grilles déjà existantes, visible
+  seulement via « Données sources ») est l'action que Grist lui-même utilise pour que la
+  colonne apparaisse immédiatement dans les vues de la table, comme avec le bouton « + »
+  natif d'une grille.
+- **Import, deuxième temps** : `AddTable` et `AddVisibleColumn` ignorent la description
+  d'une colonne, et une « colonne d'affichage » (`visible_col`) a besoin de l'identifiant
+  interne d'une colonne qui n'existe qu'une fois les tables créées. Le widget envoie donc
+  un second appel `applyUserActions` juste après : `ModifyColumn` (description, référence
+  de la colonne d'affichage) puis `SetDisplayFormula` (fait afficher la valeur cible),
+  exactement les actions que l'interface Grist envoie pour « SHOW COLUMN ». Elles
+  utilisent les identifiants que Grist a réellement créés (ceux qu'il renvoie, qu'il peut
+  avoir réécrits) et ne ciblent **jamais** que des colonnes créées par le premier appel —
+  jamais une colonne préexistante. Un échec de ce second appel n'annule pas la création
+  déjà faite ; il est signalé séparément à l'utilisateur.
 - **Export** : lecture seule. Le widget lit la structure des tables de ce document
   (`grist.docApi.fetchTable` sur les tables de métadonnées `_grist_Tables` et
   `_grist_Tables_column` — voir « Lecture des tables de métadonnées » ci-dessous) et
@@ -39,12 +37,13 @@ Trois actions métier possibles, toutes via l'API officielle du widget
   ailleurs.
 
 Le widget ne modifie et ne supprime **jamais** de table, colonne ou donnée existante :
-il ne fait qu'ajouter (et, pour `visible_col` ci-dessus, compléter une colonne qu'il
-vient tout juste de créer lui-même dans le même flux). Si l'identifiant choisi pour une
-nouvelle table existe déjà, la création est refusée côté widget (double vérification :
-au moment de l'aperçu, puis juste avant l'envoi de l'action, pour éviter une collision
-créée entre-temps) ; en mode « Table existante », une colonne dont l'identifiant est
-déjà pris sur la table choisie n'est jamais touchée, quel que soit son type réel.
+il ne fait qu'ajouter (et compléter ce qu'il vient lui-même de créer, ci-dessus). Un
+identifiant de table n'est accepté que s'il est un identifiant que Grist crée tel quel
+(sinon Grist le réécrit en silence) et s'il n'existe pas déjà, sans tenir compte des
+majuscules : vérifié dans l'aperçu, puis de nouveau juste avant l'envoi (relecture de la
+liste des tables) pour écarter une collision survenue entre-temps. En mode « Table
+existante », une colonne dont l'identifiant est déjà pris n'est jamais touchée, quel que
+soit son type réel.
 
 ## Lecture des tables de métadonnées
 
@@ -71,13 +70,14 @@ quitte le navigateur.
 
 ## Le texte collé n'est jamais exécuté
 
-`js/parser.js` ne contient ni `eval`, ni `Function(...)`, ni `import()` dynamique : le
-texte collé (qui ressemble à du code Python) est uniquement comparé à un petit ensemble
-d'expressions régulières fixes. Tout ce qui ne correspond pas à un motif reconnu est
-ignoré et signalé comme avertissement, sans jamais faire échouer l'analyse ni être
-interprété comme du code. Voir `test/parser.test.mjs` (cas « never throws on
-arbitrary/malicious-looking input ») pour une vérification automatisée de cette
-propriété.
+`js/parser.js` et `js/pyText.js` ne contiennent ni `eval`, ni `Function(...)`, ni `import()`
+dynamique : le texte collé (qui ressemble à du code Python) est uniquement comparé à un
+petit ensemble d'expressions régulières fixes et découpé par un scanner de caractères.
+Tout ce qui ne correspond pas à un motif reconnu est ignoré et signalé comme avertissement,
+sans jamais faire échouer l'analyse ni être interprété comme du code. `test/security.test.mjs`
+interdit ces appels dans `js/` à chaque modification, et `test/parser.test.mjs` soumet le
+parseur à des milliers de textes d'entrée mutés au hasard (graine fixe) : il ne lève jamais
+d'exception et s'arrête toujours vite.
 
 ## Métadonnées de colonne capturées à l'export (choix, styles, `widget_options`)
 
@@ -87,16 +87,12 @@ libellé (`label`), description, et le contenu de `widgetOptions` propre à la c
 section « Export »). Ceci ajoute deux mécanismes, tous deux de la simple analyse de
 texte déterministe, jamais de l'évaluation :
 
-- **Un scanner de profondeur de parenthèses/crochets** (`findMatchingClose` dans
-  `js/parser.js`), qui remplace l'ancienne extraction par regex `\(([^)]*)\)` pour
-  trouver la parenthèse fermante d'un appel `grist.Xxx(...)` : il compte simplement la
-  profondeur d'imbrication caractère par caractère, en ignorant le contenu des chaînes
-  entre guillemets (simples ou doubles, avec gestion de l'échappement `\`) pour qu'une
-  parenthèse littérale dans une valeur (ex. un choix nommé `'Oui (confirmé)'`) ne
-  termine pas la capture prématurément. Aucune exécution, aucune interprétation du
-  contenu : uniquement un comptage de caractères délimiteurs. Voir
-  `test/parser.test.mjs` pour les cas de test (valeurs avec parenthèses, parenthèses
-  non refermées, guillemets échappés).
+- **Un scanner de texte** (`findMatchingClose` et `parseArguments` dans `js/pyText.js`) :
+  il parcourt les caractères en comptant la profondeur des parenthèses/crochets, en
+  ignorant le contenu des chaînes entre guillemets (simples ou doubles, échappement `\`
+  compris) pour qu'une parenthèse ou une virgule littérale dans une valeur (ex. un choix
+  nommé `'Oui (confirmé)'`) ne coupe rien. Aucune exécution, aucune interprétation du
+  contenu : uniquement un comptage de caractères délimiteurs. Voir `test/pyText.test.mjs`.
 - **`JSON.parse` sur la valeur capturée de `widget_options='<JSON>'`**, à l'import
   (`js/gristTypes.js`) : `JSON.parse` n'exécute jamais son argument comme du code
   (contrairement à `eval`) — il ne fait qu'analyser une syntaxe de données stricte et
@@ -106,7 +102,7 @@ texte déterministe, jamais de l'évaluation :
 
 Le résultat de ce `JSON.parse` (et, à l'export, le `widgetOptions` brut déjà présent
 dans le document) passe systématiquement par `sanitizeWidgetOptions()`
-(`js/gristTypes.js`), qui :
+(`js/widgetOptions.js`), qui :
 
 - retire toujours la clé `rulesOptions` (styles de mise en forme conditionnelle) :
   elle n'a de sens qu'associée à un champ `rules` du schéma de la colonne (une liste de
@@ -133,23 +129,24 @@ dans le document) passe systématiquement par `sanitizeWidgetOptions()`
 Cette même fonction est utilisée à l'export (avant d'écrire `widget_options=`) et à
 l'import (sur la valeur reçue), donc un seul et même filtre décide, à un seul endroit
 du code, de ce qui est sûr à faire transiter d'un document à l'autre — voir
-`test/gristTypes.test.mjs` pour la couverture de tests de `sanitizeWidgetOptions`.
+`test/widgetOptions.test.mjs` pour la couverture de tests de `sanitizeWidgetOptions`.
 
 ## Pas d'`innerHTML`
 
 Toute valeur dérivée du texte collé par l'utilisateur (nom de table, nom de colonne,
-avertissements) est insérée dans la page via `textContent` / création de nœuds DOM
-(`js/dom.js`), jamais via `innerHTML`. Cela élimine par construction tout risque
-d'injection HTML/JS à partir du texte collé, y compris si celui-ci contient des
-caractères `<`, `>` ou des apostrophes. `js/i18n.js` (interface bilingue, voir
-README.md) suit la même règle : la seule chaîne d'interface qui inclut un élément
-(`<code>$Colonne</code>`, dans l'astuce sur les formules de l'onglet Export) est
-reconstruite via un simple marqueur `{code}` scindé en deux nœuds texte plus un nœud
-`<code>` créé par `js/dom.js` — jamais par analyse HTML.
+avertissements) est insérée dans la page via `textContent`, des propriétés du DOM ou des
+nœuds texte (`js/dom.js` est le point d'entrée habituel pour construire des éléments),
+jamais via `innerHTML`. Cela élimine par construction tout risque d'injection HTML/JS à
+partir du texte collé, y compris s'il contient des caractères `<`, `>` ou des
+apostrophes. `test/security.test.mjs` vérifie à chaque modification l'absence de
+`innerHTML`, `outerHTML`, `insertAdjacentHTML` et `document.write` dans `js/`. Les chaînes
+de l'interface bilingue (`js/i18n.js`) sont posées par `textContent` ; le seul élément
+inséré dans une phrase (`<code>$Colonne</code>`, astuce de l'onglet Export) est écrit dans
+`index.html`.
 
 ## Réglages (thème, langue) : `localStorage`, sur une base best-effort
 
-Le panneau « Réglages » (`js/settings.js`, `js/theme.js`, `js/i18n.js`) mémorise deux
+Le panneau « Réglages » (`js/settings.js`, `js/i18n.js`, `js/storage.js`) mémorise deux
 préférences d'affichage — thème (système/clair/sombre) et langue (fr/en) — dans le
 `localStorage` de l'origine du widget (deux clés, `gristFactory.theme` et
 `gristFactory.locale`, aucune autre donnée). Ce n'est ni une donnée du document, ni une
@@ -166,14 +163,20 @@ navigateur, pas du code spécifique à ce widget.
 
 ## Vérification automatisée (CI)
 
-Le workflow `.github/workflows/ci.yml` exécute, à chaque modification :
+Le workflow `.github/workflows/ci.yml` s'exécute à chaque modification (et le déploiement
+GitHub Pages, `pages.yml`, ne part que s'il passe) :
 
-- les tests unitaires (`node --test`, sans dépendance à installer) ;
-- une recherche automatique de motifs interdits dans `js/` : `eval(`, `new Function(`,
-  `.innerHTML =`, `document.write(` — la construction échoue si l'un de ces motifs
-  apparaît ;
-- une vérification qu'`index.html` ne référence aucun script externe en dehors de l'API
-  officielle Grist et du code du widget lui-même.
+- **tests unitaires et lint de sécurité** (`npm test`, sans dépendance à installer) : les
+  motifs interdits dans `js/` (voir ci-dessus) et la vérification qu'`index.html` ne charge
+  aucun script en dehors de l'API officielle de Grist et du code du widget, avec une CSP
+  qui interdit tout autre accès ;
+- **tests navigateur** (le vrai `index.html` dans Chromium, faux `grist` en mémoire) ;
+- **tests contre une vraie instance Grist** (image officielle `gristlabs/grist`, épinglée
+  par digest) : ce que le widget demande au moteur, l'aller-retour de chaque type de colonne
+  et l'interface complète.
+
+Les actions GitHub utilisées sont référencées par leur étiquette majeure
+(`actions/checkout@v4`...) et non par empreinte de commit : un durcissement possible.
 
 ## Dépendances
 
@@ -192,12 +195,12 @@ supplémentaire au chargement, aucun tiers à ajouter à la CSP (`font-src 'self
 suffit), fichier entièrement auditable dans le dépôt au même titre que le reste du code.
 
 **Playwright** (`devDependencies`) est la seule vraie dépendance npm du dépôt : elle pilote
-un navigateur pour `test/browser/run.mjs` (voir README.md, « Développement »), en local et
-en CI, et n'est déclarée que là. Elle n'apparaît dans aucun fichier publié (voir
-`.github/workflows/pages.yml`, dont la liste de copie n'a jamais inclus `node_modules/`
-ni `package.json`) et n'est jamais chargée par le widget lui-même : l'affirmation « aucune
-dépendance d'exécution » ci-dessus reste exacte, cette dépendance-ci ne concerne que le
-développement et l'intégration continue.
+un navigateur pour `test/browser` et `test/grist` (voir README.md, « Développement »), en
+local et en CI, et n'est déclarée que là. Elle n'apparaît dans aucun fichier publié (voir
+`.github/workflows/pages.yml`, dont la liste de copie n'inclut ni `node_modules/` ni
+`package.json`) et n'est jamais chargée par le widget lui-même : l'affirmation « aucune
+dépendance d'exécution » ci-dessus reste exacte. L'image Docker de Grist ne sert qu'aux
+tests, jamais au widget publié.
 
 ## Logo Grist Factory
 
@@ -214,10 +217,6 @@ la couleur du texte du bouton qui les contient, s'adaptent donc automatiquement 
 clair/sombre sans code ni fichier supplémentaire. Aucune police d'icônes, aucun emoji,
 aucune image externe (`<img>`) : rien de plus que les deux balises `<svg>` déjà présentes
 dans le HTML.
-
-`package.json` ne sert qu'au développement (lancement des tests avec le module natif
-`node:test`) ; il ne déclare aucune dépendance (`dependencies` et `devDependencies`
-vides) et n'est pas publié sur le site (voir le workflow de publication).
 
 ## Content-Security-Policy
 
@@ -250,11 +249,11 @@ Points notables :
 - `'unsafe-eval'` est **imposé par le script officiel `grist-plugin-api.js`**, pas par ce
   widget : ce fichier, tel que publié par Grist Labs, est un empaquetage webpack construit
   avec l'option de développement `devtool: eval`, qui encapsule chaque module dans un
-  appel `eval(...)` (constaté : 182 occurrences dans le fichier au moment de la rédaction).
+  appel `eval(...)` (constaté : près de deux cents occurrences dans le fichier au moment de la rédaction).
   Sans `'unsafe-eval'`, ce script officiel ne s'initialise pas du tout et le widget ne
   fonctionne pas. Le code propre à ce widget (`js/*.js`) n'utilise et n'a besoin d'aucune
-  forme d'évaluation dynamique : voir la vérification CI ci-dessus, qui l'atteste sur
-  chaque modification.
+  forme d'évaluation dynamique : `test/security.test.mjs` l'atteste à chaque
+  modification.
 - `connect-src 'none'` : le widget ne fait aucun appel réseau applicatif (voir plus haut).
 - GitHub Pages ne servant pas d'en-tête `Content-Security-Policy` (seule la balise
   `<meta>` est possible), la directive `frame-ancestors` — qui n'a d'effet que via un

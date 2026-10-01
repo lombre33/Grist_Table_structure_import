@@ -28,13 +28,15 @@ l'ajout de colonnes dans le document Grist courant, via l'API officielle du widg
      sont toutes cochées par défaut ; décochez celles à ne pas créer. L'aperçu affiche
      alors les colonnes de chaque table cochée à la suite, séparées par un intitulé
      discret, avec un champ d'identifiant par table (pré-rempli avec le nom d'origine,
-     modifiable) — tout est créé en une seule fois, en un seul clic.
+     première lettre en majuscule, modifiable) — tout est créé en une seule fois, en un
+     seul clic, et les références entre ces tables sont conservées (elles suivent le
+     nouvel identifiant si vous en changez un).
    - **Table existante** : ajoute uniquement les colonnes qui manquent à une table déjà
      présente dans ce document (une seule table source à la fois) ; les colonnes dont
-     l'identifiant existe déjà sur la table choisie sont repérées « Déjà présente » dans
-     l'aperçu et ignorées — leur type n'est jamais modifié. Les colonnes ajoutées
-     apparaissent immédiatement dans les grilles déjà existantes de cette table, pas
-     seulement dans « Données sources ».
+     l'identifiant existe déjà sur la table choisie — sans tenir compte des majuscules,
+     comme Grist — sont repérées « Déjà présente » dans l'aperçu et ignorées : leur type
+     n'est jamais modifié. Les colonnes ajoutées apparaissent immédiatement dans les
+     grilles déjà existantes de cette table, pas seulement dans « Données sources ».
 4. Vérifiez l'aperçu (types détectés, colonnes ignorées, remarques éventuelles) — chaque
    colonne a sa propre case à cocher (cochée par défaut) pour l'exclure individuellement
    de l'action, en plus de la sélection par table — puis cliquez sur le bouton d'action.
@@ -42,9 +44,11 @@ l'ajout de colonnes dans le document Grist courant, via l'API officielle du widg
    recommencer avec un autre texte.
 
 Le widget ne modifie ni ne supprime jamais une colonne ou une table existante : en mode
-« Nouvelle table », un identifiant déjà pris (y compris en double entre deux tables de la
-même sélection) est refusé (choisissez-en un autre) ; en mode « Table existante », seules
-les colonnes absentes sont ajoutées.
+« Nouvelle table », un identifiant déjà pris (sans tenir compte des majuscules, y compris
+entre deux tables de la même sélection) est refusé ; en mode « Table existante », seules
+les colonnes absentes sont ajoutées. Un identifiant de table doit être un identifiant
+que Grist crée tel quel : majuscule initiale, puis lettres, chiffres ou `_` (ni accent, ni
+espace, ni `None`/`True`/`False`) ; sinon Grist le réécrirait en silence.
 
 Aucune confirmation n'est demandée avant de cliquer sur le bouton d'action : c'est un
 choix délibéré, pas un oubli. Les actions de ce widget sont strictement additives (jamais
@@ -100,9 +104,11 @@ Cette table sert dans les deux sens : à l'import, pour choisir le type de colon
 | tout le reste / type non reconnu       | Quelconque (`Any`)               |
 
 À l'import, toutes les colonnes sont créées comme colonnes de données (pas de formules),
-y compris celles écrites avec `@grist.formulaType(...)` dans le code source : ce format
-sert à Grist à afficher aussi les colonnes de données normales dans la Code View, il ne
-signifie pas que la colonne d'origine est une formule.
+y compris celles écrites avec `@grist.formulaType(...)` dans le code source. Ce que le
+widget ne peut pas reproduire n'est pas perdu en silence : les colonnes calculées (formule
+ou valeur par défaut déclenchée, `def _default_...`) sont créées vides et les références
+bidirectionnelles (`reverse_of=`) comme références simples ; une remarque de l'aperçu
+les liste.
 
 ### Métadonnées de colonne restaurées à l'import
 
@@ -111,38 +117,35 @@ la forme des arguments nommés supplémentaires décrits plus bas (« Métadonn�
 capturées à l'export ») — le libellé (`label`), la description, la liste de choix et
 son style (couleurs, gras...) pour Choix/Choix multiples, et le reste des options
 d'affichage de la colonne (`widgetOptions` : alignement, retour à la ligne, format
-numérique/date, etc.). Un texte Code View réel, provenant directement de Grist (sans
-ces arguments), s'importe exactement comme avant : seul le type est alors repris, comme
-précédemment.
+numérique/date, etc.). Grist ignore la description quand on crée une colonne : le
+widget l'applique juste après, dans une seconde étape. Un texte Code View réel, issu
+directement de Grist (sans ces arguments), ne donne que les types.
 
 ### Limites connues
 
 - Les valeurs d'une liste de choix ne sont reprises que si elles apparaissent
   explicitement dans le code sous la forme `choices=['A', 'B']`. Un texte collé depuis
-  la vraie Code View de Grist (qui n'expose habituellement pas ces valeurs) ne les
-  contient pas ; un texte généré par l'onglet **Export** de ce même widget, si.
+  la vraie Code View de Grist (qui n'expose pas ces valeurs) ne les contient pas ; un
+  texte généré par l'onglet **Export** de ce même widget, si.
 - Pour une colonne de référence, la « colonne d'affichage » (visible column) est
-  restaurée automatiquement quand le texte collé précise `visible_col='NomDeColonne'`
-  **et** que cette colonne cible existe déjà dans le document de destination — ce qui
-  est de toute façon nécessaire pour que la colonne s'importe en Référence plutôt qu'en
-  `Any` (voir ci-dessous). Cas non géré, signalé par un avertissement plutôt qu'une
-  erreur silencieuse : une auto-référence vers la table en cours de création elle-même,
-  en mode « Nouvelle table » (la colonne cible n'existe pas encore au moment de la
-  résolution ; en mode « Table existante », ce même cas fonctionne, la table cible
-  existant déjà). Sans `visible_col`, comme avant, la colonne d'affichage n'est pas
-  définie automatiquement ; vous pouvez la choisir manuellement après création.
-- Si une colonne référence une table qui n'existe pas encore dans le document de
-  destination (et n'est pas la table en cours de création), elle est importée en type
-  `Any` plutôt qu'en référence, avec un avertissement affiché dans l'aperçu.
-- Les arguments de constructeur complexes (expressions, appels imbriqués autres que les
-  arguments nommés reconnus ci-dessous) ne sont pas interprétés ; seuls le premier
-  argument texte entre guillemets (nom de table cible, fuseau horaire) et les arguments
-  nommés `choices=`, `widget_options=`, `label=`, `description=`, `visible_col=` sont
-  lus — le reste est ignoré sans faire échouer l'import de la colonne.
-- Une valeur contenant une parenthèse ou un crochet littéral (ex. un choix nommé
-  `'Oui (confirmé)'`) est prise en charge correctement (voir SECURITY.md) ; un appel
-  dont les parenthèses ne sont pas correctement refermées est en revanche ignoré comme
-  contenu non reconnu, avec un avertissement.
+  restaurée quand le texte précise `visible_col='NomDeColonne'` et que cette colonne
+  existe dans la table cible, déjà présente ou créée dans le même lot. Introuvable, elle
+  est signalée dans le message de fin, sans faire échouer la création.
+- Si une colonne référence une table qui n'existe pas dans le document de destination
+  (et n'est pas créée en même temps), elle est importée en type `Any` avec un
+  avertissement dans l'aperçu.
+- Les arguments de constructeur complexes (expressions, appels imbriqués) ne sont pas
+  interprétés ; seuls le premier argument texte (table cible, fuseau horaire) et les
+  arguments nommés `choices=`, `widget_options=`, `label=`, `description=`, `visible_col=`
+  et `reverse_of=` sont lus — le reste est ignoré sans faire échouer l'import de la colonne.
+- Un appel dont les parenthèses ne sont pas refermées, ou une valeur texte qui s'étend sur
+  plusieurs lignes dans un texte écrit à la main, est ignoré comme contenu non reconnu,
+  avec un avertissement. Le texte généré par l'onglet **Export** n'a jamais ce défaut :
+  les retours à la ligne y sont écrits `\n`.
+- Grist réécrit certains identifiants de colonne (`_x` devient `x`, `class` devient
+  `cclass`) : le widget suit l'identifiant réellement créé. Une colonne nommée `grist`
+  fait en revanche échouer Grist lui-même (le code généré du document masque alors son
+  propre module `grist`) : l'erreur est affichée et rien n'est créé.
 
 ## Export
 
@@ -193,10 +196,9 @@ supplémentaires, tous optionnels :
 
 **Ce sont des arguments propres à ce widget, pas le format officiel de la Code View de
 Grist** : Grist lui-même n'écrit, au mieux, que `choices=[...]` dans de rares cas, jamais
-les autres. Un texte Code View authentique, collé depuis Grist sans ces arguments,
-continue de s'importer exactement comme avant (seul le type est alors repris) — ces
-arguments sont une extension strictement additive du format, reconnue par l'onglet
-**Import** de ce même widget. Voir SECURITY.md pour comment ce texte supplémentaire est
+les autres. Un texte Code View authentique, collé depuis Grist sans ces arguments, ne
+donne que les types — ces arguments sont une extension strictement additive du format,
+reconnue par l'onglet **Import** de ce même widget. Voir SECURITY.md pour comment ce texte supplémentaire est
 analysé (toujours par simple lecture de texte, jamais exécuté) et « Limites connues »
 ci-dessus pour les cas non couverts.
 
@@ -226,10 +228,10 @@ L'interface suit l'identité UI/UX commune aux widgets **Grist Factory** (grist-
 
 - **Palette** : une base neutre (fond/surface/bordures/texte en plusieurs intensités) et
   un seul bleu d'accent (`#2f6fed`) pour les actions et états actifs ; rouge pour les
-  erreurs, ambre pour les avertissements, vert pour les confirmations — jamais de
+  erreurs, ambre pour les remarques de l'analyse, vert pour les confirmations — jamais de
   couleur sans rôle sémantique. Coins arrondis partout (7 px / 11 px), ombres douces
   réservées aux éléments flottants (le panneau Réglages) et très légères sur les cartes.
-- **Typographie** : **Manrope** (poids 500 à 800) pour toute l'interface, vendorisée
+- **Typographie** : **Manrope** (police variable) pour toute l'interface, vendorisée
   dans `fonts/manrope/` (police variable, licence SIL Open Font License jointe) plutôt
   que chargée depuis une CDN — voir SECURITY.md. Le code Python (collé ou généré) reste
   en police à chasse fixe, monospace, inchangé.
@@ -239,7 +241,8 @@ L'interface suit l'identité UI/UX commune aux widgets **Grist Factory** (grist-
 - **Icônes** : deux SVG en contour, en ligne dans `index.html`, aucune police d'icônes
   ni emoji (voir SECURITY.md).
 - **Bilingue français / anglais** : réglable dans le même panneau. Toute chaîne visible
-  de l'interface est traduite (`js/i18n.js`) — aussi bien les libellés fixes (titres,
+  de l'interface est traduite (`js/i18n.js`, dont un test vérifie que les deux langues
+  ont les mêmes clés, formes plurielles et paramètres) — aussi bien les libellés fixes (titres,
   boutons, en-têtes, aide) que les messages générés dynamiquement pendant l'usage
   (statuts de création/ajout, avertissements d'analyse), accords singulier/pluriel
   compris (ex. « Table « X » créée avec 1 colonne. » / « ... avec 3 colonnes. »).
@@ -271,60 +274,81 @@ de publier ce dépôt sur votre propre hébergement statique.
 ## Développement
 
 Le widget est du HTML/CSS/JS statique sans dépendance d'exécution (modules ES natifs,
-aucun paquet npm requis pour faire tourner le widget lui-même) :
+aucun paquet npm requis pour le faire tourner). Code, commentaires et titres de tests en
+anglais ; documentation et messages de commit en français.
+
+Trois suites de tests :
 
 ```sh
-npm test   # node --test — aucune installation nécessaire
+npm test               # unitaires (node --test, aucune installation) : parseur,
+                       # génération, types, i18n, lint de sécurité, vrai Code View enregistré
+npm run test:browser   # le vrai index.html dans Chromium (Playwright), faux `grist` en mémoire
+npm run test:grist     # le widget contre une vraie instance Grist (voir ci-dessous)
 ```
 
-Pour tester l'interface dans un vrai navigateur sans document Grist sous la main,
-`test/browser/harness.html` recharge le widget réel (mêmes `js/*.js` et `style.css`) avec
-une API Grist minimale simulée (aucune dépendance, un simple `<script>` inline dans ce
-fichier de test) : ouvrez-le directement dans un navigateur. Ce fichier n'est jamais
-publié (voir `.github/workflows/pages.yml`, qui ne copie que `index.html`, `style.css`,
-`favicon.svg`, `fonts/`, `assets/` et `js/*.js`).
+`npm test` suffit pour la logique : il n'a besoin ni de navigateur ni de Grist. Le test de
+sécurité (`test/security.test.mjs`) y interdit dans `js/` `eval`, le constructeur `Function`,
+`innerHTML`/`outerHTML`, `document.write`, `import()`, `fetch`, `WebSocket`..., et vérifie
+que `index.html` ne charge que l'API officielle de Grist et sa CSP.
 
-Ce même harnais est aussi piloté automatiquement en CI (`.github/workflows/ci.yml` et
-`pages.yml`, avant chaque déploiement) via **Playwright**, seule dépendance du dépôt —
-uniquement dans `devDependencies`, jamais publiée avec le widget :
+Playwright, seule dépendance du dépôt (`devDependencies`, jamais publiée avec le widget),
+sert aux deux autres suites :
 
 ```sh
-npm ci                              # installe Playwright (une fois)
-npx playwright install chromium     # télécharge Chromium pour Playwright
-npm run test:browser                # test/browser/run.mjs
+npm ci
+npx playwright install chromium
 ```
 
-Existe parce qu'`index.html` et `harness.html` dupliquent leur balisage à la main (pas
-d'étape de build, voir ci-dessus) et ont déjà divergé silencieusement en cours de
-développement, cassant l'onglet Import d'une façon que `npm test` seul (logique pure,
-sans navigateur) ne pouvait pas détecter — ce script est le filet de sécurité
-automatisé pour cette classe de régression.
+### Tests sur une instance Grist réelle
+
+`npm run test:grist` pilote une vraie instance Grist par son API REST (qui expose la même
+chose que l'API d'un widget : `listTables`, `fetchTable`, `applyUserActions` avec ses
+`retValues`). Il vérifie ce que le widget attend du moteur (normalisation des identifiants,
+description ignorée à la création, lot atomique...), l'aller-retour Export → Import de
+chaque type de colonne avec toutes ses options, les identifiants contre le moteur, la
+logique d'import, et l'interface complète pilotée dans Chromium. Pour en lancer une :
+
+```sh
+docker run -d -p 8484:8484 -e APP_HOME_URL=http://localhost:8484 \
+  -e GRIST_DEFAULT_EMAIL=ci@example.com -e GRIST_IN_SERVICE=true \
+  -e GRIST_SANDBOX_FLAVOR=unsandboxed gristlabs/grist:1.7.20
+GRIST_URL=http://localhost:8484 npm run test:grist   # GRIST_URL est ce défaut
+```
+
+Grist n'accepte que le nom d'hôte de `APP_HOME_URL` (`localhost`, pas `127.0.0.1`). La CI
+exécute la même suite sur la même image (épinglée par digest). Si Chromium n'est pas à
+l'emplacement attendu par Playwright, `PLAYWRIGHT_CHROMIUM_PATH` indique l'exécutable.
+
+Les fixtures de `test/fixtures/code-view/` sont du texte Code View produit par le
+`gencode.py` d'un vrai Grist ; elles se régénèrent avec `test/grist/record-code-view.mjs`
+(`GRIST_SANDBOX_DIR=<grist-core>/sandbox/grist`, `GRIST_PYTHON`, `GRIST_VERSION`).
 
 Structure :
 
 ```
-index.html            page du widget (en-tête, panneau Réglages, onglets Import / Export)
+index.html             page du widget (en-tête, panneau Réglages, onglets Import / Export)
 style.css              mise en forme (identité visuelle Grist Factory, thème clair/sombre)
-fonts/manrope/          police Manrope vendorisée (voir SECURITY.md)
-assets/                 logo Grist Factory (voir SECURITY.md)
-js/parser.js           lecture du code source (regex + scanner de parenthèses/crochets,
-                        jamais exécuté)
-js/gristTypes.js       types Python <-> types de colonne Grist, métadonnées étendues
-                        (choix, styles, widgetOptions...), dans les deux sens
-js/schema.js           lecture de la structure réelle du document (_grist_Tables*),
-                        détection des tables référencées non sélectionnées
-js/codeGenerator.js    génère le code Python (types + métadonnées) à partir d'une
-                        structure de table
+fonts/manrope/         police Manrope vendorisée (voir SECURITY.md)
+assets/                logo Grist Factory (voir SECURITY.md)
+js/app.js              point d'entrée : onglets, initialisation
+js/importTab.js        onglet Import : câblage du DOM
+js/importer.js         logique de l'import sans DOM : résolution des colonnes, identifiants,
+                       création en un lot puis descriptions et colonnes d'affichage
+js/exportTab.js        onglet Export
+js/parser.js           lecture du code source (motifs fixes + scanner de parenthèses, jamais exécuté)
+js/pyText.js           texte Python : littéraux, parenthèse fermante, arguments d'un appel
+js/gristTypes.js       types de colonne <-> constructeurs Code View (une table de types)
+js/widgetOptions.js    ce qui d'un widgetOptions peut voyager d'un document à l'autre
+js/schema.js           structure réelle du document (_grist_Tables*), tables référencées
+js/codeGenerator.js    génère le code Python (types + métadonnées)
 js/dom.js              construction du DOM sans innerHTML
-js/util.js             petits utilitaires partagés (délai, pluriel, messages d'erreur)
-js/theme.js            réglage thème système/clair/sombre (localStorage best-effort)
-js/i18n.js             dictionnaire fr/en + liaison data-i18n (chaînes fixes de l'interface)
-js/settings.js         panneau Réglages (thème, langue, crédits)
-js/importTab.js        logique de l'onglet Import (nouvelle table / table existante)
-js/exportTab.js        logique de l'onglet Export
-js/app.js              point d'entrée : bascule d'onglet, initialisation
-test/                  tests unitaires (node --test, aucune dépendance)
-test/browser/run.mjs   tests navigateur automatisés (Playwright, devDependency)
+js/i18n.js             dictionnaire fr/en + liaison data-i18n
+js/settings.js         panneau Réglages (thème, langue)
+js/storage.js          préférences mémorisées (localStorage, tolérant au blocage)
+js/util.js             délai d'attente des appels Grist, texte des erreurs
+test/*.test.mjs        tests unitaires ; test/fixtures/ : vrai Code View enregistré
+test/browser/          interface dans Chromium (faux grist en mémoire)
+test/grist/            tests contre une vraie instance Grist
 ```
 
 ## Sécurité

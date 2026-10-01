@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { parseGristSchema } from "../js/parser.js";
+import { resolveColumnType } from "../js/gristTypes.js";
+import { seeded } from "./random.mjs";
 
 test("parses a simple table with assignment and formula-style columns", () => {
   const source = `
@@ -217,4 +220,27 @@ class T:
   const { tables, warnings } = parseGristSchema(source);
   assert.deepEqual(tables[0].columns.map((c) => [c.id, c.dslType, c.computed]), [["F", "Int", true], ["A", "Text", false]]);
   assert.deepEqual(warnings.map((w) => [w.key, w.params.line]), [["warn.formulaTypeNoFunction", 8]]);
+});
+
+test("input mutated at random never makes the parser throw or stall", () => {
+  const sample = readFileSync(new URL("./fixtures/code-view/features.py", import.meta.url), "utf8");
+  const pieces = ["'", '"', "(", ")", "[", "]", "\\", ",", "=", "\n", "  ", "@grist.UserTable\n", "class X:\n", "choices=[", "grist.Reference('", "label='", "widget_options='{"];
+  const random = seeded(7);
+  const pick = (n) => Math.floor(random() * n);
+  const started = Date.now();
+
+  for (let round = 0; round < 3000; round++) {
+    let text = sample;
+    for (let mutation = 0, count = 1 + pick(6); mutation < count; mutation++) {
+      const at = pick(text.length);
+      const kind = pick(3);
+      if (kind === 0) text = text.slice(0, at) + pieces[pick(pieces.length)] + text.slice(at);
+      else if (kind === 1) text = text.slice(0, at) + text.slice(at + 1 + pick(20));
+      else text = text.slice(0, at) + text.slice(Math.max(0, at - pick(40)), at) + text.slice(at);
+    }
+    for (const table of parseGristSchema(text).tables) {
+      for (const col of table.columns) resolveColumnType(col.dslType, col.argsRaw, col.id, []);
+    }
+  }
+  assert.ok(Date.now() - started < 15000, "3000 mutated texts parse quickly");
 });

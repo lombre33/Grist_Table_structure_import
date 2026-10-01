@@ -3,7 +3,7 @@
  * Grist column definitions and apply them to the document. No DOM here.
  */
 
-import { resolveColumnType } from "./gristTypes.js";
+import { resolveColumnType, splitType } from "./gristTypes.js";
 import { fetchDocSchema, existingColumnIds } from "./schema.js";
 import { reportError } from "./util.js";
 import { t, tn } from "./i18n.js";
@@ -49,7 +49,7 @@ export function resolveColumns(table, tableIds, documentTableIds, excluded = new
       const inDocument = !documentTableIds || documentTableIds.includes(resolved.refTarget);
       const target = tableIds.get(resolved.refTarget) ?? (inDocument ? resolved.refTarget : null);
       if (target) {
-        resolved.type = `${resolved.type.split(":")[0]}:${target}`;
+        resolved.type = `${splitType(resolved.type).name}:${target}`;
       } else {
         colWarnings.push({ key: "warn.refTargetMissingInDoc", params: { colId: col.id, target: resolved.refTarget } });
         Object.assign(resolved, { type: "Any", widgetOptions: null, visibleColId: null });
@@ -58,10 +58,11 @@ export function resolveColumns(table, tableIds, documentTableIds, excluded = new
     return { id: col.id, computed: col.computed, ...resolved };
   });
 
-  for (const [key, flagged] of [["warn.computedColumns", (col) => col.computed], ["warn.twoWayColumns", (col) => col.reverseOf]]) {
-    const ids = columns.filter((col) => flagged(col) && !excluded.has(col.id)).map((col) => col.id);
-    if (ids.length > 0) warnings.push({ key, params: { columns: ids.join(", ") } });
-  }
+  const named = (flagged) => columns.filter((col) => flagged(col) && !excluded.has(col.id)).map((col) => col.id).join(", ");
+  const computed = named((col) => col.computed);
+  if (computed) warnings.push({ key: "warn.computedColumns", params: { columns: computed } });
+  const twoWay = named((col) => col.reverseOf);
+  if (twoWay) warnings.push({ key: "warn.twoWayColumns", params: { columns: twoWay } });
   return { columns, warnings };
 }
 
@@ -124,21 +125,17 @@ async function refine(grist, tables) {
 
   try {
     const schema = pending.some((col) => col.visibleColId) ? await fetchDocSchema(grist) : null;
-    const notes = [];
-    const actions = pending.flatMap((col) => {
-      const changes = col.description ? { description: col.description } : {};
-      const displayRef = col.visibleColId && displayColumnRef(schema, col);
-      if (displayRef) changes.visibleCol = displayRef;
-      else if (col.visibleColId) {
-        notes.push(t("warn.visibleColMissing", { colId: col.id, visibleColId: col.visibleColId, target: col.type.split(":")[1] }));
-      }
-      return [
-        ...(Object.keys(changes).length > 0 ? [["ModifyColumn", col.tableId, col.id, changes]] : []),
-        ...(displayRef ? [["SetDisplayFormula", col.tableId, null, col.id, `$${col.id}.${col.visibleColId}`]] : []),
-      ];
-    });
+    const actions = [];
+    const unfound = [];
+    for (const col of pending) {
+      const displayRef = col.visibleColId ? displayColumnRef(schema, col) : null;
+      if (col.visibleColId && !displayRef) unfound.push(col);
+      const changes = { ...(col.description && { description: col.description }), ...(displayRef && { visibleCol: displayRef }) };
+      if (Object.keys(changes).length > 0) actions.push(["ModifyColumn", col.tableId, col.id, changes]);
+      if (displayRef) actions.push(["SetDisplayFormula", col.tableId, null, col.id, `$${col.id}.${col.visibleColId}`]);
+    }
     if (actions.length > 0) await grist.docApi.applyUserActions(actions);
-    return notes.map((note) => ` ${note}`).join("");
+    return unfound.map((col) => ` ${t("warn.visibleColMissing", { colId: col.id, visibleColId: col.visibleColId, target: splitType(col.type).arg })}`).join("");
   } catch (err) {
     return t("import.note.refineFailed", { error: reportError(err) });
   }
@@ -146,6 +143,6 @@ async function refine(grist, tables) {
 
 /** Row id of the column `col.visibleColId` in the table `col` refers to. */
 function displayColumnRef(schema, col) {
-  const target = schema.tables.find((table) => table.tableId === col.type.split(":")[1]);
+  const target = schema.tables.find((table) => table.tableId === splitType(col.type).arg);
   return target && schema.allColumns.find((c) => c.parentId === target.tableRef && c.colId === col.visibleColId)?.id;
 }

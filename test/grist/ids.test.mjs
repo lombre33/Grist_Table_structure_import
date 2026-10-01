@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { checkTableId, defaultTableId } from "../../js/importer.js";
 import { instance, column } from "./support.mjs";
-import { seeded } from "./random.mjs";
+import { seeded } from "../random.mjs";
 
 const random = seeded(2024);
 const CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_éà -.$'\"#";
