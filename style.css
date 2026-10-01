@@ -7,11 +7,7 @@
 }
 
 :root {
-  /* Lets the browser render native form controls (radio/checkbox rings,
-     scrollbars...) consistently with the active theme instead of guessing
-     from the OS setting alone — without this, a checked .mode-radio was
-     nearly invisible in dark mode (browser-drawn control still assuming a
-     light background). Each theme block below sets its own value. */
+  /* native controls follow the theme */
   color-scheme: light;
   --bg: #f4f6fa;
   --surface: #ffffff;
@@ -20,7 +16,6 @@
   --border-strong: #c3cad6;
   --ink: #1b2430;
   --muted: #667085;
-  --faint: #98a2b3;
   --accent: #2f6fed;
   --accent-hover: #2558c4;
   --accent-soft: #e8f0fe;
@@ -41,8 +36,7 @@
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
-/* Dark theme: system preference only takes effect when the user hasn't made
-   an explicit choice (no data-theme attribute) — see js/theme.js. */
+/* Dark by the system preference unless a theme was chosen; the same values as :root[data-theme="dark"] below, which test/style.test.mjs keeps equal. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
     color-scheme: dark;
@@ -53,8 +47,7 @@
     --border-strong: #3a4054;
     --ink: #eef1f6;
     --muted: #9aa3b2;
-    --faint: #6b7383;
-    --accent: #5b8def;
+      --accent: #5b8def;
     --accent-hover: #7ca2f2;
     --accent-soft: #1d2c4d;
     --accent-ink: #0b1220;
@@ -80,7 +73,6 @@
   --border-strong: #3a4054;
   --ink: #eef1f6;
   --muted: #9aa3b2;
-  --faint: #6b7383;
   --accent: #5b8def;
   --accent-hover: #7ca2f2;
   --accent-soft: #1d2c4d;
@@ -101,20 +93,11 @@
   box-sizing: border-box;
 }
 
-/* Several elements below set their own `display` (flex/grid/...); without
-   this, that author rule would beat the browser's default `[hidden] {
-   display: none}` at equal specificity, and a "hidden" element would still
-   render. */
+/* so that a rule setting `display` cannot show a hidden element */
 [hidden] {
   display: none !important;
 }
 
-/* Visually hidden but still announced by a screen reader — used for the
-   columns-preview table's checkbox-column header, whose one word ("Inclure")
-   would otherwise visually crowd a column that's just wide enough for a
-   checkbox (each checkbox also carries its own aria-label, so this heading
-   is a belt-and-suspenders label for the column as a whole, not the only
-   accessible name). */
 .sr-only {
   position: absolute;
   width: 1px;
@@ -155,9 +138,6 @@ body {
   min-width: 0;
 }
 
-/* Fixed chrome anchor: the Réglages button sits here, with the Grist
-   Factory logo placed immediately to its right once that asset is
-   available (not guessed/recreated — see README.md). */
 .masthead-controls {
   display: flex;
   align-items: center;
@@ -189,9 +169,6 @@ h1 {
   max-width: 46ch;
 }
 
-/* Icon buttons (Réglages, fermer...): plain ghost square buttons housing one
-   inline stroke SVG icon each (see index.html) — no icon font, no emoji.
-   `currentColor` on the icon means it adapts to hover/theme automatically. */
 .icon-btn {
   display: inline-flex;
   align-items: center;
@@ -272,10 +249,6 @@ h1 {
   margin-bottom: 14px;
 }
 
-.field:last-child {
-  margin-bottom: 0;
-}
-
 label,
 .label {
   display: block;
@@ -296,8 +269,7 @@ select {
   font-size: 0.85rem;
 }
 
-textarea,
-#export-output {
+textarea {
   font-family: var(--font-mono);
   resize: vertical;
 }
@@ -320,10 +292,6 @@ select:focus {
   gap: 10px;
   margin-top: 14px;
   flex-wrap: wrap;
-}
-
-.block > .actions:first-child {
-  margin-top: 0;
 }
 
 button.btn {
@@ -385,7 +353,6 @@ button.btn:disabled {
   position: relative;
 }
 
-.mode-card:has(.mode-radio:checked),
 .mode-card.is-checked {
   border-color: var(--accent);
   background: var(--accent-soft);
@@ -464,8 +431,6 @@ table#columns-preview {
   color: var(--accent);
 }
 
-/* Discreet per-table separator row, shown in the columns preview only when
-   creating more than one table at once. */
 .table-separator td {
   padding-top: 12px;
   font-size: 0.72rem;
@@ -477,7 +442,6 @@ table#columns-preview {
   background: var(--surface-sunken);
 }
 
-/* One destination-id field per table to create, in "Nouvelle table" mode. */
 #table-ids-list {
   display: flex;
   flex-direction: column;
@@ -554,7 +518,6 @@ table#columns-preview {
 }
 
 #export-output {
-  width: 100%;
   min-height: 200px;
 }
 
@@ -665,9 +628,7 @@ dialog#settings-dialog::backdrop {
   margin-bottom: 8px;
 }
 
-/* Segmented control: theme (Système/Clair/Sombre) and language (FR/EN)
-   choices. Reuses the codebase's existing pattern of a hidden native input
-   inside its own visible label, toggled via :has() — see .mode-card. */
+/* Theme and language choices: the radio is hidden inside its label. */
 .segmented {
   display: flex;
   border: 1.5px solid var(--border);
@@ -696,16 +657,12 @@ dialog#settings-dialog::backdrop {
   pointer-events: none;
 }
 
-.segmented-option:has(input:checked),
 .segmented-option.is-checked {
   background: var(--accent);
   color: var(--accent-ink);
 }
 
-/* The native input is visually hidden (opacity: 0 above) for the custom pill
-   look, which would otherwise also hide the browser's default focus ring
-   when a keyboard user tabs to it — restore a visible indicator on the
-   label itself instead. */
+/* The hidden radio's focus ring, drawn on its label. */
 .segmented-option:has(input:focus-visible) {
   outline: 2.5px solid var(--accent);
   outline-offset: 1px;
