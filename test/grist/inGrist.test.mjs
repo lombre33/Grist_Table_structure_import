@@ -19,7 +19,9 @@ after(async () => {
 });
 
 // The official plugin API injects a <style> for Grist's theme, which the widget's strict CSP refuses; nothing relies on it.
-const KNOWN_CSP_NOISE = /^Refused to apply inline style because it violates the following Content Security Policy directive: "style-src 'self'"/;
+// Chromium words that message differently from one version to the next ("Refused to apply inline style because...",
+// "Applying inline style violates..."), so it is recognised by what it says, not how.
+const isKnownCspNoise = (text) => text.includes("inline style") && text.includes("style-src 'self'");
 
 /** Opens `doc` on a page showing the widget; returns the page, the widget's frame and what it logged as errors. */
 async function openWidgetIn(doc) {
@@ -32,12 +34,19 @@ async function openWidgetIn(doc) {
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (err) => errors.push(err.message));
-  page.on("console", (msg) => msg.type() === "error" && !KNOWN_CSP_NOISE.test(msg.text()) && errors.push(msg.text()));
+  page.on("console", (msg) => msg.type() === "error" && !isKnownCspNoise(msg.text()) && errors.push(msg.text()));
   await page.goto(`${instance.url}/o/docs/${doc.id}/widget/p/${viewRef}`);
   const frame = await page.waitForEvent("framenavigated", { predicate: (f) => f.url().startsWith(widget.url), timeout: 30000 }).catch(() => null) ?? page.frames().find((f) => f.url().startsWith(widget.url));
   await frame.waitForSelector("#tab-import");
   return { page, frame, errors };
 }
+
+test("the theme <style> noise is recognised in both wordings of Chromium's message, and nothing else is", () => {
+  assert.ok(isKnownCspNoise(`Refused to apply inline style because it violates the following Content Security Policy directive: "style-src 'self'". Either the 'unsafe-inline' keyword...`));
+  assert.ok(isKnownCspNoise(`Applying inline style violates the following Content Security Policy directive 'style-src 'self''. Either the 'unsafe-inline' keyword...`));
+  assert.ok(!isKnownCspNoise(`Refused to execute inline script because it violates the following Content Security Policy directive: "script-src 'self'".`));
+  assert.ok(!isKnownCspNoise(`Refused to load the stylesheet 'https://example.org/a.css' because it violates the following Content Security Policy directive: "style-src 'self'".`));
+});
 
 test("Export in one document, Import in another, both through Grist's own interface", async () => {
   const source = await instance.newDoc("in Grist: source");

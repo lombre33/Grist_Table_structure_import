@@ -255,13 +255,16 @@ Points notables :
   forme d'évaluation dynamique : `test/security.test.mjs` l'atteste à chaque
   modification.
 - `style-src 'self'` et deux messages dans la console : dans Grist, la console du
-  navigateur affiche deux « Refused to apply inline style ». Le script officiel crée en
-  effet, dès son chargement, une balise `<style id="grist-theme">` (variables de thème et
-  couleurs de barres de défilement de Grist) que cette politique refuse volontairement ;
-  le widget n'utilise pas ces variables (il a son propre thème), donc aucune conséquence.
-  Autoriser cette balise demanderait `'unsafe-inline'` ou une empreinte propre à chaque
-  thème et à chaque version du script, ce qui affaiblirait ou fragiliserait la politique.
-  `test/grist/inGrist.test.mjs` tolère exactement ces deux messages et aucune autre erreur.
+  navigateur affiche deux erreurs sur un style en ligne (« Refused to apply inline
+  style… » ou « Applying inline style violates… » selon la version du navigateur). Le
+  script officiel crée en effet, dès son chargement, une balise
+  `<style id="grist-theme">` (variables de thème et couleurs de barres de défilement de
+  Grist) que cette politique refuse volontairement ; le widget n'utilise pas ces
+  variables (il a son propre thème), donc aucune conséquence. Autoriser cette balise demanderait
+  `'unsafe-inline'` ou une empreinte propre à chaque thème et à chaque version du
+  script, ce qui affaiblirait ou fragiliserait la politique.
+  `test/grist/inGrist.test.mjs` tolère ces messages, reconnus à leur contenu et non à
+  leur formulation, et aucune autre erreur.
 - `connect-src 'none'` : le widget ne fait aucun appel réseau applicatif (voir plus haut).
 - GitHub Pages ne servant pas d'en-tête `Content-Security-Policy` (seule la balise
   `<meta>` est possible), la directive `frame-ancestors` — qui n'a d'effet que via un
