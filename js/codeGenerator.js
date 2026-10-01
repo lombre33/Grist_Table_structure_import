@@ -27,6 +27,7 @@
  */
 
 import { buildTypeExpression, defaultLiteralForType, sanitizeWidgetOptions } from "./gristTypes.js";
+import { quotePython } from "./pyString.js";
 
 const HEADER =
   "import grist\n" +
@@ -73,17 +74,6 @@ function fieldText(col) {
 }
 
 /**
- * Python single-quoted string literal for an arbitrary text value: escapes
- * backslashes and single quotes only (the two characters that would
- * otherwise end the literal or change its meaning), and is always read back
- * by js/gristTypes.js's matching unescaper. Never evaluated — this is only
- * ever used to produce text.
- */
-function pyStringLiteral(text) {
-  return `'${String(text).replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
-}
-
-/**
  * Builds the extra keyword arguments (see module comment) for one column,
  * as raw Python source snippets ready to hand to `buildTypeExpression`.
  * Only ever includes a kwarg when there is something non-default to say,
@@ -95,22 +85,22 @@ function buildKwargs(col) {
   const widgetOptions = col.widgetOptions && typeof col.widgetOptions === "object" ? col.widgetOptions : null;
 
   if (widgetOptions && Array.isArray(widgetOptions.choices) && widgetOptions.choices.length > 0) {
-    kwargs.choices = `[${widgetOptions.choices.map(pyStringLiteral).join(", ")}]`;
+    kwargs.choices = `[${widgetOptions.choices.map(quotePython).join(", ")}]`;
   }
 
   const restOptions = sanitizeWidgetOptions(widgetOptions);
   if (restOptions) {
-    kwargs.widget_options = pyStringLiteral(JSON.stringify(restOptions));
+    kwargs.widget_options = quotePython(JSON.stringify(restOptions));
   }
 
   if (col.label && col.label !== col.colId) {
-    kwargs.label = pyStringLiteral(col.label);
+    kwargs.label = quotePython(col.label);
   }
   if (col.description) {
-    kwargs.description = pyStringLiteral(col.description);
+    kwargs.description = quotePython(col.description);
   }
   if (col.visibleColId) {
-    kwargs.visible_col = pyStringLiteral(col.visibleColId);
+    kwargs.visible_col = quotePython(col.visibleColId);
   }
 
   return kwargs;

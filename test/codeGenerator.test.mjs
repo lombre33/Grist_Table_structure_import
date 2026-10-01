@@ -323,3 +323,29 @@ test("full metadata round-trip: generateCode -> parseGristSchema -> resolveColum
   assert.equal(plain.widgetOptions, null);
   assert.equal(plain.visibleColId, null);
 });
+
+test("every text value survives the round trip, whatever characters it holds", () => {
+  const texts = [
+    "multi\nline", "windows\r\nline", "tab\there", "it's", 'say "hi"', "back\\slash", "ends with \\",
+    "literal \\n sequence", "émoji 😀", "  padded  ", "a, b", "(x) [y] {z}", "# not a comment", "label = 'x'",
+  ];
+  const columns = texts.map((text, i) => ({
+    colId: `C${i}`,
+    type: "Choice",
+    isFormula: false,
+    label: text,
+    description: text,
+    widgetOptions: { choices: [text, "other"], question: text },
+  }));
+
+  const { tables, warnings } = parseGristSchema(generateCode([{ tableId: "T", columns }]));
+
+  assert.deepEqual(warnings, []);
+  assert.equal(tables[0].columns.length, texts.length, "no column is lost");
+  tables[0].columns.forEach((col, i) => {
+    const resolved = resolveColumnType(col.dslType, col.argsRaw, col.id, []);
+    assert.equal(resolved.label, texts[i]);
+    assert.equal(resolved.description, texts[i]);
+    assert.deepEqual(resolved.widgetOptions, { choices: [texts[i], "other"], question: texts[i] });
+  });
+});

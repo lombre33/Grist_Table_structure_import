@@ -49,6 +49,7 @@
  */
 
 import { findMatchingClose } from "./parser.js";
+import { quotePython, unquotePython } from "./pyString.js";
 import { t } from "./i18n.js";
 
 const FIRST_STRING_ARG_RE = /^\s*['"]([^'"]*)['"]/;
@@ -169,22 +170,12 @@ export function sanitizeWidgetOptions(options) {
   return Object.keys(out).length > 0 ? out : null;
 }
 
-function unescapePythonQuoted(text) {
-  return text.replace(/\\(.)/g, "$1");
-}
-
-/**
- * Matches `name='...'` or `name="..."` — both quote styles, like
- * QUOTED_ITEM_RE below for `choices=[...]` items, so a hand-edited or
- * foreign paste using double quotes for these kwargs isn't silently
- * ignored just because this widget's own Export always writes single
- * quotes (see js/codeGenerator.js's pyStringLiteral).
- */
+/** Value of a `name='…'` or `name="…"` keyword argument, or null when absent. */
 function extractQuotedKwarg(argsRaw, name) {
   const re = new RegExp(`${name}\\s*=\\s*(?:'((?:\\\\.|[^'\\\\])*)'|"((?:\\\\.|[^"\\\\])*)")`);
   const match = argsRaw.match(re);
   if (!match) return null;
-  return unescapePythonQuoted(match[1] !== undefined ? match[1] : match[2]);
+  return unquotePython(match[1] ?? match[2]);
 }
 
 function extractChoicesKwarg(argsRaw) {
@@ -199,7 +190,7 @@ function extractChoicesKwarg(argsRaw) {
   let item;
   QUOTED_ITEM_RE.lastIndex = 0;
   while ((item = QUOTED_ITEM_RE.exec(inner)) !== null) {
-    choices.push(unescapePythonQuoted(item[1] !== undefined ? item[1] : item[2]));
+    choices.push(unquotePython(item[1] ?? item[2]));
   }
   return choices.length > 0 ? choices : null;
 }
@@ -399,10 +390,10 @@ export function buildTypeExpression(type, kwargs = {}) {
   const idx = type.indexOf(":");
   const rawName = idx === -1 ? type : type.slice(0, idx);
   const name = rawName === "Ref" ? "Reference" : rawName === "RefList" ? "ReferenceList" : rawName;
-  const arg = (idx === -1 ? "" : type.slice(idx + 1)).trim().replace(/'/g, "\\'");
+  const arg = (idx === -1 ? "" : type.slice(idx + 1)).trim();
 
   const parts = [];
-  if (arg) parts.push(`'${arg}'`);
+  if (arg) parts.push(quotePython(arg));
   for (const [key, value] of Object.entries(kwargs)) {
     if (value === undefined || value === null) continue;
     parts.push(`${key}=${value}`);
