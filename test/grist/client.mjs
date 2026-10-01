@@ -18,19 +18,18 @@ async function call(headers, method, path, body) {
   let data = text;
   try {
     data = JSON.parse(text);
-  } catch {} // the API key comes back as plain text
+  } catch {} // an error page is not always JSON
   if (!res.ok) throw new Error(`${method} ${path} -> ${res.status}: ${data?.error ?? text}`);
   return data;
 }
 
+/** A session of its own for every process (an API key would be replaced by the next process asking for one). */
 async function authHeaders() {
   if (process.env.GRIST_API_KEY) return { Authorization: `Bearer ${process.env.GRIST_API_KEY}` };
   const login = await fetch(`${BASE}/login?next=/`, { redirect: "manual" });
-  const session = login.headers.getSetCookie().map((cookie) => cookie.split(";")[0]).find((cookie) => cookie.startsWith("grist_sid="));
-  if (!session) throw new Error(`Cannot log in to ${BASE} (no session cookie, HTTP ${login.status})`);
-  const cookie = { Cookie: session };
-  const key = (await call(cookie, "GET", "/api/profile/apikey")) || (await call(cookie, "POST", "/api/profile/apikey", {}));
-  return { Authorization: `Bearer ${key}` };
+  const session = login.headers.getSetCookie().filter((cookie) => !cookie.includes("Expires=Thu, 01 Jan 1970")).map((cookie) => cookie.split(";")[0]);
+  if (session.length === 0) throw new Error(`Cannot log in to ${BASE} (no session cookie, HTTP ${login.status})`);
+  return { Cookie: session.join("; "), "X-Requested-With": "XMLHttpRequest" };
 }
 
 /** Rows of a column-oriented table (`{id: [...], colId: [...]}`). */

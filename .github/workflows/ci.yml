@@ -2,55 +2,51 @@ name: CI
 
 on:
   push:
-    branches: ["**"]
+    branches-ignore: ["main"] # main goes through pages.yml, which calls this workflow
   pull_request:
+  workflow_call:
 
 permissions:
   contents: read
 
 jobs:
   test:
+    name: Unit and browser tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-
-      - name: Run unit tests (zero dependency: no install step)
+      - name: Unit tests and security lint
         run: npm test
-
-      - name: Security lint — forbid eval/Function/innerHTML/document.write in shipped code
-        run: |
-          set -euo pipefail
-          if grep -RInE '\beval\s*\(|new[[:space:]]+Function\s*\(|\.innerHTML[[:space:]]*=|document\.write\s*\(' \
-              --include='*.js' js/; then
-            echo "Forbidden pattern found in js/ (see above)."
-            exit 1
-          fi
-          echo "No forbidden pattern found in js/."
-
-      - name: Forbid third-party runtime scripts beyond the official Grist plugin API
-        run: |
-          set -euo pipefail
-          if grep -oE '<script[^>]*src="[^"]*"' index.html \
-              | grep -v 'src="https://docs.getgrist.com/grist-plugin-api.js"' \
-              | grep -v 'src="js/app.js"'; then
-            echo "Unexpected external script reference in index.html."
-            exit 1
-          fi
-          echo "Only the expected scripts are referenced."
-
-      # From here on: Playwright, a devDependency used only for this browser
-      # regression suite (never shipped — see .github/workflows/pages.yml's
-      # file list and SECURITY.md's "Dépendances"). The two npm-test-only
-      # steps above stay install-free.
-      - name: Install devDependencies (Playwright, for the browser test below)
+      - name: Install the dev dependencies (Playwright)
         run: npm ci
-
-      - name: Install Playwright's Chromium
+      - name: Install Chromium
         run: npx playwright install --with-deps chromium
-
-      - name: Run browser regression tests (index.html/harness.html actually rendered in a browser)
+      - name: Browser tests
         run: npm run test:browser
+
+  grist:
+    name: Tests against a real Grist
+    runs-on: ubuntu-latest
+    services:
+      grist:
+        image: gristlabs/grist:1.7.20@sha256:c862d4c1ffa2a36009d69b72e7ab319155c3529da7df2de0a4e437e994cfe7f1
+        ports:
+          - 8484:8484
+        env:
+          APP_HOME_URL: http://localhost:8484
+          GRIST_DEFAULT_EMAIL: ci@example.com
+          GRIST_IN_SERVICE: "true"
+          GRIST_SANDBOX_FLAVOR: unsandboxed
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Wait for Grist
+        run: timeout 90 sh -c 'until curl -fs http://localhost:8484/status; do sleep 1; done'
+      - run: npm run test:grist
