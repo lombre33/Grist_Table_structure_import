@@ -4,324 +4,114 @@ import { generateCode } from "../js/codeGenerator.js";
 import { parseGristSchema } from "../js/parser.js";
 import { resolveColumnType } from "../js/gristTypes.js";
 
-test("reproduces Grist's exact header and a plain data column", () => {
-  const text = generateCode([
-    { tableId: "T", columns: [{ colId: "A", type: "Text", isFormula: false }] },
-  ]);
-  assert.equal(
-    text,
-    "import grist\n" +
-      "from functions import *       # global uppercase functions\n" +
-      "import datetime, math, re     # modules commonly needed in formulas\n" +
-      "\n\n" +
-      "@grist.UserTable\n" +
-      "class T:\n" +
-      "  A = grist.Text()\n"
-  );
+const HEADER = "import grist\nfrom functions import *       # global uppercase functions\nimport datetime, math, re     # modules commonly needed in formulas\n";
+const data = (colId, type, extra = {}) => ({ colId, type, isFormula: false, ...extra });
+const formula = (colId, type, text, extra = {}) => ({ colId, type, isFormula: true, formula: text, ...extra });
+const gen = (...columns) => generateCode([{ tableId: "T", columns }]);
+
+/** What a pasted text gives back for each column of its only table. */
+function readBack(text) {
+  const { tables, warnings } = parseGristSchema(text);
+  assert.deepEqual(warnings, []);
+  return new Map(tables[0].columns.map((col) => [col.id, resolveColumnType(col.dslType, col.argsRaw, col.id, [])]));
+}
+
+test("reproduces Grist's header and a plain data column", () => {
+  assert.equal(gen(data("A", "Text")), `${HEADER}\n\n@grist.UserTable\nclass T:\n  A = grist.Text()\n`);
 });
 
-test("a blank formula becomes 'return <type default>', matching Grist for each type", () => {
-  const text = generateCode([
-    {
-      tableId: "T",
-      columns: [
-        { colId: "F1", type: "Text", isFormula: true, formula: "" },
-        { colId: "F2", type: "Date", isFormula: true, formula: "   " },
-        { colId: "F3", type: "Ref:Other", isFormula: true, formula: "" },
-        { colId: "F4", type: "Any", isFormula: true, formula: "" },
-      ],
-    },
-  ]);
+test("a blank formula becomes 'return <type default>', as Grist does, with no decorator for Any", () => {
+  const text = gen(formula("F1", "Text", ""), formula("F2", "Date", "   "), formula("F3", "Ref:Other", ""), formula("F4", "Any", ""));
   assert.match(text, /@grist\.formulaType\(grist\.Text\(\)\)\n {2}def F1\(rec, table\):\n {4}return ''\n/);
   assert.match(text, /@grist\.formulaType\(grist\.Date\(\)\)\n {2}def F2\(rec, table\):\n {4}return None\n/);
-  assert.match(
-    text,
-    /@grist\.formulaType\(grist\.Reference\('Other'\)\)\n {2}def F3\(rec, table\):\n {4}return 0\n/
-  );
-  // Any-typed formulas get no @grist.formulaType decorator, like gencode.py.
+  assert.match(text, /@grist\.formulaType\(grist\.Reference\('Other'\)\)\n {2}def F3\(rec, table\):\n {4}return 0\n/);
   assert.match(text, /\n {2}def F4\(rec, table\):\n {4}return None\n/);
   assert.ok(!text.includes("formulaType(grist.Any())"));
 });
 
 test("blank lines separate data columns from formula columns, and formula columns from each other", () => {
-  const text = generateCode([
-    {
-      tableId: "T",
-      columns: [
-        { colId: "D1", type: "Text", isFormula: false },
-        { colId: "D2", type: "Int", isFormula: false },
-        { colId: "F1", type: "Text", isFormula: true, formula: "" },
-        { colId: "F2", type: "Text", isFormula: true, formula: "" },
-      ],
-    },
-  ]);
+  const text = gen(data("D1", "Text"), data("D2", "Int"), formula("F1", "Text", ""), formula("F2", "Text", ""));
   assert.equal(
     text,
-    "import grist\n" +
-      "from functions import *       # global uppercase functions\n" +
-      "import datetime, math, re     # modules commonly needed in formulas\n" +
-      "\n\n" +
-      "@grist.UserTable\n" +
-      "class T:\n" +
-      "  D1 = grist.Text()\n" +
-      "  D2 = grist.Int()\n" +
-      "\n" +
-      "  @grist.formulaType(grist.Text())\n" +
-      "  def F1(rec, table):\n" +
-      "    return ''\n" +
-      "\n" +
-      "  @grist.formulaType(grist.Text())\n" +
-      "  def F2(rec, table):\n" +
-      "    return ''\n"
+    `${HEADER}\n\n@grist.UserTable\nclass T:\n  D1 = grist.Text()\n  D2 = grist.Int()\n` +
+      "\n  @grist.formulaType(grist.Text())\n  def F1(rec, table):\n    return ''\n" +
+      "\n  @grist.formulaType(grist.Text())\n  def F2(rec, table):\n    return ''\n"
   );
 });
 
-test("a single-line non-blank formula gets an implicit return", () => {
-  const text = generateCode([
-    {
-      tableId: "T",
-      columns: [{ colId: "Total", type: "Numeric", isFormula: true, formula: "$A + $B" }],
-    },
-  ]);
-  assert.match(text, /def Total\(rec, table\):\n {4}return \$A \+ \$B\n/);
-});
-
-test("a single-line formula that is already a statement is left untouched", () => {
-  const text = generateCode([
-    {
-      tableId: "T",
-      columns: [{ colId: "X", type: "Numeric", isFormula: true, formula: "return 42" }],
-    },
-  ]);
-  assert.match(text, /def X\(rec, table\):\n {4}return 42\n/);
+test("a single-line formula gets an implicit return, unless it is a statement already", () => {
+  assert.match(gen(formula("Total", "Numeric", "$A + $B")), /def Total\(rec, table\):\n {4}return \$A \+ \$B\n/);
+  assert.match(gen(formula("X", "Numeric", "return 42")), /def X\(rec, table\):\n {4}return 42\n/);
 });
 
 test("a multi-line formula is reproduced (dedented) rather than invented", () => {
-  const text = generateCode([
-    {
-      tableId: "T",
-      columns: [
-        {
-          colId: "X",
-          type: "Numeric",
-          isFormula: true,
-          formula: "  if $A:\n    return 1\n  return 0",
-        },
-      ],
-    },
-  ]);
+  const text = gen(formula("X", "Numeric", "  if $A:\n    return 1\n  return 0"));
   assert.match(text, /def X\(rec, table\):\n {4}if \$A:\n {6}return 1\n {4}return 0\n/);
 });
 
 test("an empty table body is 'pass', like gencode.py", () => {
-  const text = generateCode([{ tableId: "Empty", columns: [] }]);
-  assert.match(text, /class Empty:\n {2}pass\n/);
+  assert.match(generateCode([{ tableId: "Empty", columns: [] }]), /class Empty:\n {2}pass\n/);
 });
 
-test("multiple tables are separated the same way as after the header", () => {
-  const text = generateCode([
-    { tableId: "First", columns: [{ colId: "A", type: "Text", isFormula: false }] },
-    { tableId: "Second", columns: [{ colId: "B", type: "Int", isFormula: false }] },
-  ]);
-  assert.equal(
-    text,
-    "import grist\n" +
-      "from functions import *       # global uppercase functions\n" +
-      "import datetime, math, re     # modules commonly needed in formulas\n" +
-      "\n\n" +
-      "@grist.UserTable\n" +
-      "class First:\n" +
-      "  A = grist.Text()\n" +
-      "\n\n" +
-      "@grist.UserTable\n" +
-      "class Second:\n" +
-      "  B = grist.Int()\n"
-  );
+test("tables are separated the way the first one follows the header", () => {
+  const text = generateCode([{ tableId: "First", columns: [data("A", "Text")] }, { tableId: "Second", columns: [data("B", "Int")] }]);
+  assert.equal(text, `${HEADER}\n\n@grist.UserTable\nclass First:\n  A = grist.Text()\n\n\n@grist.UserTable\nclass Second:\n  B = grist.Int()\n`);
 });
 
-test("emits choices= for a Choice column with widgetOptions.choices", () => {
-  const text = generateCode([
-    {
-      tableId: "T",
-      columns: [{ colId: "Mood", type: "Choice", isFormula: false, widgetOptions: { choices: ["Oui (confirmé)", "Non"] } }],
-    },
-  ]);
-  assert.match(text, /Mood = grist\.Choice\(choices=\['Oui \(confirmé\)', 'Non'\]\)\n/);
+test("choices, widget options, label, description and display column are written when there is something to say", () => {
+  assert.match(gen(data("Mood", "Choice", { widgetOptions: { choices: ["Oui (confirmé)", "Non"] } })), /Mood = grist\.Choice\(choices=\['Oui \(confirmé\)', 'Non'\]\)\n/);
+  assert.match(gen(data("Name", "Text", { label: "Full name" })), /Name = grist\.Text\(label='Full name'\)\n/);
+  assert.match(gen(data("Name", "Text", { label: "Name" })), /Name = grist\.Text\(\)\n/);
+  assert.match(gen(data("A", "Text", { description: "Une note (utile)" })), /A = grist\.Text\(description='Une note \(utile\)'\)\n/);
+  assert.match(gen(data("Owner", "Ref:Other", { visibleColId: "Name" })), /Owner = grist\.Reference\('Other', visible_col='Name'\)\n/);
 });
 
-test("emits label= only when different from the column id", () => {
-  const same = generateCode([{ tableId: "T", columns: [{ colId: "Name", type: "Text", isFormula: false, label: "Name" }] }]);
-  assert.match(same, /Name = grist\.Text\(\)\n/);
-
-  const different = generateCode([{ tableId: "T", columns: [{ colId: "Name", type: "Text", isFormula: false, label: "Full name" }] }]);
-  assert.match(different, /Name = grist\.Text\(label='Full name'\)\n/);
-});
-
-test("emits description= only when non-empty", () => {
-  const text = generateCode([
-    { tableId: "T", columns: [{ colId: "A", type: "Text", isFormula: false, description: "Une note (utile)" }] },
-  ]);
-  assert.match(text, /A = grist\.Text\(description='Une note \(utile\)'\)\n/);
-});
-
-test("emits visible_col= for a Reference column with a resolved visibleColId", () => {
-  const text = generateCode([
-    { tableId: "T", columns: [{ colId: "Owner", type: "Ref:Other", isFormula: false, visibleColId: "Name" }] },
-  ]);
-  assert.match(text, /Owner = grist\.Reference\('Other', visible_col='Name'\)\n/);
-});
-
-test("emits widget_options= for the remaining widgetOptions, excluding choices, filtered of dangerous keys", () => {
-  const text = generateCode([
-    {
-      tableId: "T",
-      columns: [
-        {
-          colId: "Mood",
-          type: "Choice",
-          isFormula: false,
-          widgetOptions: {
-            choices: ["A", "B"],
-            alignment: "center",
-            rulesOptions: [{ fillColor: "#FF0000" }],
-          },
-        },
-      ],
-    },
-  ]);
+test("the other widgetOptions go in widget_options, without what must not travel", () => {
+  const text = gen(data("Mood", "Choice", { widgetOptions: { choices: ["A", "B"], alignment: "center", rulesOptions: [{ fillColor: "#FF0000" }] } }));
   assert.match(text, /choices=\['A', 'B'\]/);
   assert.match(text, /widget_options='\{"alignment":"center"\}'/);
   assert.ok(!text.includes("rulesOptions"));
 });
 
-test("a column with no captured metadata generates exactly as before this feature existed", () => {
-  const text = generateCode([{ tableId: "T", columns: [{ colId: "A", type: "Text", isFormula: false }] }]);
-  assert.match(text, /A = grist\.Text\(\)\n/);
+test("a formula column of type Any keeps its metadata, and stays plain when it has none", () => {
+  const text = gen(formula("Plain", "Any", "None"), formula("Described", "Any", "None", { description: "d", label: "L" }));
+  assert.doesNotMatch(text, /formulaType\(grist\.Any\(\)\)/);
+  const { label, description, type } = readBack(text).get("Described");
+  assert.deepEqual([type, label, description], ["Any", "L", "d"]);
 });
 
-test("round-trips through parseGristSchema: same column ids and types come back out", () => {
-  const schema = [
-    {
-      tableId: "RoundTrip",
-      columns: [
-        { colId: "Name", type: "Text", isFormula: false },
-        { colId: "Age", type: "Int", isFormula: false },
-        { colId: "Active", type: "Bool", isFormula: false },
-        { colId: "Mood", type: "Choice", isFormula: false },
-        { colId: "Tags", type: "ChoiceList", isFormula: false },
-        { colId: "Birthday", type: "Date", isFormula: false },
-        { colId: "Created", type: "DateTime:Europe/Paris", isFormula: false },
-        { colId: "Owner", type: "Ref:RoundTrip", isFormula: false },
-        { colId: "Friends", type: "RefList:RoundTrip", isFormula: false },
-        { colId: "Photo", type: "Attachments", isFormula: false },
-        { colId: "Computed", type: "Numeric", isFormula: true, formula: "$Age * 2" },
-        { colId: "Untyped", type: "Any", isFormula: true, formula: "" },
-      ],
-    },
-  ];
-
-  const text = generateCode(schema);
-  const { tables, warnings } = parseGristSchema(text);
-
-  assert.equal(tables.length, 1);
-  assert.equal(tables[0].tableId, "RoundTrip");
-
-  const resolved = tables[0].columns.map((col) => {
-    const colWarnings = [];
-    const r = resolveColumnType(col.dslType, col.argsRaw, col.id, colWarnings);
-    return [col.id, r.type];
-  });
-
-  assert.deepEqual(resolved, [
-    ["Name", "Text"],
-    ["Age", "Int"],
-    ["Active", "Bool"],
-    ["Mood", "Choice"],
-    ["Tags", "ChoiceList"],
-    ["Birthday", "Date"],
-    ["Created", "DateTime:Europe/Paris"],
-    ["Owner", "Ref:RoundTrip"],
-    ["Friends", "RefList:RoundTrip"],
-    ["Photo", "Attachments"],
-    ["Computed", "Numeric"],
-    ["Untyped", "Any"],
-  ]);
-  assert.deepEqual(warnings, []);
+test("every type survives the round trip with the same type", () => {
+  const types = ["Text", "Int", "Numeric", "Bool", "Date", "Choice", "ChoiceList", "DateTime:Europe/Paris", "Ref:T", "RefList:T", "Attachments", "Any", "Blob"];
+  const read = readBack(gen(...types.map((type, i) => data(`C${i}`, type)), formula("F", "Numeric", "$C1 * 2")));
+  assert.deepEqual([...read.values()].map((col) => col.type), [...types, "Numeric"]);
 });
 
-test("full metadata round-trip: generateCode -> parseGristSchema -> resolveColumnType preserves everything captured at export", () => {
-  const schema = [
-    {
-      tableId: "RoundTrip",
-      columns: [
-        {
-          colId: "Mood",
-          type: "Choice",
-          isFormula: false,
-          label: "Humeur (du jour)",
-          description: "Une note (avec parenthèses) et une apostrophe : l'humeur",
-          widgetOptions: {
-            choices: ["Content (ok)", "Neutre", "Absent"],
-            choiceOptions: {
-              "Content (ok)": { fillColor: "#2A9D53", textColor: "#FFFFFF", fontBold: true },
-            },
-            alignment: "center",
-            rulesOptions: [{ fillColor: "#FF0000" }], // must NOT survive the round trip
-          },
-        },
-        {
-          colId: "Owner",
-          type: "Ref:RoundTrip",
-          isFormula: false,
-          visibleColId: "Mood",
-          widgetOptions: { alignment: "left" },
-        },
-        {
-          colId: "Plain",
-          type: "Text",
-          isFormula: false,
-          // No metadata at all: must round-trip to nothing captured.
-        },
-      ],
-    },
-  ];
+test("every kind of metadata survives the round trip", () => {
+  const text = gen(
+    data("Mood", "Choice", {
+      label: "Humeur (du jour)",
+      description: "Une note (avec parenthèses) et une apostrophe : l'humeur",
+      widgetOptions: {
+        choices: ["Content (ok)", "Neutre", "Absent"],
+        choiceOptions: { "Content (ok)": { fillColor: "#2A9D53", textColor: "#FFFFFF", fontBold: true } },
+        alignment: "center",
+        rulesOptions: [{ fillColor: "#FF0000" }],
+      },
+    }),
+    data("Owner", "Ref:T", { visibleColId: "Mood", widgetOptions: { alignment: "left" } }),
+    data("Plain", "Text")
+  );
+  const read = readBack(text);
 
-  const text = generateCode(schema);
-  const { tables, warnings: parseWarnings } = parseGristSchema(text);
-  assert.equal(tables.length, 1);
-
-  const resolvedById = new Map();
-  const resolutionWarnings = [];
-  for (const col of tables[0].columns) {
-    resolvedById.set(col.id, resolveColumnType(col.dslType, col.argsRaw, col.id, resolutionWarnings));
-  }
-
-  assert.deepEqual(parseWarnings, []);
-  assert.deepEqual(resolutionWarnings, []);
-
-  const mood = resolvedById.get("Mood");
-  assert.equal(mood.type, "Choice");
-  assert.equal(mood.label, "Humeur (du jour)");
-  assert.equal(mood.description, "Une note (avec parenthèses) et une apostrophe : l'humeur");
-  assert.deepEqual(mood.widgetOptions, {
+  assert.deepEqual(read.get("Mood").widgetOptions, {
     choices: ["Content (ok)", "Neutre", "Absent"],
-    choiceOptions: {
-      "Content (ok)": { fillColor: "#2A9D53", textColor: "#FFFFFF", fontBold: true },
-    },
+    choiceOptions: { "Content (ok)": { fillColor: "#2A9D53", textColor: "#FFFFFF", fontBold: true } },
     alignment: "center",
   });
-
-  const owner = resolvedById.get("Owner");
-  assert.equal(owner.type, "Ref:RoundTrip");
-  assert.equal(owner.visibleColId, "Mood");
-  assert.deepEqual(owner.widgetOptions, { alignment: "left" });
-
-  const plain = resolvedById.get("Plain");
-  assert.equal(plain.type, "Text");
-  assert.equal(plain.label, null);
-  assert.equal(plain.description, null);
-  assert.equal(plain.widgetOptions, null);
-  assert.equal(plain.visibleColId, null);
+  assert.deepEqual([read.get("Mood").label, read.get("Mood").description], ["Humeur (du jour)", "Une note (avec parenthèses) et une apostrophe : l'humeur"]);
+  assert.deepEqual([read.get("Owner").visibleColId, read.get("Owner").widgetOptions], ["Mood", { alignment: "left" }]);
+  const { label, description, widgetOptions, visibleColId } = read.get("Plain");
+  assert.deepEqual([label, description, widgetOptions, visibleColId], [null, null, null, null]);
 });
 
 test("every text value survives the round trip, whatever characters it holds", () => {
@@ -329,41 +119,13 @@ test("every text value survives the round trip, whatever characters it holds", (
     "multi\nline", "windows\r\nline", "tab\there", "it's", 'say "hi"', "back\\slash", "ends with \\",
     "literal \\n sequence", "émoji 😀", "  padded  ", "a, b", "(x) [y] {z}", "# not a comment", "label = 'x'",
   ];
-  const columns = texts.map((text, i) => ({
-    colId: `C${i}`,
-    type: "Choice",
-    isFormula: false,
-    label: text,
-    description: text,
-    widgetOptions: { choices: [text, "other"], question: text },
-  }));
+  const read = readBack(gen(...texts.map((text, i) => data(`C${i}`, "Choice", { label: text, description: text, widgetOptions: { choices: [text, "other"], question: text } }))));
 
-  const { tables, warnings } = parseGristSchema(generateCode([{ tableId: "T", columns }]));
-
-  assert.deepEqual(warnings, []);
-  assert.equal(tables[0].columns.length, texts.length, "no column is lost");
-  tables[0].columns.forEach((col, i) => {
-    const resolved = resolveColumnType(col.dslType, col.argsRaw, col.id, []);
-    assert.equal(resolved.label, texts[i]);
-    assert.equal(resolved.description, texts[i]);
-    assert.deepEqual(resolved.widgetOptions, { choices: [texts[i], "other"], question: texts[i] });
+  assert.equal(read.size, texts.length, "no column is lost");
+  texts.forEach((text, i) => {
+    const col = read.get(`C${i}`);
+    assert.equal(col.label, text);
+    assert.equal(col.description, text);
+    assert.deepEqual(col.widgetOptions, { choices: [text, "other"], question: text });
   });
-});
-
-test("a formula column of type Any keeps its metadata, and stays plain when it has none", () => {
-  const text = generateCode([
-    {
-      tableId: "T",
-      columns: [
-        { colId: "Plain", type: "Any", isFormula: true, formula: "None" },
-        { colId: "Described", type: "Any", isFormula: true, formula: "None", description: "d", label: "L" },
-      ],
-    },
-  ]);
-  assert.doesNotMatch(text, /formulaType\(grist\.Any\(\)\)/);
-
-  const { tables } = parseGristSchema(text);
-  const described = tables[0].columns.find((col) => col.id === "Described");
-  const resolved = resolveColumnType(described.dslType, described.argsRaw, described.id, []);
-  assert.deepEqual([resolved.type, resolved.label, resolved.description], ["Any", "L", "d"]);
 });
