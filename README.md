@@ -396,6 +396,7 @@ style.css              mise en forme (identité visuelle Grist Factory, thème c
 fonts/manrope/         police Manrope vendorisée et son fichier d'origine (voir SECURITY.md)
 assets/                logo Grist Factory (voir SECURITY.md)
 js/theme-init.js       applique le thème et la langue mémorisés avant le premier affichage
+                       (et masque la page française d'un lecteur de l'anglais jusqu'à sa traduction)
 js/app.js              point d'entrée : onglets, initialisation
 js/importTab.js        onglet Import : câblage du DOM
 js/importer.js         logique de l'import sans DOM : résolution des colonnes, identifiants,

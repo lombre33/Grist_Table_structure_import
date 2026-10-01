@@ -327,6 +327,24 @@ test("the saved theme and language apply before any module has run", async () =>
   await page.close();
 });
 
+test("an English reader never sees the French markup: the page waits for its translation, and shows itself anyway after two seconds", async () => {
+  const translated = await widget.open(fakeGrist(), { locale: "en" });
+  assert.deepEqual(
+    await translated.evaluate(() => [document.documentElement.dataset.pendingLocale, getComputedStyle(document.body).visibility, document.querySelector("h1").textContent]),
+    [undefined, "visible", "Table structure"]
+  );
+  await translated.close();
+
+  const stuck = await widget.browser.newPage();
+  await stuck.route("https://docs.getgrist.com/**", (route) => route.fulfill({ contentType: "text/javascript", body: "" }));
+  await stuck.route("**/js/app.js", (route) => route.abort());
+  await stuck.addInitScript(() => localStorage.setItem("gristFactory.locale", "en"));
+  await stuck.goto(widget.url);
+  assert.equal(await stuck.evaluate(() => getComputedStyle(document.body).visibility), "hidden");
+  await stuck.waitForFunction(() => getComputedStyle(document.body).visibility === "visible", null, { timeout: 5000 });
+  await stuck.close();
+});
+
 test("a short pane keeps the buttons in view: the title and the code box shrink", async () => {
   const page = await widget.open(fakeGrist());
   await page.setViewportSize({ width: 600, height: 500 });

@@ -186,6 +186,10 @@ modules, un petit script classique, `js/theme-init.js` (une dizaine de lignes, s
 source de code du widget avec les modules ES, autorisée par `script-src 'self'`), lit les
 deux mêmes clés dans `<head>` et pose l'attribut `data-theme` et la langue de la page, sans
 rien interpréter d'autre ; un test vérifie qu'il lit les clés et accepte les valeurs des modules.
+Pour un lecteur de l'anglais, dont le balisage est en français, il pose aussi
+`data-pending-locale` : la feuille de styles masque alors la page jusqu'à ce que
+`js/i18n.js` l'ait traduite (et la révèle d'elle-même après deux secondes si ce module ne
+se charge jamais), afin qu'aucun texte français ne s'affiche avant l'anglais.
 
 Le panneau lui-même utilise l'élément natif `<dialog>` (`showModal()`/`close()`) : pas
 de gestion maison du focus ni de la touche Échap, ce sont des comportements standard du

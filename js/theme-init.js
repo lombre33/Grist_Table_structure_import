@@ -5,6 +5,7 @@ try {
   if (theme === "light" || theme === "dark") document.documentElement.dataset.theme = theme;
   const locale = localStorage.getItem("gristFactory.locale");
   if (locale === "fr" || locale === "en") document.documentElement.lang = locale;
+  if (locale === "en") document.documentElement.dataset.pendingLocale = ""; // the markup is French: hidden until js/i18n.js has translated it
 } catch {
   // storage blocked, as it can be in a cross-origin iframe: the defaults stand
 }

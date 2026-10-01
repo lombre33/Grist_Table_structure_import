@@ -385,6 +385,7 @@ const BINDINGS = [
 
 function applyI18n() {
   document.documentElement.lang = currentLocale;
+  delete document.documentElement.dataset.pendingLocale;
   document.title = t("app.documentTitle");
   for (const [attribute, apply] of BINDINGS) {
     for (const node of document.querySelectorAll(`[${attribute}]`)) apply(node, t(node.getAttribute(attribute)));

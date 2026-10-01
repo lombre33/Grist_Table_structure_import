@@ -809,6 +809,18 @@ dialog#settings-dialog::backdrop {
   overflow-wrap: anywhere;
 }
 
+/* The markup is French: for a reader of English it stays hidden until js/i18n.js has translated it, or for two seconds if that never happens. */
+html[data-pending-locale] body {
+  visibility: hidden;
+  animation: reveal 0s 2s forwards;
+}
+
+@keyframes reveal {
+  to {
+    visibility: visible;
+  }
+}
+
 /* A short pane, which a Grist widget often is: the title and the code box are what the buttons need above them. */
 @media (max-height: 640px) {
   .shell {
