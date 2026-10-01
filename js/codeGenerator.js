@@ -29,15 +29,14 @@ function tableText({ tableId, columns }) {
 function fieldText(col) {
   const kwargs = buildKwargs(col);
   const typeExpr = buildTypeExpression(col.type, kwargs);
-  const body = formulaBody(col.formula, defaultLiteralForType(col.type));
   if (!col.isFormula) {
-    const trigger = col.formula?.trim() ? `\n${INDENT}def _default_${col.colId}(rec, table, value, user):\n${body}\n` : "";
+    const trigger = col.formula?.trim() ? `\n${INDENT}def _default_${col.colId}(rec, table, value, user):\n${formulaBody(col.formula)}\n` : "";
     return `${trigger}${INDENT}${col.colId} = ${typeExpr}\n`;
   }
 
   const typed = col.type !== "Any" || Object.keys(kwargs).length > 0;
   const decorator = typed ? `${INDENT}@grist.formulaType(${typeExpr})\n` : "";
-  return `\n${decorator}${INDENT}def ${col.colId}(rec, table):\n${body}\n`;
+  return `\n${decorator}${INDENT}def ${col.colId}(rec, table):\n${formulaBody(col.formula, defaultLiteralForType(col.type))}\n`;
 }
 
 /** What a column has beyond its type, as Python source: only what there is to say. */

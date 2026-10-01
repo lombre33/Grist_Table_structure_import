@@ -1,7 +1,7 @@
 import { parseGristSchema } from "./parser.js";
-import { $, el, checklistItem, restoreFocus, statusWriter, syncCheckedClass } from "./dom.js";
+import { $, el, checklistItem, restoreFocus, statusWriter, syncCheckedClass, syncMasterCheckbox } from "./dom.js";
 import { fetchDocSchema, existingColumnIds } from "./schema.js";
-import { addColumns, checkTableId, createTables, defaultTableId, isComputed, resolveColumns, twoWayPairs, twoWayWarnings } from "./importer.js";
+import { addColumns, checkTableId, createTables, defaultTableId, isComputed, linkedColumns, resolveColumns, twoWayWarnings } from "./importer.js";
 import { callGrist, reportError } from "./util.js";
 import { t, tn, typeLabel, onLocaleChange } from "./i18n.js";
 
@@ -61,7 +61,7 @@ export function initImportTab(grist) {
     return mode() === "existing" ? renderExisting() : renderCreate();
   };
   /** The columns whose checkbox can take them out of (or back into) what will be applied, each with the ids left out of its table. */
-  const toggleable = () =>
+  const tickableColumns = () =>
     mode() === "existing"
       ? existing.columns.filter((col) => col.isNew).map((col) => [col, existing.excluded])
       : entries.flatMap((entry) => entry.columns.map((col) => [col, entry.excluded]));
@@ -69,14 +69,19 @@ export function initImportTab(grist) {
 
   analyzeBtn.addEventListener("click", onAnalyze);
   clearBtn.addEventListener("click", onClear);
-  sourceInput.addEventListener("input", () => parsed.length > 0 && !busy && clearResults());
+  sourceInput.addEventListener("input", () => {
+    if (parsed.length > 0 && !busy) clearResults(); // what is shown is no longer what is written
+  });
   sourceSelect.addEventListener("change", () => {
     existing = { index: Number(sourceSelect.value), excluded: new Set(), columns: [] };
     renderExisting();
   });
   checklist.addEventListener("change", onChecklistChange);
   selectAllColumns.addEventListener("change", () => {
-    for (const [col, excluded] of toggleable()) selectAllColumns.checked ? excluded.delete(col.id) : excluded.add(col.id);
+    for (const [col, excluded] of tickableColumns()) {
+      if (selectAllColumns.checked) excluded.delete(col.id);
+      else excluded.add(col.id);
+    }
     render();
   });
   formulasOption.addEventListener("change", () => {
@@ -201,6 +206,9 @@ export function initImportTab(grist) {
 
   const newEntry = (table, index) => ({ index, table, id: defaultTableId(table.tableId), excluded: new Set() });
 
+  /** The tables to create as the importer takes them: the id typed (the source's while there is none) and the columns still ticked. */
+  const batchOf = () => entries.map((entry) => ({ id: entry.id.trim() || entry.table.tableId, columns: entry.columns.filter((col) => !entry.excluded.has(col.id)) }));
+
   /** Keeps the entry (id typed, columns unticked) of every table that stays ticked. */
   function onChecklistChange() {
     const ticked = parsed.length > 1 ? Array.from(checklist.querySelectorAll("input:checked"), (input) => Number(input.value)) : [0];
@@ -254,8 +262,8 @@ export function initImportTab(grist) {
     const destination = new Map(entries.map((entry) => [entry.table.tableId, entry.id.trim()]));
     const resolved = entries.map((entry) => resolveColumns(entry.table, destination, documentTableIds(), { excluded: entry.excluded, withFormulas }));
     entries.forEach((entry, i) => (entry.columns = resolved[i].columns));
-    const batch = entries.map((entry) => ({ id: entry.id.trim() || entry.table.tableId, columns: entry.columns.filter((col) => !entry.excluded.has(col.id)) }));
-    const linked = new Set(twoWayPairs(batch).flat().map(({ col }) => col));
+    const batch = batchOf();
+    const linked = linkedColumns(batch);
     const notes = [...resolved.flatMap(({ warnings: found }, i) => found.map((warning) => ({ ...warning, table: batch[i].id }))), ...twoWayWarnings(batch)];
 
     const rows = entries.flatMap((entry, i) => [
@@ -271,7 +279,7 @@ export function initImportTab(grist) {
       entry.error.hidden = !problem;
       entry.error.textContent = problem ? t(problem, { tableId: id }) : "";
       entry.input.setAttribute("aria-invalid", String(Boolean(problem)));
-      valid &&= !problem;
+      if (problem) valid = false;
     }
 
     columnsBody.replaceChildren(...rows);
@@ -281,8 +289,14 @@ export function initImportTab(grist) {
     renderWarnings(notes);
     const anyColumn = batch.some((table) => table.columns.length > 0);
     actionBtn.disabled = busy || !valid || !anyColumn;
-    actionBtn.textContent =
-      entries.length === 0 ? t("import.action.chooseTables") : !anyColumn ? t("import.action.noColumns") : entries.length > 1 ? tn("import.action.createTables", entries.length) : t("import.action.create");
+    actionBtn.textContent = createLabel(anyColumn);
+  }
+
+  /** What the button says: what it creates, or what is missing for it to. */
+  function createLabel(anyColumn) {
+    if (entries.length === 0) return t("import.action.chooseTables");
+    if (!anyColumn) return t("import.action.noColumns");
+    return entries.length > 1 ? tn("import.action.createTables", entries.length) : t("import.action.create");
   }
 
   /** The row that names a table of several: the id it will have, and the table of the code it comes from when that is another. */
@@ -293,11 +307,9 @@ export function initImportTab(grist) {
 
   /** The checkbox of the table's head: all the columns that can be ticked, or some. */
   function renderSelectAll() {
-    const items = toggleable();
-    const included = items.filter(([col, excluded]) => !excluded.has(col.id)).length;
+    const items = tickableColumns();
     selectAllColumns.disabled = items.length === 0;
-    selectAllColumns.checked = items.length > 0 && included === items.length;
-    selectAllColumns.indeterminate = included > 0 && included < items.length;
+    syncMasterCheckbox(selectAllColumns, items.filter(([col, excluded]) => !excluded.has(col.id)).length, items.length);
   }
 
   function renderExisting() {
@@ -311,7 +323,7 @@ export function initImportTab(grist) {
     existing.columns = resolved.columns.map((col) => ({ ...col, isNew: !present(col) }));
     const included = existing.columns.filter((col) => col.isNew && !existing.excluded.has(col.id));
     const batch = [{ id: target?.tableId ?? table.tableId, columns: included }];
-    const linked = new Set(twoWayPairs(batch).flat().map(({ col }) => col));
+    const linked = linkedColumns(batch);
 
     columnsBody.replaceChildren(
       ...existing.columns.map((col) => {
@@ -325,11 +337,14 @@ export function initImportTab(grist) {
     renderFormulasOption(included.filter(isComputed).length);
     renderWarnings([...resolved.warnings, ...twoWayWarnings(batch)]);
     actionBtn.disabled = busy || !known || included.length === 0;
-    actionBtn.textContent = !known
-      ? t("import.action.chooseTarget")
-      : included.length === 0
-        ? t("import.action.noNewColumns")
-        : tn("import.action.addColumns", included.length, { table: target.tableId });
+    actionBtn.textContent = addLabel(target, known, included);
+  }
+
+  /** What the button says: what it adds, or what is missing for it to. */
+  function addLabel(target, known, included) {
+    if (!known) return t("import.action.chooseTarget");
+    if (included.length === 0) return t("import.action.noNewColumns");
+    return tn("import.action.addColumns", included.length, { table: target.tableId });
   }
 
   /** The checkbox that imports the formulas, offered when some of the columns to create have one. */
@@ -361,10 +376,10 @@ export function initImportTab(grist) {
   }
 
   async function runCreate() {
-    const tables = entries.map((entry) => ({ id: entry.id.trim(), columns: entry.columns.filter((col) => !entry.excluded.has(col.id)) }));
-    setStatus(tn("import.status.creating", tables.length));
+    const batch = batchOf();
+    setStatus(tn("import.status.creating", batch.length));
     try {
-      const { tables: created, note } = await createTables(grist, tables, { withFormulas });
+      const { tables: created, note } = await createTables(grist, batch, { withFormulas });
       const columnsPhrase = tn("common.columnsCount", created.reduce((total, table) => total + table.columns.length, 0));
       const summary =
         created.length > 1

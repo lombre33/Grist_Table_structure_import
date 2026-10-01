@@ -1,7 +1,6 @@
 /** What a user does in the Import tab, as functions of a page opened by widgetPage.mjs. */
 
-/** French text with its no-break spaces as plain ones, which is how the tests write it. */
-export const plain = (text) => text.replaceAll("\u00a0", " ");
+import { plain } from "../helpers.mjs";
 
 /** The text of an element, in `plain` form. */
 export const textOf = async (page, selector) => plain(await page.textContent(selector));

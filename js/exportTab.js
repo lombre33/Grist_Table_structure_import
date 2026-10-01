@@ -1,4 +1,4 @@
-import { $, el, checklistItem, restoreFocus, statusWriter } from "./dom.js";
+import { $, el, checklistItem, restoreFocus, statusWriter, syncMasterCheckbox } from "./dom.js";
 import { fetchDocSchema, buildExportSchema, findReferencedTables } from "./schema.js";
 import { generateCode } from "./codeGenerator.js";
 import { callGrist, reportError } from "./util.js";
@@ -60,10 +60,8 @@ export function initExportTab(grist) {
   }
 
   function refresh() {
-    const count = tableList.querySelectorAll("input").length;
     const ticked = selected().length;
-    selectAll.checked = count > 0 && ticked === count;
-    selectAll.indeterminate = ticked > 0 && ticked < count;
+    syncMasterCheckbox(selectAll, ticked, tableList.querySelectorAll("input").length);
     generateBtn.disabled = busy || ticked === 0;
     updateRefsBanner();
   }
@@ -96,7 +94,7 @@ export function initExportTab(grist) {
     }
   }
 
-  /** Generating without the referenced tables is allowed: Import turns such references into Any. */
+  /** Generating without the referenced tables is allowed: Import then keeps a reference only if its table exists where it imports. */
   function updateRefsBanner() {
     const { referencedBy, ids, key } = missingTables();
     refsBanner.hidden = ids.length === 0 || key === dismissed;
@@ -142,7 +140,7 @@ export function initExportTab(grist) {
     }
   }
 
-  /** The outcome of Copier: a short confirmation, or what to do instead (which deserves more than a hint's look). */
+  /** The outcome of Copier: a short confirmation, or what to do instead, which is a message since the user has to act on it. */
   function setCopyStatus(message, level = "hint") {
     copyStatus.className = level === "hint" ? "hint" : `status status-${level}`;
     copyStatus.textContent = message;

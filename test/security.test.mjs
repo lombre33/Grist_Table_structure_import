@@ -1,9 +1,9 @@
 /** What the widget must never contain: it only edits the document it is opened in. */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync } from "node:fs";
+import { read } from "./helpers.mjs";
 
-const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const sources = readdirSync(new URL("../js/", import.meta.url))
   .filter((name) => name.endsWith(".js"))
   .map((name) => [`js/${name}`, read(`js/${name}`)]);

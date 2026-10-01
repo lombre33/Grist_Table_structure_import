@@ -388,7 +388,10 @@ l'emplacement attendu par Playwright, `PLAYWRIGHT_CHROMIUM_PATH` indique l'exéc
 
 Les fixtures de `test/fixtures/code-view/` sont du texte Code View produit par le
 `gencode.py` d'un vrai Grist ; elles se régénèrent avec `test/grist/record-code-view.mjs`
-(`GRIST_SANDBOX_DIR=<grist-core>/sandbox/grist`, `GRIST_PYTHON`, `GRIST_VERSION`).
+(`GRIST_SANDBOX_DIR=<grist-core>/sandbox/grist`, `GRIST_PYTHON`, `GRIST_VERSION`). Sans
+sources de grist-core, `GRIST_PYTHON` peut être un petit script qui lance `python3` dans le
+conteneur (`docker cp test/grist/code_view.py <conteneur>:/tmp/`, puis
+`exec docker exec -i -e GRIST_SANDBOX_DIR=/grist/sandbox/grist <conteneur> python3 /tmp/code_view.py`).
 
 Structure :
 

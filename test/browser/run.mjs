@@ -450,6 +450,11 @@ const TESTS = [
     assert.equal(await page.evaluate(() => window.writes), 0);
   }],
 
+  ["Import: Analyser has the keyboard back once the document has been read", async (page) => {
+    await analyse(page, MULTI);
+    assert.equal(await page.evaluate(() => document.activeElement.id), "analyze-btn");
+  }],
+
   ["Import: once the table is created, the keyboard goes back to the text, since the button is gone", async (page) => {
     await analyse(page, MULTI);
     await apply(page);
@@ -507,7 +512,13 @@ test("an English reader never sees the French markup: the page waits for its tra
   await stuck.route("**/js/app.js", (route) => route.abort());
   await stuck.addInitScript(() => localStorage.setItem("gristFactory.locale", "en"));
   await stuck.goto(widget.url);
-  assert.equal(await stuck.evaluate(() => getComputedStyle(document.body).visibility), "hidden");
+  await stuck.evaluate(() => {
+    document.body.style.animation = "none"; // set from the script: the page's CSP allows that, not a <style>
+  });
+  assert.equal(await stuck.evaluate(() => getComputedStyle(document.body).visibility), "hidden", "what the styles say, whatever the time taken to load");
+  await stuck.evaluate(() => {
+    document.body.style.animation = "";
+  });
   await stuck.waitForFunction(() => getComputedStyle(document.body).visibility === "visible", null, { timeout: 5000 });
   await stuck.close();
 });

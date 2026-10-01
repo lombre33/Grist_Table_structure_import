@@ -1,9 +1,8 @@
 /** What the page asks for is what the Pages workflow publishes: a file left out would only show in production. */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
-
-const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
+import { existsSync, readdirSync } from "node:fs";
+import { read } from "./helpers.mjs";
 
 const published = [...read(".github/workflows/pages.yml").matchAll(/^\s*cp\s+(.+?)\s+_site\/\S*\s*$/gm)].flatMap(([, sources]) => sources.split(/\s+/));
 const isPublished = (path) =>

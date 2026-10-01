@@ -30,7 +30,9 @@ export function initSettings() {
   const dialog = $("settings-dialog");
   $("settings-btn").addEventListener("click", () => dialog.showModal());
   $("settings-close-btn").addEventListener("click", () => dialog.close());
-  dialog.addEventListener("click", (event) => event.target === dialog && dialog.close());
+  dialog.addEventListener("click", (event) => {
+    if (event.target === dialog) dialog.close(); // the backdrop is the dialog itself
+  });
 
   const theme = load(THEME_KEY, (value) => THEMES.includes(value), "system");
   applyTheme(theme);

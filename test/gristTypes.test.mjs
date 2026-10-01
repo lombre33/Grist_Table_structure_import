@@ -2,8 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { resolveColumnType, buildTypeExpression, defaultLiteralForType, splitType } from "../js/gristTypes.js";
 import { typeLabel } from "../js/i18n.js";
-
-const plain = (text) => text.replaceAll("\u00a0", " ");
+import { plain } from "./helpers.mjs";
 
 function resolve(dslType, argsRaw = "") {
   const warnings = [];

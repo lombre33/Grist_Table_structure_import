@@ -1,14 +1,15 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
+import { readdirSync } from "node:fs";
 import { STRINGS, tn, typeLabel } from "../js/i18n.js";
+import { plain, read } from "./helpers.mjs";
 
 test("typeLabel gives a readable name, with the target or time zone when there is one", () => {
-  const plain = (type) => typeLabel(type).replaceAll("\u00a0", " ");
-  assert.equal(plain("Text"), "Texte");
-  assert.equal(plain("Ref:Foo"), "Référence vers « Foo »");
-  assert.equal(plain("RefList:Foo"), "Références vers « Foo » (liste)");
-  assert.equal(plain("DateTime:UTC"), "Date et heure (UTC)");
+  const label = (type) => plain(typeLabel(type));
+  assert.equal(label("Text"), "Texte");
+  assert.equal(label("Ref:Foo"), "Référence vers « Foo »");
+  assert.equal(label("RefList:Foo"), "Références vers « Foo » (liste)");
+  assert.equal(label("DateTime:UTC"), "Date et heure (UTC)");
 });
 
 test("tn follows the plural rules of the language: in French zero is singular", () => {
@@ -17,7 +18,6 @@ test("tn follows the plural rules of the language: in French zero is singular", 
   assert.equal(tn("common.columnsCount", 2), "2 colonnes");
 });
 
-const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const [, i18nCode] = read("js/i18n.js").split("const LOCALE_KEY");
 const code = [...readdirSync(new URL("../js/", import.meta.url)).filter((name) => name !== "i18n.js").map((name) => read(`js/${name}`)), i18nCode, read("index.html")].join("\n");
 const shape = (value) => (typeof value === "string" ? "text" : Object.keys(value).sort().join("/"));

@@ -121,9 +121,12 @@ export function twoWayPairs(tables) {
   });
 }
 
+/** The columns of `tables` that a two-way link joins. */
+export const linkedColumns = (tables) => new Set(twoWayPairs(tables).flat().map(({ col }) => col));
+
 /** What is said, per table, about the two-way references that `tables` cannot link: they become plain references. */
 export function twoWayWarnings(tables) {
-  const linked = new Set(twoWayPairs(tables).flat().map(({ col }) => col));
+  const linked = linkedColumns(tables);
   return tables.flatMap(({ id, columns }) => {
     const plain = columns.filter((col) => col.reverseOf && !linked.has(col));
     return plain.length > 0 ? [{ key: "warn.twoWayColumns", params: { columns: plain.map((col) => col.id).join(", ") }, table: id }] : [];
@@ -156,7 +159,7 @@ export async function createTables(grist, tables, { withFormulas = false } = {})
     id: retValues[i].table_id,
     columns: columns.map((col, j) => ({ ...col, id: retValues[i].columns[j] })),
   }));
-  return { tables: created, note: await finish(grist, tables, created) };
+  return { tables: created, note: await afterCreation(grist, tables, created) };
 }
 
 /**
@@ -174,18 +177,18 @@ export async function addColumns(grist, table, columns, { withFormulas = false }
     missing.map((col) => ["AddVisibleColumn", table.tableId, col.id, columnPayload(col, withFormulas)])
   );
   const added = missing.map((col, i) => ({ ...col, id: retValues[i].colId }));
-  const note = await finish(grist, [{ id: table.tableId, columns: missing }], [{ id: table.tableId, columns: added }]);
+  const note = await afterCreation(grist, [{ id: table.tableId, columns: missing }], [{ id: table.tableId, columns: added }]);
   return { added: added.length, note };
 }
 
 /**
- * What follows a creation: the details (see refine), then the two-way links. `requested` holds the
+ * What follows a creation: the details (see applyDetails), then the two-way links. `requested` holds the
  * columns as they were asked for, `created` the same as Grist named them.
  */
-async function finish(grist, requested, created) {
+async function afterCreation(grist, requested, created) {
   const placed = new Map(requested.flatMap(({ columns }, i) => columns.map((col, j) => [col, { tableId: created[i].id, id: created[i].columns[j].id }])));
   const pairs = twoWayPairs(requested).map((pair) => pair.map(({ col }) => placed.get(col)));
-  return (await refine(grist, created)) + (await linkTwoWay(grist, pairs));
+  return (await applyDetails(grist, created)) + (await linkTwoWay(grist, pairs));
 }
 
 /**
@@ -194,7 +197,7 @@ async function finish(grist, requested, created) {
  * needs the row ids of columns that only exist once the tables do (SetDisplayFormula takes
  * no other form on every version of Grist). Returns a note about whatever was not applied.
  */
-async function refine(grist, tables) {
+async function applyDetails(grist, tables) {
   const pending = tables.flatMap(({ id, columns }) =>
     columns.filter((col) => col.description || col.visibleColId || isUntied(col)).map((col) => ({ ...col, tableId: id }))
   );

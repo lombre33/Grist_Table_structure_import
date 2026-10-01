@@ -1,9 +1,9 @@
 /** What the README says about the repository is what is in it. */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync } from "node:fs";
+import { read } from "./helpers.mjs";
 
-const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const readme = read("README.md");
 
 test("the README's file map lists every module of js/, and only those", () => {

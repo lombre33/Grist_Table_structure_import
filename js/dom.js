@@ -32,6 +32,12 @@ export function restoreFocus(button) {
   if (document.activeElement === document.body && !button.disabled) button.focus({ preventScroll: true });
 }
 
+/** A checkbox standing for a group: ticked when all of its `total` are, in between when only some are. */
+export function syncMasterCheckbox(box, ticked, total) {
+  box.checked = total > 0 && ticked === total;
+  box.indeterminate = ticked > 0 && ticked < total;
+}
+
 /** Marks the wrapper of the checked radio with `is-checked`: the styles do not rely on :has(). */
 export function syncCheckedClass(radios, className, wrapperSelector) {
   for (const radio of radios) radio.closest(wrapperSelector)?.classList.toggle(className, radio.checked);
