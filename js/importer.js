@@ -5,7 +5,7 @@
 
 import { resolveColumnType } from "./gristTypes.js";
 import { fetchDocSchema, existingColumnIds } from "./schema.js";
-import { errorMessage } from "./util.js";
+import { reportError } from "./util.js";
 import { t, tn } from "./i18n.js";
 
 // Table ids Grist creates as they are. It rewrites anything else (capital first
@@ -140,7 +140,7 @@ async function refine(grist, tables) {
     if (actions.length > 0) await grist.docApi.applyUserActions(actions);
     return notes.map((note) => ` ${note}`).join("");
   } catch (err) {
-    return t("import.note.refineFailed", { error: errorMessage(err) });
+    return t("import.note.refineFailed", { error: reportError(err) });
   }
 }
 

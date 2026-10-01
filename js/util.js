@@ -1,33 +1,20 @@
-export const GRIST_CALL_TIMEOUT_MS = 8000;
+import { t } from "./i18n.js";
 
-/**
- * Best-effort human-readable text for a caught error, including whatever
- * extra detail the Grist widget RPC layer attaches (`details`/`data`, seen
- * on some `applyUserActions` rejections in addition to `message`) so a
- * failure is actionable instead of a bare "[object Object]". Also logs the
- * raw error to the console (`console.error`), so a report of "it didn't
- * work" can be paired with the real stack trace/detail from devtools.
- */
-export function errorMessage(err) {
-  console.error(err);
-  if (!err) return String(err);
-  const base = err.message || String(err);
-  const extra = err.details || (err.data && err.data.details);
-  return extra && extra !== base ? `${base} (${extra})` : base;
+const GRIST_CALL_TIMEOUT_MS = 8000;
+
+/** `promise`, a call to Grist, with a deadline: Grist does not always answer. */
+export function callGrist(promise) {
+  let timer;
+  const deadline = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(t("error.timeout"))), GRIST_CALL_TIMEOUT_MS);
+  });
+  return Promise.race([promise, deadline]).finally(() => clearTimeout(timer));
 }
 
-export function withTimeout(promise, ms, message) {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(message)), ms);
-    promise.then(
-      (value) => {
-        clearTimeout(timer);
-        resolve(value);
-      },
-      (err) => {
-        clearTimeout(timer);
-        reject(err);
-      }
-    );
-  });
+/** The text to show for a caught error, which is also logged for whoever reports the problem. */
+export function reportError(err) {
+  console.error(err);
+  const message = err?.message || String(err);
+  const details = err?.details || err?.data?.details;
+  return details && details !== message ? `${message} (${details})` : message;
 }

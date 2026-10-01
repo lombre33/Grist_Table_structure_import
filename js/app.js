@@ -1,41 +1,33 @@
+import { $ } from "./dom.js";
+import { initSettings } from "./settings.js";
 import { initImportTab } from "./importTab.js";
 import { initExportTab } from "./exportTab.js";
-import { initSettings } from "./settings.js";
 
 initSettings();
+const grist = window.grist;
+grist?.ready({ requiredAccess: "full" });
 
-const gristAvailable = typeof window.grist !== "undefined";
-if (gristAvailable) {
-  window.grist.ready({ requiredAccess: "full" });
+const exportTab = initExportTab(grist);
+initImportTab(grist);
+
+const TABS = ["import", "export"];
+
+function activate(name) {
+  for (const tab of TABS) {
+    $(`tab-${tab}`).setAttribute("aria-selected", String(tab === name));
+    $(`tab-${tab}`).tabIndex = tab === name ? 0 : -1;
+    $(`panel-${tab}`).hidden = tab !== name;
+  }
+  if (name === "export") exportTab.activate();
 }
 
-const tabImport = document.getElementById("tab-import");
-const tabExport = document.getElementById("tab-export");
-const panelImport = document.getElementById("panel-import");
-const panelExport = document.getElementById("panel-export");
-
-const exportTab = initExportTab(window.grist, gristAvailable);
-initImportTab(window.grist, gristAvailable);
-
-function activateTab(name) {
-  const importActive = name === "import";
-  tabImport.setAttribute("aria-selected", String(importActive));
-  tabExport.setAttribute("aria-selected", String(!importActive));
-  tabImport.tabIndex = importActive ? 0 : -1;
-  tabExport.tabIndex = importActive ? -1 : 0;
-  panelImport.hidden = !importActive;
-  panelExport.hidden = importActive;
-  if (!importActive) exportTab.activate();
-}
-
-tabImport.addEventListener("click", () => activateTab("import"));
-tabExport.addEventListener("click", () => activateTab("export"));
-tabImport.addEventListener("keydown", (event) => handleArrowKey(event, "export", tabExport));
-tabExport.addEventListener("keydown", (event) => handleArrowKey(event, "import", tabImport));
-
-function handleArrowKey(event, otherName, otherButton) {
-  if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-  event.preventDefault();
-  activateTab(otherName);
-  otherButton.focus();
+for (const tab of TABS) {
+  $(`tab-${tab}`).addEventListener("click", () => activate(tab));
+  $(`tab-${tab}`).addEventListener("keydown", (event) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    const other = TABS.find((name) => name !== tab);
+    event.preventDefault();
+    activate(other);
+    $(`tab-${other}`).focus();
+  });
 }

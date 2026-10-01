@@ -1,26 +1,11 @@
 /**
- * fr/en dictionary + DOM binding for this widget's interface — see the
- * Grist Factory UI/UX identity's "Bilingue fr/en systématique" rule.
- *
- * Two kinds of entries:
- * - Static chrome strings (labels, headings, buttons, hints), bound via
- *   data-i18n/-placeholder/-aria-label attributes in index.html and applied
- *   by applyI18n() below — t(key) with no params.
- * - Dynamic status/warning messages built at runtime in js/importTab.js,
- *   js/exportTab.js, js/gristTypes.js and js/parser.js (e.g.
- *   "Table « X » créée avec 3 colonnes.") — t(key, params) for a plain
- *   parameterized string, tn(key, count, params) for one that also needs
- *   singular/plural agreement (a {one, other} dictionary entry instead of a
- *   plain string).
- *
- * No innerHTML anywhere (see SECURITY.md): the one string that embeds an
- * inline <code> element (export.formulaHint) is rebuilt from a "{code}"
- * placeholder using safe DOM construction (js/dom.js), never HTML parsing.
+ * French and English texts. t(key, params) fills {name} placeholders, tn(key, count, params) picks the
+ * singular or plural form of a {one, other} entry; the static markup uses data-i18n*, applied by applyI18n().
  */
 
-import { el, clear } from "./dom.js";
+import { load, save } from "./storage.js";
 
-const STRINGS = {
+export const STRINGS = {
   fr: {
     "settings.open": "Réglages",
     "settings.close": "Fermer",
@@ -70,15 +55,13 @@ const STRINGS = {
     "export.generate": "Générer le code",
     "export.step2.eyebrow": "2. Code généré",
     "export.copy": "Copier",
-    "export.formulaHint":
+    "export.formulaHint.before":
       "Seule la structure (types de colonnes) est garantie fidèle. Pour une colonne de formule, " +
-      "la formule d'origine est recopiée telle que stockée (syntaxe {code} de Grist) quand elle " +
-      "existe, sinon remplacée par la valeur par défaut du type — comme le fait Grist lui-même " +
-      "pour une formule vide.",
+      "la formule d'origine est recopiée telle que stockée (syntaxe ",
+    "export.formulaHint.after":
+      " de Grist) quand elle existe, sinon remplacée par la valeur par défaut du type — comme le fait " +
+      "Grist lui-même pour une formule vide.",
 
-    // --- Dynamic status/warning messages (js/importTab.js, js/exportTab.js,
-    // js/gristTypes.js, js/parser.js) — see t()/tn() in this module. A
-    // {one, other} value is a pluralized entry, read via tn(key, count, ...).
     "error.noGristApi":
       "Impossible de trouver l'API Grist. Ouvrez cette page en tant que widget personnalisé " +
       "dans un document Grist (elle ne fonctionne pas seule, hors d'un document).",
@@ -226,13 +209,13 @@ const STRINGS = {
     "export.generate": "Generate code",
     "export.step2.eyebrow": "2. Generated code",
     "export.copy": "Copy",
-    "export.formulaHint":
+    "export.formulaHint.before":
       "Only the structure (column types) is guaranteed faithful. For a formula column, the " +
-      "original formula is copied back exactly as stored (Grist's {code} syntax) when it exists, " +
-      "otherwise replaced with the type's default value — just as Grist itself does for an empty " +
-      "formula.",
+      "original formula is copied back exactly as stored (Grist's ",
+    "export.formulaHint.after":
+      " syntax) when it exists, otherwise replaced with the type's default value — just as Grist " +
+      "itself does for an empty formula.",
 
-    // --- Dynamic status/warning messages — see the matching fr. block above.
     "error.noGristApi":
       "Could not find the Grist API. Open this page as a custom widget inside a Grist document " +
       "(it does not work standalone, outside of a document).",
@@ -330,56 +313,19 @@ const STRINGS = {
   },
 };
 
-const STORAGE_KEY = "gristFactory.locale";
+const LOCALE_KEY = "gristFactory.locale";
 let currentLocale = "fr";
 const listeners = [];
 
-function readStored() {
-  try {
-    const value = localStorage.getItem(STORAGE_KEY);
-    return STRINGS[value] ? value : null;
-  } catch {
-    return null;
-  }
-}
-
-function writeStored(value) {
-  try {
-    localStorage.setItem(STORAGE_KEY, value);
-  } catch {
-    // Best effort only — same iframed-storage caveat as js/theme.js.
-  }
-}
-
-/**
- * Replaces `{name}` placeholders in `text` with `params[name]`, leaving an
- * unmatched placeholder as-is (rather than silently blanking it) so a
- * missing param stays visibly wrong instead of disappearing quietly.
- */
+/** An unmatched placeholder is left as it is, so that a missing parameter shows instead of vanishing. */
 function interpolate(text, params) {
-  if (!params) return text;
-  return text.replace(/\{(\w+)\}/g, (match, name) => (name in params ? String(params[name]) : match));
+  return params ? text.replace(/\{(\w+)\}/g, (match, name) => (name in params ? String(params[name]) : match)) : text;
 }
 
-/**
- * `params` is optional and, when given, fills `{name}` placeholders in the
- * resolved string (see interpolate above) — used for every dynamic
- * status/warning message in the app; `t(key)` with no params is exactly the
- * original behavior, used for static chrome strings via data-i18n.
- */
 export function t(key, params) {
-  const raw = STRINGS[currentLocale][key] ?? key;
-  return interpolate(raw, params);
+  return interpolate(STRINGS[currentLocale][key] ?? key, params);
 }
 
-/**
- * Pluralized counterpart of t(): `key` must resolve to a `{one, other}`
- * object (not a plain string) in the dictionary. `{n}` in either form is
- * the count itself; `params` adds any further placeholders. Only "one"
- * (count === 1) vs "other" (everything else, including 0) — fr/en both
- * only ever need these two categories for the counts this app displays
- * (tables, columns...), never a language with more plural categories.
- */
 export function tn(key, count, params) {
   const entry = STRINGS[currentLocale][key];
   return interpolate(entry[new Intl.PluralRules(currentLocale).select(count)] ?? entry.other, { n: count, ...params });
@@ -391,39 +337,22 @@ export function typeLabel(type) {
   return t(`type.${name}`, { arg });
 }
 
-export function getLocale() {
-  return currentLocale;
-}
+const BINDINGS = [
+  ["data-i18n", (node, text) => (node.textContent = text)],
+  ["data-i18n-placeholder", (node, text) => (node.placeholder = text)],
+  ["data-i18n-aria-label", (node, text) => node.setAttribute("aria-label", text)],
+];
 
-function applyToNode(node) {
-  const key = node.getAttribute("data-i18n");
-  const text = t(key);
-  const codeText = node.getAttribute("data-i18n-code");
-  if (codeText && text.includes("{code}")) {
-    const [before, after] = text.split("{code}");
-    clear(node);
-    if (before) node.appendChild(document.createTextNode(before));
-    node.appendChild(el("code", { text: codeText }));
-    if (after) node.appendChild(document.createTextNode(after));
-  } else {
-    node.textContent = text;
-  }
-}
-
-export function applyI18n() {
+function applyI18n() {
   document.documentElement.lang = currentLocale;
   document.title = t("app.documentTitle");
-  for (const node of document.querySelectorAll("[data-i18n]")) applyToNode(node);
-  for (const node of document.querySelectorAll("[data-i18n-placeholder]")) {
-    node.placeholder = t(node.getAttribute("data-i18n-placeholder"));
-  }
-  for (const node of document.querySelectorAll("[data-i18n-aria-label]")) {
-    node.setAttribute("aria-label", t(node.getAttribute("data-i18n-aria-label")));
+  for (const [attribute, apply] of BINDINGS) {
+    for (const node of document.querySelectorAll(`[${attribute}]`)) apply(node, t(node.getAttribute(attribute)));
   }
 }
 
 export function initLocale() {
-  currentLocale = readStored() || "fr";
+  currentLocale = load(LOCALE_KEY, (value) => value in STRINGS, "fr");
   applyI18n();
   return currentLocale;
 }
@@ -434,8 +363,8 @@ export function onLocaleChange(listener) {
 }
 
 export function setLocale(value) {
-  currentLocale = STRINGS[value] ? value : "fr";
-  writeStored(currentLocale);
+  currentLocale = value in STRINGS ? value : "fr";
+  save(LOCALE_KEY, currentLocale);
   applyI18n();
   for (const listener of listeners) listener();
 }

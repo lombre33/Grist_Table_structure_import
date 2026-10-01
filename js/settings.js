@@ -1,45 +1,42 @@
-import { initTheme, setTheme } from "./theme.js";
+import { $, syncCheckedClass } from "./dom.js";
 import { initLocale, setLocale } from "./i18n.js";
-import { syncCheckedClass } from "./dom.js";
+import { load, save } from "./storage.js";
 
-/**
- * Wires the Réglages dialog: appearance (theme) and language choices, plus
- * the static Crédits section already in index.html. Both choices are
- * applied immediately on load (initTheme/initLocale), before the dialog is
- * ever opened, so the chrome always reflects the stored choice from the
- * first paint.
- */
-export function initSettings() {
-  const dialog = document.getElementById("settings-dialog");
-  const openBtn = document.getElementById("settings-btn");
-  const closeBtn = document.getElementById("settings-close-btn");
-  const themeRadios = Array.from(document.querySelectorAll('input[name="theme-choice"]'));
-  const localeRadios = Array.from(document.querySelectorAll('input[name="locale-choice"]'));
+const THEME_KEY = "gristFactory.theme";
+const THEMES = ["system", "light", "dark"];
 
-  setChecked(themeRadios, initTheme());
-  setChecked(localeRadios, initLocale());
-  syncCheckedClass(themeRadios, "is-checked", ".segmented-option");
-  syncCheckedClass(localeRadios, "is-checked", ".segmented-option");
-
-  openBtn.addEventListener("click", () => dialog.showModal());
-  closeBtn.addEventListener("click", () => dialog.close());
-  dialog.addEventListener("click", (event) => {
-    if (event.target === dialog) dialog.close();
-  });
-  for (const radio of themeRadios) {
-    radio.addEventListener("change", () => {
-      setTheme(radio.value);
-      syncCheckedClass(themeRadios, "is-checked", ".segmented-option");
-    });
-  }
-  for (const radio of localeRadios) {
-    radio.addEventListener("change", () => {
-      setLocale(radio.value);
-      syncCheckedClass(localeRadios, "is-checked", ".segmented-option");
-    });
-  }
+/** "System" leaves data-theme off, so that the prefers-color-scheme media query decides. */
+function applyTheme(theme) {
+  if (theme === "system") document.documentElement.removeAttribute("data-theme");
+  else document.documentElement.dataset.theme = theme;
 }
 
-function setChecked(radios, value) {
-  for (const radio of radios) radio.checked = radio.value === value;
+/** Makes the radio group `name` show `current` and report each change to `onChange`. */
+function bindChoice(name, current, onChange) {
+  const radios = Array.from(document.querySelectorAll(`input[name="${name}"]`));
+  const sync = () => syncCheckedClass(radios, "is-checked", ".segmented-option");
+  for (const radio of radios) {
+    radio.checked = radio.value === current;
+    radio.addEventListener("change", () => {
+      onChange(radio.value);
+      sync();
+    });
+  }
+  sync();
+}
+
+/** The Réglages dialog: theme and language, both applied at once and remembered. */
+export function initSettings() {
+  const dialog = $("settings-dialog");
+  $("settings-btn").addEventListener("click", () => dialog.showModal());
+  $("settings-close-btn").addEventListener("click", () => dialog.close());
+  dialog.addEventListener("click", (event) => event.target === dialog && dialog.close());
+
+  const theme = load(THEME_KEY, (value) => THEMES.includes(value), "system");
+  applyTheme(theme);
+  bindChoice("theme-choice", theme, (value) => {
+    applyTheme(value);
+    save(THEME_KEY, value);
+  });
+  bindChoice("locale-choice", initLocale(), setLocale);
 }

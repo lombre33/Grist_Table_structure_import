@@ -211,11 +211,10 @@
         <button id="copy-btn" type="button" class="btn" data-i18n="export.copy">Copier</button>
         <span id="copy-status" class="hint" aria-live="polite"></span>
       </div>
-      <p class="hint" data-i18n="export.formulaHint" data-i18n-code="$Colonne">
-        Seule la structure (types de colonnes) est garantie fidèle. Pour une colonne de formule,
-        la formule d'origine est recopiée telle que stockée (syntaxe <code>$Colonne</code> de
-        Grist) quand elle existe, sinon remplacée par la valeur par défaut du type — comme le
-        fait Grist lui-même pour une formule vide.
+      <p class="hint">
+        <span data-i18n="export.formulaHint.before">Seule la structure (types de colonnes) est garantie fidèle. Pour une colonne de formule,
+        la formule d'origine est recopiée telle que stockée (syntaxe </span><code>$Colonne</code><span data-i18n="export.formulaHint.after"> de Grist) quand elle existe, sinon remplacée par la valeur par défaut du type — comme le
+        fait Grist lui-même pour une formule vide.</span>
       </p>
     </div>
 

@@ -1,16 +1,13 @@
 import { parseGristSchema } from "./parser.js";
-import { el, clear, syncCheckedClass, statusWriter } from "./dom.js";
+import { $, el, checklistItem, statusWriter, syncCheckedClass } from "./dom.js";
 import { fetchDocSchema, existingColumnIds } from "./schema.js";
 import { addColumns, checkTableId, createTables, defaultTableId, resolveColumns } from "./importer.js";
-import { withTimeout, errorMessage, GRIST_CALL_TIMEOUT_MS } from "./util.js";
+import { callGrist, reportError } from "./util.js";
 import { t, tn, typeLabel, onLocaleChange } from "./i18n.js";
 
-const $ = (id) => document.getElementById(id);
-
-export function initImportTab(grist, gristAvailable) {
+export function initImportTab(grist) {
   const sourceInput = $("source-input");
   const analyzeBtn = $("analyze-btn");
-  const clearBtn = $("clear-btn");
   const modeBlock = $("mode-block");
   const modeRadios = Array.from(document.querySelectorAll('input[name="import-mode"]'));
   const previewSection = $("preview-section");
@@ -22,9 +19,7 @@ export function initImportTab(grist, gristAvailable) {
   const tableIdsList = $("table-ids-list");
   const targetRow = $("target-table-row");
   const targetSelect = $("target-table-select");
-  const targetError = $("target-table-error");
   const columnsPreview = $("columns-preview");
-  const statusHeader = $("status-column-header");
   const columnsBody = $("columns-preview-body");
   const warningsBlock = $("warnings-block");
   const warningsList = $("warnings-list");
@@ -33,19 +28,17 @@ export function initImportTab(grist, gristAvailable) {
   const announcement = $("import-announcement");
   const setStatus = statusWriter($("import-status-region"));
 
-  if (!gristAvailable) {
+  if (!grist) {
     analyzeBtn.disabled = true;
     setStatus(t("error.noGristApi"), "error");
     return;
   }
 
-  let parsed; // tables found in the source text
-  let warnings; // about the text and about reading the document
+  let parsed; // the tables found in the source text
+  let warnings; // about the text, and about reading the document
   let docSchema; // this document's tables and columns, null when unreadable
-  let createEntries; // "new table" mode, one per ticked table: { index, table, id, excluded, columns, input, error }
-  let existingIndex; // "existing table" mode: which parsed table is the source
-  let existingExcluded; // ... which of its columns are unticked
-  let existingColumns; // ... and its resolved columns, each flagged isNew
+  let entries; // "new table" mode, one per ticked table: { index, table, id, excluded, columns, input, error }
+  let existing; // "existing table" mode: { index of the source table, excluded column ids, columns }
   let busy = false;
   reset();
 
@@ -53,18 +46,17 @@ export function initImportTab(grist, gristAvailable) {
   const render = () => (mode() === "existing" ? renderExisting() : renderCreate());
   const documentTableIds = () => docSchema?.tableIds ?? null;
 
-  analyzeBtn.addEventListener("click", onAnalyze);
-  clearBtn.addEventListener("click", onClear);
+  $("analyze-btn").addEventListener("click", onAnalyze);
+  $("clear-btn").addEventListener("click", onClear);
+  sourceInput.addEventListener("input", () => parsed.length > 0 && !busy && clearResults());
   sourceSelect.addEventListener("change", () => {
-    existingIndex = Number(sourceSelect.value);
-    existingExcluded = new Set();
+    existing = { index: Number(sourceSelect.value), excluded: new Set(), columns: [] };
     renderExisting();
   });
   checklist.addEventListener("change", onChecklistChange);
   targetSelect.addEventListener("change", renderExisting);
   for (const radio of modeRadios) radio.addEventListener("change", onModeChange);
   actionBtn.addEventListener("click", onAction);
-  sourceInput.addEventListener("input", () => parsed.length > 0 && !busy && clearResults());
   onLocaleChange(render);
 
   syncCheckedClass(modeRadios, "is-checked", ".mode-card");
@@ -74,13 +66,11 @@ export function initImportTab(grist, gristAvailable) {
     parsed = [];
     warnings = [];
     docSchema = null;
-    createEntries = [];
-    existingIndex = 0;
-    existingExcluded = new Set();
-    existingColumns = [];
+    entries = [];
+    existing = { index: 0, excluded: new Set(), columns: [] };
   }
 
-  /** A disabled button drops the keyboard focus: give it back once the button is usable again. */
+  /** A button that was disabled has lost the keyboard focus: give it back once it is usable again. */
   function restoreFocus(button) {
     if (document.activeElement === document.body && !button.disabled) button.focus();
   }
@@ -88,10 +78,10 @@ export function initImportTab(grist, gristAvailable) {
   async function loadSchema() {
     analyzeBtn.disabled = true;
     try {
-      docSchema = await withTimeout(fetchDocSchema(grist), GRIST_CALL_TIMEOUT_MS, t("error.timeout"));
+      docSchema = await callGrist(fetchDocSchema(grist));
     } catch (err) {
       docSchema = null;
-      warnings = [...warnings, { key: "import.error.fetchDocInfo", params: { error: errorMessage(err) } }];
+      warnings = [...warnings, { key: "import.error.fetchDocInfo", params: { error: reportError(err) } }];
     } finally {
       analyzeBtn.disabled = false;
       restoreFocus(analyzeBtn);
@@ -101,15 +91,13 @@ export function initImportTab(grist, gristAvailable) {
   async function onAnalyze() {
     setStatus(null);
     reset();
-    const result = parseGristSchema(sourceInput.value);
-    parsed = result.tables;
-    warnings = result.warnings;
+    ({ tables: parsed, warnings } = parseGristSchema(sourceInput.value));
 
     const found = parsed.length > 0;
     modeBlock.hidden = columnsPreview.hidden = createActions.hidden = !found;
     previewSection.hidden = false;
     if (!found) {
-      for (const node of [columnsBody, tableIdsList, checklist]) clear(node);
+      for (const list of [columnsBody, tableIdsList, checklist]) list.replaceChildren();
       sourcePickerRow.hidden = checklistRow.hidden = tableIdRow.hidden = targetRow.hidden = true;
       actionBtn.disabled = true;
       renderWarnings();
@@ -121,11 +109,11 @@ export function initImportTab(grist, gristAvailable) {
     await loadSchema();
     setStatus(null);
 
-    fillSourceSelect();
-    fillChecklist();
+    sourceSelect.replaceChildren(...parsed.map((table, index) => el("option", { value: String(index), text: table.tableId })));
+    checklist.replaceChildren(...parsed.map((table, index) => checklistItem(String(index), table.tableId, true)));
     fillTargetSelect();
     updateModeUI();
-    createEntries = parsed.map((table, index) => newEntry(table, index));
+    entries = parsed.map(newEntry);
     renderTableIds();
     render();
     announcement.textContent = t("import.announce.found", {
@@ -139,7 +127,7 @@ export function initImportTab(grist, gristAvailable) {
   function clearResults() {
     reset();
     modeBlock.hidden = previewSection.hidden = warningsBlock.hidden = true;
-    for (const node of [columnsBody, tableIdsList, checklist, warningsList]) clear(node);
+    for (const list of [columnsBody, tableIdsList, checklist, warningsList]) list.replaceChildren();
     actionBtn.disabled = true;
     announcement.textContent = "";
     setStatus(null);
@@ -160,68 +148,51 @@ export function initImportTab(grist, gristAvailable) {
   }
 
   function updateModeUI() {
-    const existing = mode() === "existing";
+    const isExisting = mode() === "existing";
     const several = parsed.length > 1;
-    tableIdRow.hidden = existing;
-    sourcePickerRow.hidden = !(existing && several);
-    checklistRow.hidden = existing || !several;
-    targetRow.hidden = !existing;
-    statusHeader.hidden = !existing;
-  }
-
-  function fillSourceSelect() {
-    clear(sourceSelect);
-    parsed.forEach((table, index) => sourceSelect.appendChild(el("option", { value: String(index), text: table.tableId })));
-  }
-
-  function fillChecklist() {
-    clear(checklist);
-    parsed.forEach((table, index) => {
-      const input = el("input", { type: "checkbox", value: String(index), checked: true });
-      checklist.appendChild(el("li", {}, [el("label", {}, [input, el("span", { text: table.tableId })])]));
-    });
+    tableIdRow.hidden = isExisting;
+    sourcePickerRow.hidden = !(isExisting && several);
+    checklistRow.hidden = isExisting || !several;
+    targetRow.hidden = !isExisting;
+    $("status-column-header").hidden = !isExisting;
   }
 
   function fillTargetSelect() {
-    clear(targetSelect);
     const problem = !docSchema ? "import.error.noTableList" : docSchema.tables.length === 0 ? "import.error.noTablesToComplete" : null;
-    targetError.hidden = !problem;
-    targetError.textContent = problem ? t(problem) : "";
-    for (const table of docSchema?.tables ?? []) {
-      targetSelect.appendChild(el("option", { value: String(table.tableRef), text: table.tableId }));
-    }
+    $("target-table-error").hidden = !problem;
+    $("target-table-error").textContent = problem ? t(problem) : "";
+    targetSelect.replaceChildren(...(docSchema?.tables ?? []).map((table) => el("option", { value: String(table.tableRef), text: table.tableId })));
   }
 
   const targetTable = () => docSchema?.tables.find((table) => String(table.tableRef) === targetSelect.value) ?? null;
 
-  function newEntry(table, index) {
-    return { index, table, id: defaultTableId(table.tableId), excluded: new Set() };
-  }
+  const newEntry = (table, index) => ({ index, table, id: defaultTableId(table.tableId), excluded: new Set() });
 
   /** Keeps the entry (id typed, columns unticked) of every table that stays ticked. */
   function onChecklistChange() {
-    const ticked = parsed.length > 1 ? Array.from(checklist.querySelectorAll("input:checked")).map((input) => Number(input.value)) : [0];
-    const previous = new Map(createEntries.map((entry) => [entry.index, entry]));
-    createEntries = ticked.map((index) => previous.get(index) ?? newEntry(parsed[index], index));
+    const ticked = parsed.length > 1 ? Array.from(checklist.querySelectorAll("input:checked"), (input) => Number(input.value)) : [0];
+    const previous = new Map(entries.map((entry) => [entry.index, entry]));
+    entries = ticked.map((index) => previous.get(index) ?? newEntry(parsed[index], index));
     renderTableIds();
     renderCreate();
   }
 
   function renderTableIds() {
-    clear(tableIdsList);
-    createEntries.forEach((entry, position) => {
-      const inputId = `table-id-${position}`;
-      entry.input = el("input", { type: "text", id: inputId, autocomplete: "off", value: entry.id, "aria-describedby": `${inputId}-error` });
-      entry.error = el("p", { class: "field-error", id: `${inputId}-error`, hidden: true });
-      entry.input.addEventListener("input", () => {
-        entry.id = entry.input.value;
-        renderCreate();
-      });
-      tableIdsList.appendChild(el("div", { class: "table-id-entry" }, [el("label", { text: entry.table.tableId, for: inputId }), entry.input, entry.error]));
-    });
+    tableIdsList.replaceChildren(
+      ...entries.map((entry, position) => {
+        const inputId = `table-id-${position}`;
+        entry.input = el("input", { type: "text", id: inputId, autocomplete: "off", value: entry.id, "aria-describedby": `${inputId}-error` });
+        entry.error = el("p", { class: "field-error", id: `${inputId}-error`, hidden: true });
+        entry.input.addEventListener("input", () => {
+          entry.id = entry.input.value;
+          renderCreate();
+        });
+        return el("div", { class: "table-id-entry" }, [el("label", { text: entry.table.tableId, for: inputId }), entry.input, entry.error]);
+      })
+    );
   }
 
-  /** One row per column, with a checkbox that takes it out of (or back into) what will be applied; `locked` for a column that is there already. */
+  /** A column's row, with the checkbox that takes it out of (or back into) what will be applied; `locked` when it is there already. */
   function columnRow(col, excluded, statusCell, rerender, locked = false) {
     const checkbox = el("input", {
       type: "checkbox",
@@ -241,26 +212,26 @@ export function initImportTab(grist, gristAvailable) {
     return el("tr", {}, statusCell ? [...cells, statusCell] : cells);
   }
 
-  /** Re-resolves and re-validates every ticked table: called after each change the user makes. */
+  /** Resolves and checks every ticked table again: called after each change the user makes. */
   function renderCreate() {
-    const several = createEntries.length > 1;
-    const destination = new Map(createEntries.map((entry) => [entry.table.tableId, entry.id.trim()]));
+    const several = entries.length > 1;
+    const destination = new Map(entries.map((entry) => [entry.table.tableId, entry.id.trim()]));
+    const rows = [];
     const notes = [];
-    let valid = createEntries.length > 0;
+    let valid = entries.length > 0;
     let anyColumn = false;
 
-    clear(columnsBody);
-    for (const entry of createEntries) {
+    for (const entry of entries) {
       const id = entry.id.trim();
       const resolved = resolveColumns(entry.table, destination, documentTableIds(), entry.excluded);
       entry.columns = resolved.columns;
       notes.push(...resolved.warnings.map((warning) => ({ ...warning, table: id || entry.table.tableId })));
 
-      if (several) columnsBody.appendChild(el("tr", { class: "table-separator" }, [el("td", { colspan: "3", text: id || entry.table.tableId })]));
-      for (const col of entry.columns) columnsBody.appendChild(columnRow(col, entry.excluded, null, renderCreate));
+      if (several) rows.push(el("tr", { class: "table-separator" }, [el("td", { colspan: "3", text: id || entry.table.tableId })]));
+      rows.push(...entry.columns.map((col) => columnRow(col, entry.excluded, null, renderCreate)));
       anyColumn ||= entry.columns.some((col) => !entry.excluded.has(col.id));
 
-      const others = createEntries.filter((other) => other !== entry).map((other) => other.id.trim());
+      const others = entries.filter((other) => other !== entry).map((other) => other.id.trim());
       const problem = checkTableId(id, documentTableIds(), others);
       entry.error.hidden = !problem;
       entry.error.textContent = problem ? t(problem, { id }) : "";
@@ -268,44 +239,41 @@ export function initImportTab(grist, gristAvailable) {
       valid &&= !problem;
     }
 
+    columnsBody.replaceChildren(...rows);
     renderWarnings(notes);
     actionBtn.disabled = busy || !valid || !anyColumn;
-    actionBtn.textContent = several ? tn("import.action.createTables", createEntries.length) : t("import.action.create");
+    actionBtn.textContent = several ? tn("import.action.createTables", entries.length) : t("import.action.create");
   }
 
   function renderExisting() {
-    const table = parsed[existingIndex];
+    const table = parsed[existing.index];
     if (!table) return;
     const target = targetTable();
     const known = target ? existingColumnIds(docSchema.allColumns, target.tableRef) : null;
-    const resolved = resolveColumns(table, new Map(target ? [[table.tableId, target.tableId]] : []), documentTableIds(), existingExcluded);
-    existingColumns = resolved.columns.map((col) => ({ ...col, isNew: !known || !known.has(col.id.toLowerCase()) }));
+    const resolved = resolveColumns(table, new Map(target ? [[table.tableId, target.tableId]] : []), documentTableIds(), existing.excluded);
+    existing.columns = resolved.columns.map((col) => ({ ...col, isNew: !known || !known.has(col.id.toLowerCase()) }));
 
-    clear(columnsBody);
-    for (const col of existingColumns) {
-      const pill = col.isNew ? ["new", t("import.status.new")] : ["skip", t("import.status.existing")];
-      const status = el("td", {}, [el("span", { class: `status-pill status-pill-${pill[0]}`, text: pill[1] })]);
-      columnsBody.appendChild(columnRow(col, existingExcluded, status, renderExisting, !col.isNew));
-    }
+    columnsBody.replaceChildren(
+      ...existing.columns.map((col) => {
+        const pill = col.isNew ? ["new", t("import.status.new")] : ["skip", t("import.status.existing")];
+        const status = el("td", {}, [el("span", { class: `status-pill status-pill-${pill[0]}`, text: pill[1] })]);
+        return columnRow(col, existing.excluded, status, renderExisting, !col.isNew);
+      })
+    );
 
     renderWarnings(resolved.warnings);
-    const newCount = existingColumns.filter((col) => col.isNew && !existingExcluded.has(col.id)).length;
+    const newCount = existing.columns.filter((col) => col.isNew && !existing.excluded.has(col.id)).length;
     actionBtn.disabled = busy || !known || newCount === 0;
-    actionBtn.textContent = !known
-      ? t("import.action.chooseTarget")
-      : newCount === 0
-      ? t("import.action.noNewColumns")
-      : tn("import.action.addColumns", newCount);
+    actionBtn.textContent = !known ? t("import.action.chooseTarget") : newCount === 0 ? t("import.action.noNewColumns") : tn("import.action.addColumns", newCount);
   }
 
   function renderWarnings(more = []) {
-    const all = [...warnings, ...more].map(({ key, params, table }) => {
+    const texts = [...warnings, ...more].map(({ key, params, table }) => {
       const message = t(key, params);
       return table && parsed.length > 1 ? t("warn.tablePrefix", { tableId: table, message }) : message;
     });
-    clear(warningsList);
-    warningsBlock.hidden = all.length === 0;
-    for (const text of all) warningsList.appendChild(el("li", { text }));
+    warningsBlock.hidden = texts.length === 0;
+    warningsList.replaceChildren(...texts.map((text) => el("li", { text })));
   }
 
   async function onAction() {
@@ -321,10 +289,7 @@ export function initImportTab(grist, gristAvailable) {
   }
 
   async function runCreate() {
-    const tables = createEntries.map((entry) => ({
-      id: entry.id.trim(),
-      columns: entry.columns.filter((col) => !entry.excluded.has(col.id)),
-    }));
+    const tables = entries.map((entry) => ({ id: entry.id.trim(), columns: entry.columns.filter((col) => !entry.excluded.has(col.id)) }));
     setStatus(tn("import.status.creating", tables.length));
     try {
       const { tables: created, note } = await createTables(grist, tables);
@@ -334,11 +299,12 @@ export function initImportTab(grist, gristAvailable) {
         created.length > 1
           ? t("import.success.createdMulti", { count: created.length, ids: created.map((table) => table.id).join(", "), columnsPhrase })
           : t("import.success.createdSingle", { id: created[0].id, columnsPhrase });
-      parsed = createEntries = [];
+      parsed = [];
+      entries = [];
       previewSection.hidden = modeBlock.hidden = true;
       setStatus(summary + note, "success");
     } catch (err) {
-      setStatus(t("import.error.createFailed", { error: errorMessage(err) }), "error");
+      setStatus(t("import.error.createFailed", { error: reportError(err) }), "error");
     }
   }
 
@@ -347,12 +313,12 @@ export function initImportTab(grist, gristAvailable) {
     if (!target) return;
     setStatus(t("import.status.addingColumns", { table: target.tableId }));
     try {
-      const { added, note } = await addColumns(grist, target, existingColumns.filter((col) => !existingExcluded.has(col.id)));
+      const { added, note } = await addColumns(grist, target, existing.columns.filter((col) => !existing.excluded.has(col.id)));
       await loadSchema();
       if (added === 0) setStatus(t("import.info.noNewColumns", { table: target.tableId }));
       else setStatus(tn("import.success.columnsAdded", added, { table: target.tableId }) + note, "success");
     } catch (err) {
-      setStatus(t("import.error.addColumnsFailed", { error: errorMessage(err) }), "error");
+      setStatus(t("import.error.addColumnsFailed", { error: reportError(err) }), "error");
     }
   }
 }
