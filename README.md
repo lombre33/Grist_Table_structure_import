@@ -134,10 +134,19 @@ calculée à la création d'une ligne). Le texte de la fonction est lu tel qu'é
 `return X` seul devient la formule `X`, les fonctions de plusieurs lignes restent telles
 quelles, et la valeur que rend une formule vide (`return None`, `return ''`...) donne une
 colonne sans formule, comme dans Grist ; la case n'est proposée que s'il y a une formule
-non vide à reprendre. Une chaîne à guillemets triples qui s'étend sur plusieurs lignes est
-reprise telle quelle, ses lignes non indentées comprises (c'est ainsi que la vraie Code View
-les écrit). La syntaxe `$Colonne` (écrite par l'onglet **Export**) et `rec.Colonne`
-(écrite par la vraie Code View) sont toutes deux valides pour Grist.
+non vide à reprendre. La syntaxe `$Colonne` (écrite par l'onglet **Export**) et
+`rec.Colonne` (écrite par la vraie Code View) sont toutes deux valides pour Grist.
+
+Une chaîne qui s'étend sur plusieurs lignes (guillemets triples, antislash en fin de ligne,
+littéraux accolés entre parenthèses) garde son texte. Grist écrit ses lignes telles quelles
+depuis la 1.7.20 et les indente avec le code avant : le widget lit les deux, d'après les
+fixtures de `test/fixtures/code-view/strings-*.py` et 400 formules tirées au hasard dans le
+Code View de chaque version. Un seul cas est indécidable à la lecture : quand **toutes** les
+lignes de la chaîne sont au moins aussi indentées que le code, le texte ne dit pas de quelle
+version il vient et il est lu comme celui d'une version antérieure à 1.7.20 ; collé depuis
+une version plus récente, il perd alors l'indentation du code (4 espaces) en tête de ces
+lignes (26 formules sur 400 dans le tirage, qui en indente beaucoup). L'onglet **Export**
+écrit toujours un texte que cette règle relit exactement.
 
 La case est **décochée par défaut, volontairement** : une formule est du code Python que
 Grist exécute dans ce document dès sa création, et un texte collé peut venir de
@@ -294,7 +303,8 @@ L'interface suit l'identité UI/UX commune aux widgets **Grist Factory** (grist-
   messages, bleu des petits textes) sont légèrement assombries pour atteindre 4,5:1 (WCAG
   AA, RGAA 3.2) là où elles donnaient 3,7 à 4,4, et les champs ont un contour à 3:1 ;
   `test/style.test.mjs` mesure ces contrastes dans les deux thèmes. Les zones cliquables
-  font au moins 24 px, le focus reste visible et conservé après chaque action, les
+  font au moins 24 px, le focus reste visible et revient au bouton qu'on vient d'actionner,
+ou au champ de texte quand il n'y a plus rien à actionner (table créée, colonnes ajoutées), les
   champs, groupes et résultats ont un nom accessible et les fins d'analyse sont annoncées,
   l'onglet sélectionné reste repérable en mode contraste élevé (`forced-colors`), la page
   a un repère `main` et un titre par étape, et les onglets répondent aux flèches, à
@@ -397,8 +407,11 @@ le digest affiché dans `.github/workflows/ci.yml`. Si Chromium n'est pas à
 l'emplacement attendu par Playwright, `PLAYWRIGHT_CHROMIUM_PATH` indique l'exécutable.
 
 Les fixtures de `test/fixtures/code-view/` sont du texte Code View produit par le
-`gencode.py` d'un vrai Grist ; elles se régénèrent avec `test/grist/record-code-view.mjs`
-(`GRIST_SANDBOX_DIR=<grist-core>/sandbox/grist`, `GRIST_PYTHON`, `GRIST_VERSION`). Sans
+`gencode.py` d'un vrai Grist, dont `strings-1.2.1.py` et `strings-1.7.20.py`, les deux
+façons d'écrire les chaînes sur plusieurs lignes ; elles se régénèrent avec
+`test/grist/record-code-view.mjs` (`GRIST_SANDBOX_DIR=<grist-core>/sandbox/grist`,
+`GRIST_PYTHON`, `GRIST_VERSION` ; l'argument `strings` n'enregistre que celle de la version
+visée). Sans
 sources de grist-core, `GRIST_PYTHON` peut être un petit script qui lance `python3` dans le
 conteneur (`docker cp test/grist/code_view.py <conteneur>:/tmp/`, puis
 `exec docker exec -i -e GRIST_SANDBOX_DIR=/grist/sandbox/grist <conteneur> python3 /tmp/code_view.py`).
@@ -418,7 +431,7 @@ js/importer.js         logique de l'import sans DOM : résolution des colonnes, 
                        formules, création en un lot, puis détails et références bidirectionnelles
 js/exportTab.js        onglet Export
 js/parser.js           lecture du code source (motifs fixes + scanner de parenthèses, jamais exécuté)
-js/pyText.js           texte Python : littéraux, parenthèse fermante, arguments d'un appel
+js/pyText.js           texte Python : littéraux, chaînes sur plusieurs lignes, parenthèse fermante, arguments
 js/gristTypes.js       types de colonne <-> constructeurs Code View (une table de types)
 js/widgetOptions.js    ce qui d'un widgetOptions peut voyager d'un document à l'autre
 js/schema.js           structure réelle du document (_grist_Tables*), tables référencées
