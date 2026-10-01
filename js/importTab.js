@@ -371,6 +371,7 @@ export function initImportTab(grist) {
           ? t("import.success.createdMulti", { count: created.length, ids: created.map((table) => table.id).join(", "), columnsPhrase })
           : t("import.success.createdSingle", { tableId: created[0].id, columnsPhrase });
       clearResults();
+      sourceInput.focus({ preventScroll: true }); // the button that had the focus is gone with the preview: the next paste goes here
       setStatus(summary + note, "success");
     } catch (err) {
       setStatus(t("import.error.createFailed", { error: reportError(err) }), "error");

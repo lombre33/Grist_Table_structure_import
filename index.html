@@ -35,9 +35,9 @@
     </div>
   </header>
 
-  <dialog id="settings-dialog">
+  <dialog id="settings-dialog" aria-labelledby="settings-title">
     <div class="settings-header">
-      <h2 data-i18n="settings.title">Réglages</h2>
+      <h2 id="settings-title" data-i18n="settings.title">Réglages</h2>
       <button id="settings-close-btn" type="button" class="icon-btn" data-i18n-aria-label="settings.close" aria-label="Fermer">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
           <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -158,7 +158,7 @@
         <p id="target-table-error" class="field-error" hidden></p>
       </div>
 
-      <table id="columns-preview">
+      <table id="columns-preview" aria-labelledby="preview-heading">
         <thead>
           <tr>
             <th scope="col" class="col-checkbox"><label><input type="checkbox" id="columns-select-all" aria-label="Inclure toutes les colonnes" data-i18n-aria-label="import.preview.includeAll"></label></th>

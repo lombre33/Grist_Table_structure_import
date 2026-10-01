@@ -18,6 +18,8 @@ export function initExportTab(grist) {
   const refsBanner = $("export-refs-banner");
   const includeBtn = $("refs-include-btn");
   const dismissBtn = $("refs-dismiss-btn");
+  const refsIntro = $("export-refs-banner-intro");
+  const refsList = $("export-refs-list");
   const announcement = $("export-announcement");
   const setStatus = statusWriter($("export-status-region"));
 
@@ -29,6 +31,7 @@ export function initExportTab(grist) {
 
   let docSchema = null;
   let loaded = false;
+  let busy = false; // the list is being read, or the code generated
   let dismissed = null; // the tables the user chose to do without, as missingTables().key
 
   refreshBtn.addEventListener("click", loadTables);
@@ -43,6 +46,7 @@ export function initExportTab(grist) {
   dismissBtn.addEventListener("click", () => {
     dismissed = missingTables().key;
     updateRefsBanner();
+    generateBtn.focus({ preventScroll: true }); // the banner, which had the focus, is gone: the next step is here
   });
   onLocaleChange(updateRefsBanner);
 
@@ -60,8 +64,14 @@ export function initExportTab(grist) {
     const ticked = selected().length;
     selectAll.checked = count > 0 && ticked === count;
     selectAll.indeterminate = ticked > 0 && ticked < count;
-    generateBtn.disabled = ticked === 0;
+    generateBtn.disabled = busy || ticked === 0;
     updateRefsBanner();
+  }
+
+  /** Actualiser and Générer wait for each other: the list is not read again while the code is generated, nor the code generated twice. */
+  function setBusy(value) {
+    busy = refreshBtn.disabled = value;
+    refresh();
   }
 
   /** Reads the document's tables again, keeping the ones that were ticked. */
@@ -69,9 +79,9 @@ export function initExportTab(grist) {
     const kept = new Set(selected());
     setStatus(t("export.status.loading"));
     outputBlock.hidden = tablesEmpty.hidden = selectAllRow.hidden = true;
-    refreshBtn.disabled = generateBtn.disabled = true;
     dismissed = null;
     tableList.replaceChildren();
+    setBusy(true);
     try {
       docSchema = await callGrist(fetchDocSchema(grist));
       setStatus(null);
@@ -81,8 +91,7 @@ export function initExportTab(grist) {
     } catch (err) {
       setStatus(t("export.error.fetchTables", { error: reportError(err) }), "error");
     } finally {
-      refreshBtn.disabled = false;
-      refresh();
+      setBusy(false);
       restoreFocus(refreshBtn);
     }
   }
@@ -96,10 +105,11 @@ export function initExportTab(grist) {
       return;
     }
     const intro = tn("export.refs.intro", ids.length);
-    $("export-refs-banner-intro").textContent = announcement.textContent = intro;
+    refsIntro.textContent = intro;
+    if (announcement.textContent !== intro) announcement.textContent = intro; // a screen reader says again what is written again
     includeBtn.textContent = tn("export.refs.include", ids.length);
     dismissBtn.textContent = tn("export.refs.dismiss", ids.length);
-    $("export-refs-list").replaceChildren(
+    refsList.replaceChildren(
       ...ids.map((tableId) => el("li", { text: t("export.refs.item", { tableId, columns: referencedBy.get(tableId).join(", ") }) }))
     );
   }
@@ -108,12 +118,13 @@ export function initExportTab(grist) {
     const { ids } = missingTables();
     for (const input of tableList.querySelectorAll("input")) if (ids.includes(input.value)) input.checked = true;
     refresh(); // the tables just included may refer to others
+    generateBtn.focus({ preventScroll: true }); // the button that had the focus may be gone with the banner
   }
 
   async function onGenerate() {
     if (selected().length === 0) return;
     setStatus(t("export.status.generating"));
-    generateBtn.disabled = true;
+    setBusy(true);
     try {
       docSchema = await callGrist(fetchDocSchema(grist)); // columns may have changed since the list was loaded
       const schema = buildExportSchema(docSchema.tables, docSchema.allColumns, selected());
@@ -126,7 +137,7 @@ export function initExportTab(grist) {
     } catch (err) {
       setStatus(t("export.error.generateFailed", { error: reportError(err) }), "error");
     } finally {
-      generateBtn.disabled = selected().length === 0;
+      setBusy(false);
       restoreFocus(generateBtn);
     }
   }

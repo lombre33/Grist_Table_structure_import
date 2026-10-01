@@ -27,9 +27,9 @@ export function statusWriter(region) {
   };
 }
 
-/** A button that was disabled has lost the keyboard focus: give it back once it is usable again. */
+/** A button that was disabled has lost the keyboard focus: give it back once it is usable again, without scrolling to it. */
 export function restoreFocus(button) {
-  if (document.activeElement === document.body && !button.disabled) button.focus();
+  if (document.activeElement === document.body && !button.disabled) button.focus({ preventScroll: true });
 }
 
 /** Marks the wrapper of the checked radio with `is-checked`: the styles do not rely on :has(). */

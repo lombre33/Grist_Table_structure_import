@@ -398,6 +398,72 @@ const TESTS = [
     assert.match(await page.textContent("#copy-status"), /Ctrl\+C/);
   }],
 
+  ["Export: while the code is generated, ticking a table does not allow a second generation", async (page, grist) => {
+    await page.click("#tab-export");
+    await page.waitForSelector("#export-table-list input");
+    await page.locator("#export-table-list li", { hasText: "Standalone_Table" }).locator("input").check();
+    const fetchTable = grist.docApi.fetchTable;
+    grist.docApi.fetchTable = async (...args) => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      return fetchTable(...args);
+    };
+    await page.click("#generate-btn");
+    await page.locator("#export-table-list li", { hasText: "Other_Table" }).locator("input").check();
+    assert.equal(await page.isDisabled("#generate-btn"), true, "while it runs");
+    assert.equal(await page.isDisabled("#refresh-tables-btn"), true);
+    await page.waitForSelector("#export-output-block:not([hidden])");
+    assert.equal(await page.isDisabled("#generate-btn"), false);
+  }],
+
+  ["Export: the code is brought into view, and stays there once the button has its focus back", async (page) => {
+    await page.setViewportSize({ width: 600, height: 500 });
+    await page.click("#tab-export");
+    await page.waitForSelector("#export-table-list input");
+    await page.locator("#export-table-list li", { hasText: "Standalone_Table" }).locator("input").check();
+    await page.click("#generate-btn");
+    await page.waitForSelector("#export-output-block:not([hidden])");
+    assert.equal(await page.evaluate(() => document.activeElement.id), "generate-btn");
+    assert.ok((await page.evaluate(() => document.getElementById("export-output-block").getBoundingClientRect().top)) < 100);
+  }],
+
+  ["Export: when the banner's buttons go, the keyboard goes on to Générer", async (page) => {
+    await page.click("#tab-export");
+    await page.waitForSelector("#export-table-list input");
+    await page.locator("#export-table-list li", { hasText: "Existing_Table" }).locator("input").check();
+    await page.click("#refs-include-btn");
+    assert.equal(await page.evaluate(() => document.activeElement.id), "generate-btn");
+    await page.locator("#export-table-list li", { hasText: "Other_Table" }).locator("input").uncheck();
+    await page.click("#refs-dismiss-btn");
+    assert.equal(await page.evaluate(() => document.activeElement.id), "generate-btn");
+  }],
+
+  ["Export: a tick that changes nothing in the banner does not have a screen reader say it again", async (page) => {
+    await page.click("#tab-export");
+    await page.waitForSelector("#export-table-list input");
+    await page.locator("#export-table-list li", { hasText: "Existing_Table" }).locator("input").check();
+    await page.evaluate(() => {
+      window.writes = 0;
+      new MutationObserver((records) => (window.writes += records.length)).observe(document.getElementById("export-announcement"), { childList: true, characterData: true, subtree: true });
+    });
+    await page.locator("#export-table-list li", { hasText: "Standalone_Table" }).locator("input").check();
+    await page.waitForTimeout(50);
+    assert.equal(await page.evaluate(() => window.writes), 0);
+  }],
+
+  ["Import: once the table is created, the keyboard goes back to the text, since the button is gone", async (page) => {
+    await analyse(page, MULTI);
+    await apply(page);
+    assert.equal(await page.evaluate(() => document.activeElement.id), "source-input");
+  }],
+
+  ["Accessibility: the settings dialog and the preview table have a name", async (page) => {
+    await page.click("#settings-btn");
+    assert.equal(await page.getByRole("dialog", { name: "Réglages" }).count(), 1);
+    await page.click("#settings-close-btn");
+    await analyse(page, MULTI);
+    assert.equal(await page.getByRole("table", { name: /Vérification/ }).count(), 1);
+  }],
+
   ["Réglages: opens, persists the theme, switches the language", async (page) => {
     await page.click("#settings-btn");
     assert.equal(await page.evaluate(() => document.getElementById("settings-dialog").open), true);
