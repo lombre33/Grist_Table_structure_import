@@ -502,6 +502,17 @@ const TESTS = [
     assert.equal(await page.evaluate(() => document.activeElement.id), "source-input");
   }],
 
+  ["Focus: a button disabled a moment ago may still hold the keyboard, which is given on all the same", async (page) => {
+    const holder = await page.evaluate(async () => {
+      const { restoreFocus } = await import("/js/dom.js");
+      const button = document.getElementById("analyze-btn");
+      button.focus(); // where some browsers leave the focus of a button just disabled, until their next frame
+      restoreFocus(document.getElementById("source-input"), button);
+      return document.activeElement.id;
+    });
+    assert.equal(holder, "source-input");
+  }],
+
   ["Import: once the table is created, the keyboard goes back to the text, since the button is gone", async (page) => {
     await analyse(page, MULTI);
     await apply(page);

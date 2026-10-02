@@ -372,7 +372,7 @@ export function initImportTab(grist) {
       busy = false;
       analyzeBtn.disabled = false;
       render();
-      restoreFocus(actionBtn.disabled ? sourceInput : actionBtn); // done, nothing left to press: the next text goes in the box
+      restoreFocus(actionBtn.disabled ? sourceInput : actionBtn, actionBtn); // done, nothing left to press: the next text goes in the box
     }
   }
 
