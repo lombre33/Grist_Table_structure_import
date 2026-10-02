@@ -404,7 +404,7 @@ export function onLocaleChange(listener) {
 }
 
 export function setLocale(value) {
-  currentLocale = Object.hasOwn(STRINGS, value) ? value : "fr";
+  currentLocale = value;
   save(LOCALE_KEY, currentLocale);
   applyI18n();
   for (const listener of listeners) listener();

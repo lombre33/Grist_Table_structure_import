@@ -71,3 +71,8 @@ test("the French written in the markup is the dictionary's, so nothing changes w
   }
   assert.ok(checked > 40, "the markup was read");
 });
+
+test("the languages the Réglages dialog offers are the dictionary's, so that choosing one can never leave the widget without text", () => {
+  const offered = [...read("index.html").matchAll(/name="locale-choice" value="(\w+)"/g)].map((match) => match[1]);
+  assert.deepEqual(offered.sort(), Object.keys(STRINGS).sort());
+});
