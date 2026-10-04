@@ -195,6 +195,7 @@ export const STRINGS = {
     },
     "import.confirm.safe": "Rien n’est supprimé ni modifié dans ce qui existe déjà ; Ctrl+Z annule l’action.",
     "import.confirm.cancel": "Annuler",
+    "import.confirm.ok": "Confirmer", // what the button says before the dialog gives it the label of the action it confirms
     "import.status.new": "Nouvelle",
     "import.status.existing": "Déjà présente",
     "import.action.createTables": { one: "Créer {n} table dans ce document", other: "Créer {n} tables dans ce document" },
@@ -409,6 +410,7 @@ export const STRINGS = {
     },
     "import.confirm.safe": "Nothing that already exists is removed or changed; Ctrl+Z undoes the action.",
     "import.confirm.cancel": "Cancel",
+    "import.confirm.ok": "Confirm",
     "import.status.new": "New",
     "import.status.existing": "Already present",
     "import.action.createTables": { one: "Create {n} table in this document", other: "Create {n} tables in this document" },
