@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { checkTableId, createTables, defaultTableId, idFromLabel, isComputed, isTied, resolveColumns, twoWayPairs, twoWayWarnings } from "../js/importer.js";
+import { addColumns, checkTableId, createTables, defaultTableId, idFromLabel, isComputed, isTied, resolveColumns, twoWayPairs, twoWayWarnings } from "../js/importer.js";
 
 const table = (...columns) => ({ tableId: "Source", columns: columns.map(([id, dslType, argsRaw = "", kind = "data", code = ""]) => ({ id, dslType, argsRaw, kind, code })) });
 const ids = (...pairs) => new Map(pairs);
@@ -199,7 +199,8 @@ function recordingGrist({ after, before = [] }) {
   const tableIds = Object.keys(after);
   const columns = tableIds.flatMap((tableId, i) => after[tableId].map((colId) => ({ parentId: i + 1, colId })));
   const metadata = {
-    _grist_Tables: { id: tableIds.map((_, i) => i + 1), tableId: tableIds, summarySourceTable: tableIds.map(() => 0) },
+    _grist_Tables: { id: tableIds.map((_, i) => i + 1), tableId: tableIds, summarySourceTable: tableIds.map(() => 0), rawViewSectionRef: tableIds.map((_, i) => 100 + i) },
+    _grist_Views_section: { id: tableIds.map((_, i) => 100 + i), description: tableIds.map(() => "") },
     _grist_Tables_column: { id: columns.map((_, i) => i + 1), parentId: columns.map((col) => col.parentId), colId: columns.map((col) => col.colId) },
   };
   return {
@@ -209,7 +210,8 @@ function recordingGrist({ after, before = [] }) {
       fetchTable: async (name) => metadata[name],
       applyUserActions: async (actions) => {
         calls.push(actions);
-        return { retValues: actions.map(([name, tableId, second]) => (name === "AddTable" ? { table_id: tableId, columns: second.map((col) => col.id) } : null)) };
+        const result = ([name, tableId, second]) => (name === "AddTable" ? { table_id: tableId, columns: second.map((col) => col.id) } : name === "AddVisibleColumn" ? { colId: second } : null);
+        return { retValues: actions.map(result) };
       },
     },
   };
@@ -251,7 +253,7 @@ const WITH_ELEMENTS = () =>
     ["Late", "Bool", "", "formula", "return $Due < TODAY()"],
     ["Plain", "Int"]
   );
-const ELEMENT_COUNTS = { labels: 1, descriptions: 1, choices: 1, options: 1, displayColumns: 1, twoWay: 1, formulas: 1 };
+const ELEMENT_COUNTS = { labels: 1, descriptions: 1, tableDescriptions: 0, choices: 1, options: 1, displayColumns: 1, twoWay: 1, formulas: 1 };
 
 test("resolveColumns counts the elements the text has, over the columns that are not left out, whatever is chosen", () => {
   const options = (extra) => ({ withFormulas: false, ...extra });
@@ -317,4 +319,33 @@ test("with every element omitted, only the id and the type of a column reach the
   const [full, ...followUps] = await create([]);
   assert.equal(JSON.parse(full[0][2][2].widgetOptions).alignment, "center");
   assert.ok(followUps.length > 0, "with the elements kept, the engine is asked for the details");
+});
+
+test("a table's description is written to its raw data widget, once the table is there, and only for the tables that have one", async () => {
+  const grist = recordingGrist({ after: { Plain: ["A"], Described: ["A"], Other: ["A"] } });
+  await createTables(grist, [made("Plain", ["A", "Text", ""]), { ...made("Described", ["A", "Text", ""]), description: "Table des\nclients" }, { ...made("Other", ["A", "Text", ""]), description: null }]);
+  assert.equal(grist.calls.length, 2);
+  assert.deepEqual(grist.calls[1], [["UpdateRecord", "_grist_Views_section", 101, { description: "Table des\nclients" }]]);
+});
+
+test("the description of a table goes with the details of its columns", async () => {
+  const grist = recordingGrist({ after: { T: ["A"] } });
+  await createTables(grist, [{ ...made("T", ["A", "Text", "description='Une colonne'"]), description: "Une table" }]);
+  assert.equal(grist.calls.length, 2, "one second call for all of them");
+  assert.deepEqual(grist.calls[1].map(([name, table, id]) => [name, table, id]), [["UpdateRecord", "_grist_Views_section", 100], ["ModifyColumn", "T", "A"]]);
+});
+
+test("a table description that cannot be written is said, and leaves the table created", async () => {
+  const grist = recordingGrist({ after: { T: ["A"] } });
+  const failing = { ...grist.docApi, applyUserActions: async (actions) => (actions[0][0] === "AddTable" ? grist.docApi.applyUserActions(actions) : Promise.reject(new Error("no right"))) };
+  const { tables, note } = await createTables({ docApi: failing }, [{ ...made("T", ["A", "Text", ""]), description: "Une table" }]);
+  assert.equal(tables[0].id, "T");
+  assert.match(note, /no right/);
+});
+
+test("the columns added to a table that exists leave its description alone", async () => {
+  const grist = recordingGrist({ after: { Contacts: ["Name"] } });
+  const fresh = made("X", ["Fresh", "Text", "description='Une colonne'"]).columns;
+  assert.equal((await addColumns(grist, { tableId: "Contacts", tableRef: 1 }, fresh)).added, 1);
+  assert.deepEqual(grist.calls.flat().map(([name]) => name), ["AddVisibleColumn", "ModifyColumn"], "the description of the column, not of the table");
 });

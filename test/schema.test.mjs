@@ -45,12 +45,13 @@ test("existingColumnIds lists reserved columns too, lower-cased (Grist ids are u
   assert.deepEqual(existingColumnIds(columns, 1), new Set(["id", "name"]));
 });
 
-function stubGrist(tablesById, columnsById) {
+function stubGrist(tablesById, columnsById, sectionsById = { id: [], description: [] }) {
   return {
     docApi: {
       async fetchTable(tableId) {
         if (tableId === "_grist_Tables") return tablesById;
         if (tableId === "_grist_Tables_column") return columnsById;
+        if (tableId === "_grist_Views_section") return sectionsById;
         throw new Error(`unexpected fetchTable(${tableId})`);
       },
     },
@@ -242,6 +243,7 @@ const exportedColumn = (colId, extra = {}) => ({ colId, type: "Text", isFormula:
 const SCHEMA = [
   {
     tableId: "Tasks",
+    description: "Ce qu'il y a à faire",
     columns: [
       exportedColumn("Title", { label: "Titre", description: "Ce qu'il faut faire", widgetOptions: { alignment: "left" } }),
       exportedColumn("Status", { type: "Choice", widgetOptions: { choices: ["Todo", "Done"], choiceOptions: { Done: { fillColor: "#2A9D53" } } } }),
@@ -251,7 +253,7 @@ const SCHEMA = [
       exportedColumn("Blank", { type: "Numeric", isFormula: true, formula: "" }),
     ],
   },
-  { tableId: "People", columns: [exportedColumn("Name")] },
+  { tableId: "People", description: null, columns: [exportedColumn("Name")] },
 ];
 
 test("omitFromExport with nothing omitted gives the schema as it is", () => {
@@ -279,4 +281,34 @@ test("omitFromExport writes a column whose formula is left out as plain data, tr
   const [title, status, owner] = omitFromExport(SCHEMA, new Set(["formulas"]))[0].columns;
   assert.deepEqual([title, status, owner], SCHEMA[0].columns.slice(0, 3), "only the formulas go");
   assert.deepEqual(omitFromExport(SCHEMA, new Set(["labels"]))[0].columns.slice(3).map((col) => [col.isFormula, col.formula]), [[false, "NOW()"], [true, "$Due < TODAY()"], [true, ""]], "formulas stay unless asked");
+});
+
+test("omitFromExport leaves out the descriptions of the tables, and only them", () => {
+  const [tasks, people] = omitFromExport(SCHEMA, new Set(["tableDescriptions"]));
+  assert.deepEqual([tasks.description, people.description], [null, null]);
+  assert.deepEqual(tasks.columns, SCHEMA[0].columns, "the columns keep what they carry");
+  assert.equal(omitFromExport(SCHEMA, new Set(["descriptions"]))[0].description, "Ce qu'il y a à faire", "the descriptions of the columns are another element");
+});
+
+test("fetchDocSchema gives each table the description of its raw data widget, which is also where it is written", async () => {
+  const columns = { id: [], parentId: [], colId: [], type: [], isFormula: [], formula: [], parentPos: [] };
+  const grist = stubGrist(
+    { id: [1, 2, 3], tableId: ["Described", "Plain", "Blank"], summarySourceTable: [0, 0, 0], rawViewSectionRef: [10, 11, 12] },
+    columns,
+    { id: [10, 11, 12, 13], description: ["About it\non two lines", "", "", "A widget, not a table"] }
+  );
+  const { tables } = await fetchDocSchema(grist);
+  assert.deepEqual(tables.map((table) => [table.tableId, table.rawViewSectionRef, table.description]), [["Blank", 12, null], ["Described", 10, "About it\non two lines"], ["Plain", 11, null]]);
+});
+
+test("fetchDocSchema copes with a Grist whose widgets have no description", async () => {
+  const columns = { id: [], parentId: [], colId: [], type: [], isFormula: [], formula: [], parentPos: [] };
+  const grist = stubGrist({ id: [1], tableId: ["Old"], summarySourceTable: [0], rawViewSectionRef: [10] }, columns, { id: [10] });
+  assert.equal((await fetchDocSchema(grist)).tables[0].description, null);
+});
+
+test("buildExportSchema gives the description of each table", () => {
+  const tables = [{ tableRef: 10, tableId: "Foo", description: "About Foo" }, { tableRef: 20, tableId: "Bar", description: null }, { tableRef: 30, tableId: "Old" }];
+  const schema = buildExportSchema(tables, [], ["Foo", "Bar", "Old"]);
+  assert.deepEqual(schema.map((table) => table.description), ["About Foo", null, null]);
 });

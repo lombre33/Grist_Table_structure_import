@@ -5,14 +5,17 @@
  *
  * Existing_Table references Other_Table (Owner, shown through its Label) and
  * has a summary table; Mood carries a label, a description and styled choices
- * whose text holds parentheses.
+ * whose text holds parentheses; Other_Table has a description of its own.
  */
 
 const TABLES = {
   id: [1, 2, 3, 4],
   tableId: ["Existing_Table", "Other_Table", "Existing_Table_summary_Age", "Standalone_Table"],
   summarySourceTable: [0, 0, 1, 0],
+  rawViewSectionRef: [101, 102, 103, 104],
 };
+
+const SECTIONS = { id: [101, 102, 103, 104], description: ["", "Table liée, pour le choix des valeurs.", "", ""] };
 
 const MOOD_OPTIONS = {
   choices: ["Content (ok)", "Neutre", "Absent"],
@@ -43,9 +46,21 @@ const echo = (action) => {
   return name === "AddVisibleColumn" ? { colId: second } : null;
 };
 
+/** What AddTable leaves in the metadata that the widget reads: the table, and its raw data widget (the next ones in line). */
+function recordTable(metadata, tableId) {
+  const { _grist_Tables: tables, _grist_Views_section: sections } = metadata;
+  const section = Math.max(...sections.id) + 1;
+  tables.id.push(Math.max(...tables.id) + 1);
+  tables.tableId.push(tableId);
+  tables.summarySourceTable.push(0);
+  tables.rawViewSectionRef.push(section);
+  sections.id.push(section);
+  sections.description.push("");
+}
+
 export function fakeGrist({ delay = 0 } = {}) {
   const calls = [];
-  const metadata = { _grist_Tables: TABLES, _grist_Tables_column: COLUMNS };
+  const metadata = structuredClone({ _grist_Tables: TABLES, _grist_Tables_column: COLUMNS, _grist_Views_section: SECTIONS });
   return {
     calls,
     docApi: {
@@ -53,6 +68,7 @@ export function fakeGrist({ delay = 0 } = {}) {
       fetchTable: async (tableId) => metadata[tableId] ?? Promise.reject(new Error(`unstubbed fetchTable(${tableId})`)),
       applyUserActions: async (actions) => {
         calls.push(actions);
+        for (const [name, tableId] of actions) if (name === "AddTable") recordTable(metadata, tableId);
         await new Promise((resolve) => setTimeout(resolve, delay));
         return { retValues: actions.map(echo) };
       },

@@ -4,7 +4,7 @@
  * warning, `{ key, params, table }`, rendered by the interface.
  */
 
-import { findMatchingClose, indentOf, stringLines } from "./pyText.js";
+import { findMatchingClose, indentOf, parseString, stringLines } from "./pyText.js";
 import { RESERVED_COLUMN_IDS } from "./gristTypes.js";
 
 const CLASS_RE = /^class\s+([A-Za-z_]\w*)\s*(?:\([^)]*\))?\s*:\s*$/;
@@ -77,9 +77,10 @@ const truncate = (text) => (text.length > MAX_SNIPPET_LENGTH ? `${text.slice(0, 
 
 /**
  * @param {string} sourceText what the user pasted
- * @returns {{tables: {tableId: string, columns: {id: string, dslType: string, argsRaw: string, kind: "data"|"formula"|"trigger", code: string}[]}[], warnings: object[]}}
- *   `kind`: a data column, a formula column, or a data column with a trigger formula; `code`: that
- *   formula's function body, as written (empty for a data column).
+ * @returns {{tables: {tableId: string, description: ?string, columns: {id: string, dslType: string, argsRaw: string, kind: "data"|"formula"|"trigger", code: string}[]}[], warnings: object[]}}
+ *   `description`: the table's, written as the string that opens its class (its docstring); `kind`: a data
+ *   column, a formula column, or a data column with a trigger formula; `code`: that formula's function body,
+ *   as written (empty for a data column).
  */
 export function parseGristSchema(sourceText) {
   const lines = String(sourceText).replace(/\r\n?/g, "\n").split("\n");
@@ -97,7 +98,7 @@ export function parseGristSchema(sourceText) {
       continue;
     }
     const body = parseTableBody(lines, inString, header + 1, match[1]);
-    tables.push({ tableId: match[1], columns: body.columns });
+    tables.push({ tableId: match[1], description: body.description, columns: body.columns });
     for (const warning of body.warnings) warnings.push(warning); // not push(...): a text of hundreds of thousands of lines would overflow the call
     i = body.end - 1;
   }
@@ -106,8 +107,10 @@ export function parseGristSchema(sourceText) {
   return { tables, warnings };
 }
 
-/** The columns of the class body starting at `start`, which ends at the first line indented less than it. */
+/** The description and the columns of the class body starting at `start`, which ends at the first line indented less than it. */
 function parseTableBody(lines, inString, start, table) {
+  let description = null; // the string that opens the body, which Python takes for the docstring
+  let opening = true; // no statement read yet
   const columns = [];
   const warnings = [];
   const triggers = new Map();
@@ -118,7 +121,7 @@ function parseTableBody(lines, inString, start, table) {
   let i = start;
   while (i < lines.length && lines[i].trim() === "") i++;
   const bodyIndent = i < lines.length ? indentOf(lines[i]) : 0;
-  if (bodyIndent === 0) return { columns, warnings, end: i };
+  if (bodyIndent === 0) return { description, columns, warnings, end: i };
 
   const addColumn = (id, dslType, argsRaw, kind, code, line) => {
     if (RESERVED_COLUMN_IDS.has(id)) warn("warn.reservedColumnId", { line, colId: id });
@@ -136,6 +139,12 @@ function parseTableBody(lines, inString, start, table) {
     if (indent < bodyIndent) break;
 
     const line = i + 1;
+    const docstring = opening ? parseString(text) : null;
+    opening = false;
+    if (docstring !== null) {
+      description = docstring || null;
+      continue;
+    }
     const found = classify(text);
     if (found.kind === "formulaType") {
       if (pendingType) warn("warn.formulaTypeDuplicate", { line: pendingType.line });
@@ -160,5 +169,5 @@ function parseTableBody(lines, inString, start, table) {
   if (pendingType) warn("warn.formulaTypeNoFunction", { line: pendingType.line });
 
   for (const col of columns) if (col.kind === "data" && triggers.has(col.id)) Object.assign(col, { kind: "trigger", code: triggers.get(col.id) });
-  return { columns, warnings, end: i };
+  return { description, columns, warnings, end: i };
 }

@@ -26,11 +26,14 @@ davantage :
   de la colonne d'affichage, indépendance de l'identifiant vis-à-vis du libellé —
   `untieColIdFromLabel`, que `AddTable` ignore aussi) puis `SetDisplayFormula` (fait
   afficher la valeur cible), exactement les actions que l'interface Grist envoie pour
-  « SHOW COLUMN ». Elles
+  « SHOW COLUMN ». Pour une table créée dont le texte donne une description (la chaîne qui
+  ouvre sa classe), le même appel contient `UpdateRecord` sur `_grist_Views_section`, le
+  widget « Données brutes » de la table, où Grist garde la description d'une table
+  (`AddTable` ne la reçoit pas). Ces actions
   utilisent les identifiants que Grist a réellement créés (ceux qu'il renvoie, qu'il peut
-  avoir réécrits) et ne ciblent **jamais** que des colonnes créées par le premier appel —
-  jamais une colonne préexistante. Un échec de ce second appel n'annule pas la création
-  déjà faite ; il est signalé séparément à l'utilisateur.
+  avoir réécrits) et ne ciblent **jamais** que des colonnes ou des tables créées par le
+  premier appel — jamais une colonne ou une table préexistante. Un échec de ce second appel
+  n'annule pas la création déjà faite ; il est signalé séparément à l'utilisateur.
 - **Import, références bidirectionnelles** : pour deux colonnes de référence créées par le
   même appel et qui se désignent l'une l'autre (`reverse_of`), un dernier appel envoie
   `ModifyColumn` avec `reverseCol` (l'action que Grist utilise pour relier deux colonnes).
@@ -43,8 +46,9 @@ davantage :
   colonne). Voir « Le texte collé n'est jamais exécuté » ci-dessous : le widget ne les
   évalue pas, Grist si.
 - **Export** : lecture seule. Le widget lit la structure des tables de ce document
-  (`grist.docApi.fetchTable` sur les tables de métadonnées `_grist_Tables` et
-  `_grist_Tables_column` — voir « Lecture des tables de métadonnées » ci-dessous) et
+  (`grist.docApi.fetchTable` sur les tables de métadonnées `_grist_Tables`,
+  `_grist_Tables_column` et `_grist_Views_section` — voir « Lecture des tables de
+  métadonnées » ci-dessous) et
   affiche le code généré à l'écran ; rien n'est modifié dans le document, rien n'est
   envoyé où que ce soit. L'utilisateur copie le texte lui-même s'il veut l'utiliser
   ailleurs.
@@ -60,9 +64,10 @@ soit son type réel.
 
 ## Lecture des tables de métadonnées
 
-Les modes « Table existante » et « Export » lisent `_grist_Tables` et
-`_grist_Tables_column` — les tables internes où Grist décrit lui-même la structure du
-document (identifiants de table, colonnes, types...). Ce n'est pas un accès caché ou
+Les modes « Table existante » et « Export » lisent `_grist_Tables`,
+`_grist_Tables_column` et `_grist_Views_section` — les tables internes où Grist décrit
+lui-même la structure du document (identifiants de table, colonnes, types, et, pour la
+description d'une table, son widget « Données brutes »). Ce n'est pas un accès caché ou
 détourné : c'est le mécanisme normal `grist.docApi.fetchTable(tableId)` de l'API
 publique du widget, appliqué à ces tables comme à n'importe quelle autre — l'implémentation
 côté Grist (`GristDocAPIImpl.fetchTable`, dans `app/client/components/WidgetFrame.ts`
@@ -103,8 +108,9 @@ aucun pouvoir à ce code, et ne l'interprète pas (`js/parser.js` n'en lit que l
 les chaînes, pour savoir où la fonction s'arrête).
 L'option est décochée par défaut, et à chaque analyse, accompagnée d'une mise en garde
 (« ne cochez “Formules” que pour du code de confiance »), précisément parce que l'origine
-d'un texte collé est inconnue. Les autres éléments du groupe (libellés, descriptions,
-listes de choix, options d'affichage, colonnes d'affichage, liens bidirectionnels) ne font
+d'un texte collé est inconnue. Les autres éléments du groupe (libellés, descriptions des
+colonnes et des tables, listes de choix, format des cellules, colonne affichée des
+références, liens bidirectionnels) ne font
 que retirer, au choix de l'utilisateur, une partie de ce que l'import aurait appliqué :
 ils n'ajoutent aucun appel ni aucun pouvoir.
 

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { generateCode } from "../js/codeGenerator.js";
 import { parseGristSchema } from "../js/parser.js";
 import { resolveColumnType } from "../js/gristTypes.js";
+import { quotePython } from "../js/pyText.js";
 import { omitFromExport } from "../js/schema.js";
 
 const HEADER = "import grist\nfrom functions import *       # global uppercase functions\nimport datetime, math, re     # modules commonly needed in formulas\n";
@@ -211,4 +212,19 @@ test("an element left out of the export is gone from the text, and only that one
 test("with every element left out, the export is the types of the columns", () => {
   const text = generateCode(omitFromExport(RICH, new Set(LEFT_OUT.map(([element]) => element))));
   assert.equal(text, `${HEADER}\n\n@grist.UserTable\nclass T:\n  Mood = grist.Choice()\n  Owner = grist.Reference('People')\n  Stamp = grist.Int()\n  Late = grist.Bool()\n`);
+});
+
+test("a table's description is the string that opens its class, on one line whatever it holds, and it reads back", () => {
+  for (const description of ["Table des clients", "ligne 1\nligne 2", "it's \"quoted\" \\ back\\slash\ttab", "émoji 😀 é", "pass", "  ", "'"]) {
+    const text = generateCode([{ tableId: "T", description, columns: [data("A", "Text")] }]);
+    assert.ok(text.includes(`class T:\n  ${quotePython(description)}\n  A = grist.Text()\n`), JSON.stringify(description));
+    const { tables, warnings } = parseGristSchema(text);
+    assert.deepEqual([tables[0].description, warnings], [description, []], JSON.stringify(description));
+  }
+});
+
+test("a table without a description has no string after its class line, and one without columns still says pass", () => {
+  assert.equal(generateCode([{ tableId: "T", description: null, columns: [data("A", "Text")] }]), `${HEADER}\n\n@grist.UserTable\nclass T:\n  A = grist.Text()\n`);
+  assert.equal(generateCode([{ tableId: "T", columns: [data("A", "Text")] }]), generateCode([{ tableId: "T", description: "", columns: [data("A", "Text")] }]));
+  assert.match(generateCode([{ tableId: "Empty", description: "Vide", columns: [] }]), /class Empty:\n {2}'Vide'\n {2}pass\n/);
 });

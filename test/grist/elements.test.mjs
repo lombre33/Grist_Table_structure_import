@@ -6,29 +6,32 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ELEMENTS, elementCounts } from "../../js/elements.js";
+import { ELEMENTS, elementCounts, sumCounts } from "../../js/elements.js";
 import { parseGristSchema } from "../../js/parser.js";
 import { addColumns, defaultTableId, resolveColumns } from "../../js/importer.js";
 import { buildExportSchema, fetchDocSchema } from "../../js/schema.js";
-import { instance, addTable, column, buildSource, exportText, importText, snapshot, expectedAfterImport } from "./support.mjs";
-import { SPEC } from "./spec.mjs";
+import { instance, addTable, column, buildSource, exportText, importText, snapshot, tableDescriptions, expectedAfterImport } from "./support.mjs";
+import { SPEC, TABLE_DESCRIPTIONS } from "./spec.mjs";
 
 const tableIds = Object.keys(SPEC);
 const source = await instance.newDoc("elements: source");
-await buildSource(source, SPEC);
+await buildSource(source, SPEC, { descriptions: TABLE_DESCRIPTIONS });
 const before = await snapshot(source);
+const described = await tableDescriptions(source);
 const everything = await exportText(source, tableIds);
 
-/** The tables an import makes in a document of its own, as the engine holds them. */
+/** The tables an import makes in a document of its own, as the engine holds them, and their descriptions. */
 async function imported(text, options) {
   const target = await instance.newDoc("elements: target");
   const { note } = await importText(target, text, options);
   assert.equal(note, "", "nothing the engine refused");
-  return snapshot(target);
+  return { ...(await snapshot(target)), descriptions: await tableDescriptions(target) };
 }
 
 /** What `before` becomes when `element` is left out (the formulas, which Import brings only on request, are brought here). */
 const expected = (element, tableId) => expectedAfterImport(before[tableId], { withFormulas: element !== "formulas", omit: [element] });
+/** The description of each table once `elements` are left out: none, or what the source says. */
+const expectedDescriptions = (elements) => Object.fromEntries(tableIds.map((tableId) => [tableId, elements.includes("tableDescriptions") ? "" : described[tableId]]));
 
 for (const element of ELEMENTS) {
   test(`${element} left out: the same tables whether the Export tab or the Import tab does it`, async () => {
@@ -38,11 +41,16 @@ for (const element of ELEMENTS) {
       assert.deepEqual(byImport[tableId], expected(element, tableId), `Import: ${tableId}`);
       assert.deepEqual(byExport[tableId], expected(element, tableId), `Export: ${tableId}`);
     }
+    for (const [name, result] of [["Import", byImport], ["Export", byExport]]) {
+      const wanted = expectedDescriptions([element]);
+      assert.deepEqual(Object.fromEntries(tableIds.map((tableId) => [tableId, result.descriptions[tableId]])), wanted, `${name}: the descriptions of the tables`);
+    }
   });
 }
 
 test("with every element left out, only the id and the type of each column are left", async () => {
   const bare = await imported(everything, { omit: ELEMENTS });
+  assert.deepEqual(Object.fromEntries(tableIds.map((tableId) => [tableId, bare.descriptions[tableId]])), expectedDescriptions(ELEMENTS));
   for (const tableId of tableIds) {
     assert.deepEqual(bare[tableId], expectedAfterImport(before[tableId], { omit: ELEMENTS }), tableId);
     for (const { id, type, ...rest } of bare[tableId]) {
@@ -55,9 +63,10 @@ test("the Export tab and the Import tab count the same elements in the same tabl
   const { tables, allColumns } = await fetchDocSchema(source.grist);
   const { tables: parsed } = parseGristSchema(everything);
   const destination = new Map(parsed.map((table) => [table.tableId, defaultTableId(table.tableId)]));
-  for (const { tableId, columns } of buildExportSchema(tables, allColumns, tableIds)) {
-    const found = resolveColumns(parsed.find((table) => table.tableId === tableId), destination, tableIds).counts;
-    assert.deepEqual(found, elementCounts(columns), tableId);
+  for (const table of buildExportSchema(tables, allColumns, tableIds)) {
+    const read = parsed.find((candidate) => candidate.tableId === table.tableId);
+    const found = sumCounts([resolveColumns(read, destination, tableIds).counts, elementCounts([], [read])]);
+    assert.deepEqual(found, elementCounts(table.columns, [table]), table.tableId);
   }
 });
 
@@ -72,10 +81,10 @@ test("the counts of a real table are the elements it was built with", async () =
       { id: "Stamp", type: "Text", trigger: "'new'" },
       { id: "Plain", type: "Int" },
     ],
-  });
+  }, { descriptions: { Teams: "Les équipes" } });
   const { tables, allColumns } = await fetchDocSchema(doc.grist);
-  const columns = buildExportSchema(tables, allColumns, ["Members", "Teams"]).flatMap((table) => table.columns);
-  assert.deepEqual(elementCounts(columns), { labels: 1, descriptions: 1, choices: 1, options: 1, displayColumns: 1, twoWay: 2, formulas: 2 });
+  const schema = buildExportSchema(tables, allColumns, ["Members", "Teams"]);
+  assert.deepEqual(elementCounts(schema.flatMap((table) => table.columns), schema), { labels: 1, descriptions: 1, tableDescriptions: 1, choices: 1, options: 1, displayColumns: 1, twoWay: 2, formulas: 2 });
 });
 
 test("the columns added to an existing table leave out the elements too", async () => {

@@ -25,6 +25,7 @@ export { rows };
 
 import { parseGristSchema } from "../../js/parser.js";
 import { createTables, resolveColumns, defaultTableId } from "../../js/importer.js";
+import { omitTable } from "../../js/elements.js";
 
 /**
  * Parses Code View text and creates its tables in `doc` as the Import tab does
@@ -38,7 +39,7 @@ export async function importText(doc, text, { ids = {}, exclude = {}, withFormul
   const entries = tables.map((table) => {
     const left = new Set(exclude[table.tableId]);
     const { columns } = resolveColumns(table, destination, known, { excluded: left, withFormulas, omit: new Set(omit) });
-    return { id: destination.get(table.tableId), columns: columns.filter((col) => !left.has(col.id)) };
+    return { id: destination.get(table.tableId), description: omitTable(table, new Set(omit)).description, columns: columns.filter((col) => !left.has(col.id)) };
   });
   return createTables(doc.grist, entries, { withFormulas });
 }
@@ -76,6 +77,13 @@ export async function snapshot(doc) {
   );
 }
 
+/** The description of each table of `doc`, which Grist keeps with the table's raw data widget ("" for none). */
+export async function tableDescriptions(doc) {
+  const [tables, sections] = await Promise.all([doc.fetchTable("_grist_Tables"), doc.fetchTable("_grist_Views_section")]);
+  const byRef = new Map(rows(sections).map((section) => [section.id, section.description]));
+  return Object.fromEntries(rows(tables).filter((table) => !table.summarySourceTable).map((table) => [table.tableId, byRef.get(table.rawViewSectionRef) ?? ""]));
+}
+
 import { fetchDocSchema, buildExportSchema, omitFromExport } from "../../js/schema.js";
 import { generateCode } from "../../js/codeGenerator.js";
 
@@ -84,14 +92,16 @@ import { generateCode } from "../../js/codeGenerator.js";
  * label?, tied?, description?, widgetOptions?, visibleCol?, reverse? }] }`) the way Grist's own
  * interface does: columns first, then descriptions, display columns and two-way links
  * (`reverse`: the column of the target table this one is the counterpart of). A column with a
- * label has its id apart from it, unless `tied`.
+ * label has its id apart from it, unless `tied`. `descriptions` gives some tables theirs.
  */
-export async function buildSource(doc, spec) {
+export async function buildSource(doc, spec, { descriptions = {} } = {}) {
   const payload = ({ id, type, formula, trigger, label, widgetOptions }) =>
     column(id, type, { isFormula: formula !== undefined, formula: formula ?? trigger ?? "", label, widgetOptions: widgetOptions && JSON.stringify(widgetOptions) });
   await doc.apply(Object.entries(spec).map(([tableId, columns]) => ["AddTable", tableId, columns.map(payload)]));
 
   const followUps = [];
+  const sectionOf = new Map(rows(await doc.fetchTable("_grist_Tables")).map((table) => [table.tableId, table.rawViewSectionRef]));
+  for (const [tableId, description] of Object.entries(descriptions)) followUps.push(["UpdateRecord", "_grist_Views_section", sectionOf.get(tableId), { description }]);
   for (const [tableId, columns] of Object.entries(spec)) {
     for (const { id, type, label, tied, description, visibleCol, reverse } of columns) {
       if (label && !tied) followUps.push(["ModifyColumn", tableId, id, { untieColIdFromLabel: true }]);
@@ -112,14 +122,20 @@ export async function exportText(doc, tableIds, omitted = []) {
   return generateCode(omitFromExport(buildExportSchema(tables, allColumns, tableIds), new Set(omitted)));
 }
 
-/** Builds `spec` in a first document, exports it, imports the text in a second one (with the formulas if `withFormulas`). */
-export async function roundTrip(spec, options) {
+/** Builds `spec` (with the `descriptions` of some tables) in a first document, exports it, imports the text in a second one (with the formulas if `withFormulas`). */
+export async function roundTrip(spec, { descriptions, ...options } = {}) {
   const source = await instance.newDoc("round trip: source");
-  await buildSource(source, spec);
+  await buildSource(source, spec, { descriptions });
   const text = await exportText(source, Object.keys(spec));
   const target = await instance.newDoc("round trip: target");
   const { note } = await importText(target, text, options);
-  const result = { text, note, before: await snapshot(source), after: await snapshot(target) };
+  const result = {
+    text,
+    note,
+    before: await snapshot(source),
+    after: await snapshot(target),
+    descriptions: { before: await tableDescriptions(source), after: await tableDescriptions(target) },
+  };
   await instance.cleanup([source.id, target.id]);
   return result;
 }

@@ -2,7 +2,7 @@ import { parseGristSchema } from "./parser.js";
 import { $, el, checklistItem, restoreFocus, statusWriter, syncCheckedClass, syncMasterCheckbox } from "./dom.js";
 import { fetchDocSchema, existingColumnIds } from "./schema.js";
 import { addColumns, checkTableId, createTables, defaultTableId, isComputed, linkedColumns, resolveColumns, twoWayWarnings } from "./importer.js";
-import { sumCounts } from "./elements.js";
+import { elementCounts, omitTable, sumCounts } from "./elements.js";
 import { elementsPicker } from "./elementsPicker.js";
 import { callGrist, reportError } from "./util.js";
 import { t, tn, typeLabel, onLocaleChange } from "./i18n.js";
@@ -214,8 +214,9 @@ export function initImportTab(grist) {
 
   const newEntry = (table, index) => ({ index, table, id: defaultTableId(table.tableId), excluded: new Set() });
 
-  /** The tables to create as the importer takes them: the id typed (the source's while there is none) and the columns still ticked. */
-  const batchOf = () => entries.map((entry) => ({ id: entry.id.trim() || entry.table.tableId, columns: entry.columns.filter((col) => !entry.excluded.has(col.id)) }));
+  /** The tables to create as the importer takes them: the id typed (the source's while there is none), the description if it is kept, and the columns still ticked. */
+  const batchOf = () =>
+    entries.map((entry) => ({ id: entry.id.trim() || entry.table.tableId, description: omitTable(entry.table, omitted).description, columns: entry.columns.filter((col) => !entry.excluded.has(col.id)) }));
 
   /** Keeps the entry (id typed, columns unticked) of every table that stays ticked. */
   function onChecklistChange() {
@@ -293,7 +294,7 @@ export function initImportTab(grist) {
     columnsBody.replaceChildren(...rows);
     tableIdsLabel.textContent = tn("import.tableId.label", Math.max(entries.length, 1));
     renderSelectAll();
-    renderElements(sumCounts(resolved.map(({ counts }) => counts)));
+    renderElements(sumCounts([...resolved.map(({ counts }) => counts), elementCounts([], entries.map((entry) => entry.table))]));
     renderWarnings(notes);
     const anyColumn = batch.some((table) => table.columns.length > 0);
     actionBtn.disabled = busy || !valid || !anyColumn;

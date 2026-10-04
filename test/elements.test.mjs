@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ELEMENTS, ELEMENT_KEYS, elementCounts, omitElements, sumCounts } from "../js/elements.js";
+import { ELEMENTS, ELEMENT_KEYS, ELEMENT_UNITS, elementCounts, omitElements, omitTable, sumCounts } from "../js/elements.js";
 
 const none = Object.fromEntries(ELEMENTS.map((element) => [element, 0]));
 
@@ -21,7 +21,7 @@ test("a column that carries nothing besides its type counts for no element", () 
 
 test("each element is counted over the columns that carry it, whichever shape the column has", () => {
   const columns = [exported({ ...CARRIES_ALL, isFormula: true }), imported({ ...CARRIES_ALL, kind: "formula" }), exported({ colId: "Other", description: "Only this" })];
-  assert.deepEqual(elementCounts(columns), { labels: 2, descriptions: 3, choices: 2, options: 2, displayColumns: 2, twoWay: 2, formulas: 2 });
+  assert.deepEqual(elementCounts(columns), { labels: 2, descriptions: 3, tableDescriptions: 0, choices: 2, options: 2, displayColumns: 2, twoWay: 2, formulas: 2 });
 });
 
 test("a label that is the id says nothing, and a formula of blanks is no formula", () => {
@@ -82,4 +82,19 @@ test("omitElements takes out the elements asked and nothing else, leaving the co
 test("omitElements has no widget options to take from a column that has none", () => {
   assert.equal(omitElements(imported(), new Set(["choices"])).widgetOptions, null);
   assert.equal(omitElements(exported({ widgetOptions: {} }), new Set()).widgetOptions, null);
+});
+
+test("the descriptions of the tables are counted in tables, apart from the columns", () => {
+  const tables = [{ description: "A" }, { description: null }, { description: "B" }, {}];
+  assert.deepEqual(elementCounts([], tables), { ...none, tableDescriptions: 2 });
+  assert.deepEqual(elementCounts([exported({ description: "d" })], tables), { ...none, descriptions: 1, tableDescriptions: 2 });
+  assert.equal(elementCounts([exported({ description: "d" })]).tableDescriptions, 0);
+  assert.deepEqual(ELEMENT_UNITS, { tableDescriptions: "common.tablesCount" });
+});
+
+test("omitTable takes the description of a table out when it is omitted, and nothing else", () => {
+  const table = { tableId: "T", description: "About T", columns: [] };
+  assert.deepEqual(omitTable(table, new Set(["tableDescriptions"])), { tableId: "T", description: null, columns: [] });
+  assert.deepEqual(omitTable(table, new Set(["descriptions", "labels"])), table);
+  assert.equal(table.description, "About T", "not changed");
 });

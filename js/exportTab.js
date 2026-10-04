@@ -109,8 +109,8 @@ export function initExportTab(grist) {
     selectAllText.textContent = t(searchInput.value.trim() ? "export.selectAllShown" : "export.selectAll");
     renderSearchStatus(shown, ticked);
     generateBtn.disabled = busy || ticked === 0;
-    const columns = docSchema ? buildExportSchema(docSchema.tables, docSchema.allColumns, selected()).flatMap((table) => table.columns) : [];
-    elementsBox.hidden = !showElements(elementCounts(columns), (element) => !omitted.has(element));
+    const schema = docSchema ? buildExportSchema(docSchema.tables, docSchema.allColumns, selected()) : [];
+    elementsBox.hidden = !showElements(elementCounts(schema.flatMap((table) => table.columns), schema), (element) => !omitted.has(element));
     updateRefsBanner();
   }
 

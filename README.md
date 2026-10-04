@@ -132,20 +132,27 @@ fin le dit.
 Le type de chaque colonne est toujours importé. Le groupe **Éléments à importer**, sous
 l'aperçu, laisse choisir d'un coup ce que le texte apporte en plus :
 
-| Élément                   | Ce que le texte en dit                                         |
-| ------------------------- | -------------------------------------------------------------- |
-| **Libellés**              | `label='...'`, quand il diffère de l'identifiant               |
-| **Descriptions**          | `description='...'`                                            |
-| **Listes de choix**       | `choices=[...]` et le style de chaque choix                    |
-| **Options d'affichage**   | le reste de `widget_options` : alignement, formats, couleurs… |
-| **Colonnes d'affichage**  | `visible_col='...'`                                            |
-| **Liens bidirectionnels** | `reverse_of='...'`                                             |
-| **Formules**              | colonnes de formule et formules de déclenchement               |
+| Élément                             | Ce que le texte en dit                                                          |
+| ----------------------------------- | ------------------------------------------------------------------------------- |
+| **Libellés**                        | `label='...'`, quand il diffère de l'identifiant                                |
+| **Descriptions des colonnes**       | `description='...'`                                                             |
+| **Descriptions des tables**         | la chaîne qui ouvre la classe de la table (voir « Métadonnées capturées »)      |
+| **Listes de choix**                 | `choices=[...]` et le style de chaque choix                                     |
+| **Format des cellules**             | le reste de `widget_options` : alignement, formats de nombre et de date, couleurs… |
+| **Colonne affichée des références** | `visible_col='...'` : la colonne de la table liée que montre la cellule d'une référence |
+| **Liens bidirectionnels**           | `reverse_of='...'`                                                              |
+| **Formules**                        | colonnes de formule et formules de déclenchement                                |
+
+Chaque élément dit, sous son nom, ce qu'il est : « Format des cellules » et « Colonne affichée
+des références » sont les noms de ce que Grist range dans les options d'une colonne
+(`widgetOptions`) et dans son réglage « colonne à afficher ».
 
 Seuls les éléments que le texte contient réellement sont proposés, chacun avec le nombre
-de colonnes qui le portent ; quand il n'en contient aucun, le groupe n'apparaît pas. Ces
-nombres suivent l'aperçu : ne comptent que les colonnes qui seront créées (tables cochées,
-colonnes cochées, colonnes absentes de la table existante). Tout est coché par défaut, sauf
+de colonnes qui le portent (de tables, pour les descriptions de tables) ; quand il n'en
+contient aucun, le groupe n'apparaît pas. Ces nombres suivent l'aperçu : ne comptent que ce
+qui sera créé (tables cochées, colonnes cochées, colonnes absentes de la table existante ; la
+description d'une table qui reçoit des colonnes n'est jamais proposée : une table existante
+n'est jamais modifiée). Tout est coché par défaut, sauf
 **Formules** (voir ci-dessous), et les cases reviennent à cet état à chaque analyse. Un
 élément décoché est laissé de côté à la création, comme si le texte ne le contenait pas :
 sans **Liens bidirectionnels**, deux colonnes qui se désignent restent deux références
@@ -228,7 +235,9 @@ métadonnées est un élément que le groupe **Éléments à importer** laisse d
   View et ne sont pas repris. Une formule qui s'appuie sur une colonne ou une table absente
   du document de destination est créée telle quelle, et Grist en affiche l'erreur.
 - Le widget copie la **structure** d'une table : ni les données, ni les droits d'accès, ni
-  les vues et widgets de la page, ni les tables de synthèse ne sont repris ou proposés.
+  les vues et widgets de la page (ni leurs titres et descriptions), ni les tables de
+  synthèse ne sont repris ou proposés. La description de la table elle-même l'est, pour les
+  tables que l'import crée ; celle d'une table qui reçoit des colonnes n'est jamais modifiée.
 - **Versions de Grist** : la suite complète (`npm run test:grist`, plus de 300 tests) passe
   sur Grist 1.2.1 (octobre 2024), 1.6.1, 1.7.1, 1.7.20 et une version de développement du
   1er octobre 2026. Avant 1.2, le moteur ne connaît pas les références bidirectionnelles
@@ -246,11 +255,13 @@ métadonnées est un élément que le groupe **Éléments à importer** laisse d
    compte des majuscules, des accents ni de l'ordre des mots) : les tables cochées que la
    recherche masque restent cochées, et exportées, ce que le champ rappelle ; la case du
    dessus (**Cocher les tables affichées**) n'agit alors que sur celles qui le sont, et
-   **Échap** efface la recherche. Sous la liste, le groupe **Éléments à exporter** liste ce que ces tables contiennent au-delà
-   du type de leurs colonnes (libellés, descriptions, listes de choix, options d'affichage,
-   colonnes d'affichage, liens bidirectionnels, formules), avec le nombre de colonnes
-   concernées. Tout est coché par défaut : décochez ce que le code ne doit pas contenir (le
-   type de chaque colonne est toujours exporté). Cliquez ensuite sur **Générer le code**.
+   **Échap** efface la recherche. Sous la liste, le groupe **Éléments à exporter** liste ce
+   que ces tables contiennent au-delà du type de leurs colonnes (libellés, descriptions des
+   colonnes et des tables, listes de choix, format des cellules, colonne affichée des
+   références, liens bidirectionnels, formules), avec le nombre de colonnes (ou de tables)
+   concernées et, sous chaque nom, ce qu'il est. Tout est coché par défaut : décochez ce que
+   le code ne doit pas contenir (le type de chaque colonne est toujours exporté). Cliquez
+   ensuite sur **Générer le code**.
 3. Copiez le code affiché (bouton **Copier**, ou sélection manuelle du texte) et
    collez-le où vous en avez besoin — par exemple dans l'onglet **Import** de ce même
    widget, ouvert sur un autre document.
@@ -284,7 +295,7 @@ exporter** laisse décocher (les formules en forment un de plus) :
 
 - **`choices=[...]`** (**Listes de choix**) : la liste des valeurs d'un Choix/Choix
   multiples.
-- **`widget_options='<JSON>'`** (**Options d'affichage**, et pour le style par choix
+- **`widget_options='<JSON>'`** (**Format des cellules**, et pour le style par choix
   **Listes de choix**) : le reste des options d'affichage de la colonne
   (`widgetOptions`, tel que Grist les stocke), sous forme d'un objet JSON — notamment le
   style par choix (`choiceOptions` : couleur de texte/fond, gras...), l'alignement, le
@@ -295,16 +306,32 @@ exporter** laisse décocher (les formules en forment un de plus) :
   colonne n'a aucune option à en dehors des choix.
 - **`label='...'`** (**Libellés**) : le libellé affiché de la colonne, uniquement s'il
   diffère de son identifiant (Grist les fait correspondre par défaut).
-- **`description='...'`** (**Descriptions**) : la description de la colonne, si elle est
-  renseignée.
-- **`visible_col='NomDeColonne'`** (**Colonnes d'affichage**) : pour une colonne de
-  référence, l'identifiant (pas
+- **`description='...'`** (**Descriptions des colonnes**) : la description de la colonne,
+  si elle est renseignée.
+- **`visible_col='NomDeColonne'`** (**Colonne affichée des références**) : pour une colonne
+  de référence, l'identifiant (pas
   l'identifiant technique interne, propre au document et sans signification ailleurs) de
   la colonne de la table cible utilisée comme « colonne d'affichage ».
 
 Une référence bidirectionnelle est écrite, comme le fait la vraie Code View, avec
 **`reverse_of='NomDeColonne'`** (la colonne réciproque, dans la table cible ; élément
 **Liens bidirectionnels**) : ce n'est pas une extension de ce widget.
+
+La description d'une **table** (celle de son widget « Données brutes », où Grist la garde)
+s'écrit comme la docstring de sa classe, une chaîne sur une seule ligne comme celle de
+`description=` (élément **Descriptions des tables**) :
+
+```python
+@grist.UserTable
+class Clients:
+  'Les clients de l’association'
+  Nom = grist.Text()
+```
+
+À l'import, la chaîne qui ouvre la classe est la description de la table, écrite une fois la
+table créée ; une chaîne placée ailleurs, ou sur plusieurs lignes entre guillemets triples,
+n'est pas lue (remarque « contenu non reconnu »). Seule la description de la table est
+reprise : celles des autres widgets (vues, pages) ne font pas partie de sa structure.
 
 **Ce sont des arguments propres à ce widget, pas le format officiel de la Code View de
 Grist** : Grist lui-même n'écrit, au mieux, que `choices=[...]` dans de rares cas, jamais

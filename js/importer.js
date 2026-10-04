@@ -148,8 +148,8 @@ const columnPayload = (col, withFormulas) => ({
 });
 
 /**
- * Creates `tables` (`[{ id, columns }]`) in one atomic batch, with the formulas of their columns
- * if `withFormulas`.
+ * Creates `tables` (`[{ id, columns, description }]`) in one atomic batch, with the formulas of their columns
+ * if `withFormulas`, then gives them their descriptions.
  * @returns {{tables: {id: string, columns: object[]}[], note: string}} the tables
  *   as Grist named them, and what could not be applied afterwards, if anything.
  */
@@ -160,8 +160,9 @@ export async function createTables(grist, tables, { withFormulas = false } = {})
 
   const actions = tables.map(({ id, columns }) => ["AddTable", id, columns.map((col) => columnPayload(col, withFormulas))]);
   const { retValues } = await grist.docApi.applyUserActions(actions);
-  const created = tables.map(({ columns }, i) => ({
+  const created = tables.map(({ columns, description }, i) => ({
     id: retValues[i].table_id,
+    description,
     columns: columns.map((col, j) => ({ ...col, id: retValues[i].columns[j] })),
   }));
   return { tables: created, note: await afterCreation(grist, tables, created) };
@@ -198,19 +199,24 @@ async function afterCreation(grist, requested, created) {
 
 /**
  * Applies what the creation actions cannot: AddTable and AddVisibleColumn drop
- * descriptions and the independence of an id from its label, and a display column
+ * descriptions and the independence of an id from its label, a display column
  * needs the row ids of columns that only exist once the tables do (SetDisplayFormula takes
- * no other form on every version of Grist). Returns a note about whatever was not applied.
+ * no other form on every version of Grist), and a table's description lives in its raw data
+ * widget. Returns a note about whatever was not applied.
  */
 async function applyDetails(grist, tables) {
   const pending = tables.flatMap(({ id, columns }) =>
     columns.filter((col) => col.description || col.visibleColId || isUntied(col)).map((col) => ({ ...col, tableId: id }))
   );
-  if (pending.length === 0) return "";
+  const described = tables.filter((table) => table.description);
+  if (pending.length === 0 && described.length === 0) return "";
 
   try {
-    const schema = pending.some((col) => col.visibleColId) ? await fetchDocSchema(grist) : null;
-    const actions = [];
+    const schema = described.length > 0 || pending.some((col) => col.visibleColId) ? await fetchDocSchema(grist) : null;
+    const actions = described.flatMap(({ id, description }) => {
+      const section = schema.tables.find((table) => table.tableId === id)?.rawViewSectionRef;
+      return section ? [["UpdateRecord", "_grist_Views_section", section, { description }]] : [];
+    });
     const unfound = [];
     for (const col of pending) {
       const displayRef = col.visibleColId ? displayColumnRef(schema, col) : null;

@@ -3,7 +3,7 @@ import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { launchWidget } from "../browser/widgetPage.mjs";
 import { analyse, apply, choice, offered, previewRows, warnings } from "../browser/driver.mjs";
-import { instance, column, columnRef, addTable, buildSource, expectedAfterImport, snapshot } from "./support.mjs";
+import { instance, column, columnRef, addTable, buildSource, expectedAfterImport, snapshot, tableDescriptions } from "./support.mjs";
 
 const widget = await launchWidget();
 after(() => widget.close());
@@ -178,7 +178,7 @@ test("elements left out in the Export tab, then others in the Import tab, are mi
       { id: "Mood", type: "Choice", label: "Humeur", description: "Du jour", widgetOptions: { choices: ["Content (ok)", "it's"], alignment: "center" } },
       { id: "Shout", type: "Text", formula: "$Mood.upper()" },
     ],
-  });
+  }, { descriptions: { Teams: "Les équipes" } });
   const before = await snapshot(source);
 
   const exporter = await widget.open(source.grist);
@@ -187,14 +187,15 @@ test("elements left out in the Export tab, then others in the Import tab, are mi
   await exporter.click("#refs-include-btn");
   assert.deepEqual(await offered(exporter, "export"), [
     "[x] Libellés (2 colonnes)",
-    "[x] Descriptions (2 colonnes)",
+    "[x] Descriptions des colonnes (2 colonnes)",
+    "[x] Descriptions des tables (1 table)",
     "[x] Listes de choix (1 colonne)",
-    "[x] Options d’affichage (1 colonne)",
-    "[x] Colonnes d’affichage (1 colonne)",
+    "[x] Format des cellules (1 colonne)",
+    "[x] Colonne affichée des références (1 colonne)",
     "[x] Liens bidirectionnels (2 colonnes)",
     "[x] Formules (1 colonne)",
   ]);
-  await choice(exporter, "export", "Descriptions").uncheck();
+  await choice(exporter, "export", "Descriptions des colonnes").uncheck();
   await choice(exporter, "export", "Formules").uncheck();
   await exporter.click("#generate-btn");
   await exporter.waitForFunction(() => document.getElementById("export-output").value.includes("class Members"));
@@ -205,15 +206,17 @@ test("elements left out in the Export tab, then others in the Import tab, are mi
   assert.match(text, /label='Humeur'/);
   assert.match(text, /visible_col='Title'/);
   assert.match(text, /reverse_of='Roster'/);
+  assert.match(text, /class Teams:\n {2}'Les équipes'\n/, "the description of the table is the other element of that name");
   assert.match(text, /\n {2}Shout = grist\.Text\(\)\n/, "the formula column is plain data");
 
   await inWidget(async (page, target) => {
     await analyse(page, text);
     assert.deepEqual(await offered(page, "import"), [
       "[x] Libellés (2 colonnes)",
+      "[x] Descriptions des tables (1 table)",
       "[x] Listes de choix (1 colonne)",
-      "[x] Options d’affichage (1 colonne)",
-      "[x] Colonnes d’affichage (1 colonne)",
+      "[x] Format des cellules (1 colonne)",
+      "[x] Colonne affichée des références (1 colonne)",
       "[x] Liens bidirectionnels (2 colonnes)",
     ]); // only what the text has
     await choice(page, "import", "Liens bidirectionnels").uncheck();
@@ -224,6 +227,7 @@ test("elements left out in the Export tab, then others in the Import tab, are mi
     assert.deepEqual(after.Members, wanted("Members"));
     assert.deepEqual(after.Teams, wanted("Teams"));
     assert.deepEqual([after.Members[0].visibleCol, after.Members[0].reverseCol, after.Teams[0].untied, after.Members.at(-1).isFormula], ["Title", null, true, false], "the display column and the labels came, the link, the descriptions and the formula did not");
+    assert.deepEqual(await tableDescriptions(target), { Table1: "", Members: "", Teams: "Les équipes" }, "the description of the table came, in the raw data widget of the table");
   });
 });
 

@@ -3,7 +3,7 @@ import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { launchWidget } from "../browser/widgetPage.mjs";
 import { analyse, apply } from "../browser/driver.mjs";
-import { instance, rows, column, addTable, buildSource, snapshot } from "./support.mjs";
+import { instance, rows, column, addTable, buildSource, snapshot, tableDescriptions } from "./support.mjs";
 
 const widget = await launchWidget();
 const context = await widget.browser.newContext();
@@ -57,7 +57,7 @@ test("Export in one document, Import in another, both through Grist's own interf
       { id: "Mood", type: "Choice", widgetOptions: { choices: ["Content (ok)", "it's"], alignment: "center" } },
       { id: "Shout", type: "Text", formula: "$Mood.upper()" },
     ],
-  });
+  }, { descriptions: { Teams: "Les équipes" } });
 
   const exporter = await openWidgetIn(source);
   await exporter.frame.click("#tab-export");
@@ -81,6 +81,7 @@ test("Export in one document, Import in another, both through Grist's own interf
   assert.deepEqual(after.Members, before.Members);
   assert.deepEqual(after.Teams, before.Teams);
   assert.equal(after.Teams[0].description, "Nom de l'équipe\nsur deux lignes");
+  assert.equal((await tableDescriptions(target)).Teams, "Les équipes", "the description of the table, written to its raw data widget through the plugin API");
   assert.deepEqual([after.Members[0].reverseCol, after.Members.at(-1).formula], ["Roster", "$Mood.upper()"], "the two-way link and the formula came through the plugin API");
 });
 
