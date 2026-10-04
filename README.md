@@ -281,8 +281,8 @@ métadonnées est un élément que le groupe **Éléments à importer** laisse d
    quand on décoche puis recoche une table, quand on actualise la liste et quand la langue
    change. Il ne réécrit pas les formules : la formule d'une colonne gardée qui cite une
    colonne décochée est exportée telle quelle.
-3. Copiez le code affiché (icône **Copier**, qui montre un ✓ un instant, ou sélection
-   manuelle du texte) et collez-le où vous en avez besoin — par exemple dans l'onglet **Import** de ce même
+3. Copiez le code affiché (bouton **Copier le code**, sous le texte, qui montre un ✓ un
+   instant, ou sélection manuelle du texte) et collez-le où vous en avez besoin — par exemple dans l'onglet **Import** de ce même
    widget, ouvert sur un autre document.
 
 Le format généré suit celui de la vraie « Code View » de Grist : mêmes lignes

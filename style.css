@@ -225,19 +225,26 @@ h1 {
   margin: 0;
 }
 
-/* The copy button shows a tick for a moment once the code is copied. */
-.icon-btn .icon-done,
-.icon-btn.is-done .icon-copy {
+/* A button with an icon beside its label: the copy button shows a tick in place of its icon for a moment once the code is copied. */
+button.btn-with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-with-icon svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.btn-with-icon .icon-done,
+.btn-with-icon.is-done .icon-copy {
   display: none;
 }
 
-.icon-btn.is-done .icon-done {
+.btn-with-icon.is-done .icon-done {
   display: block;
-}
-
-.icon-btn.is-done {
-  color: var(--success);
-  border-color: var(--success);
 }
 
 .brand-logo {

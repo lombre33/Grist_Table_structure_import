@@ -1348,7 +1348,6 @@ const TESTS = [
     const ICONS = [
       ["clear-btn", "Effacer", "Clear"],
       ["refresh-tables-btn", "Actualiser la liste", "Refresh the list"],
-      ["copy-btn", "Copier", "Copy"],
     ];
     for (const [id, fr] of ICONS) {
       assert.equal(await page.getAttribute(`#${id}`, "aria-label"), fr, id);
@@ -1362,6 +1361,34 @@ const TESTS = [
       assert.equal(await page.getAttribute(`#${id}`, "aria-label"), en, id);
       assert.equal(await page.getAttribute(`#${id}`, "title"), en, id);
     }
+  }],
+
+  ["Export: Copier le code is a labelled button, under the code and in sight once the code is there, in both languages", async (page) => {
+    await page.setViewportSize({ width: 520, height: 640 });
+    await page.click("#tab-export");
+    await tick(page, "Existing_Table");
+    assert.equal(await hidden(page, "export-output-block"), true, "nothing to copy before the code");
+    await generate(page);
+
+    const button = page.getByRole("button", { name: "Copier le code" });
+    assert.equal(await button.count(), 1);
+    assert.equal(await button.isVisible(), true);
+    assert.equal(await textOf(page, "#copy-btn span"), "Copier le code", "the words, not an icon alone");
+    assert.equal(await page.$eval("#copy-btn", (copy) => copy.classList.contains("btn-primary")), true, "the action of the step stands out");
+    const [codeBottom, buttonTop, buttonBottom] = await page.evaluate(() => [
+      document.getElementById("export-output").getBoundingClientRect().bottom,
+      document.getElementById("copy-btn").getBoundingClientRect().top,
+      document.getElementById("copy-btn").getBoundingClientRect().bottom,
+    ]);
+    assert.ok(buttonTop >= codeBottom, "under the code, as it always was");
+    assert.ok(buttonBottom <= 640, `in sight in a pane of 640 px once the code is brought into view (it ends at ${buttonBottom} px)`);
+    const [width, height] = await page.$eval("#copy-btn", (copy) => [copy.offsetWidth, copy.offsetHeight]);
+    assert.ok(width >= 100 && height >= 32, `${width} x ${height}`);
+
+    await page.click("#settings-btn");
+    await page.click('label.segmented-option:has(input[value="en"])');
+    assert.equal(await textOf(page, "#copy-btn span"), "Copy the code");
+    assert.equal(await page.getByRole("button", { name: "Copy the code" }).count(), 1);
   }],
 
   ["Export: the copy button shows a tick for a moment once the code is copied", async (page) => {

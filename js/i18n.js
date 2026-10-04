@@ -109,7 +109,7 @@ export const STRINGS = {
     "export.columns.some": { one: "{n} colonne sur {total}", other: "{n} colonnes sur {total}" },
     "export.generate": "Générer le code",
     "export.step2.eyebrow": "2. Code généré",
-    "export.copy": "Copier",
+    "export.copy": "Copier le code",
     "export.formulaHint.before":
       "Seule la structure (types de colonnes) est garantie fidèle. Pour une colonne de formule, " +
       "la formule d’origine est recopiée telle que stockée (syntaxe ",
@@ -319,7 +319,7 @@ export const STRINGS = {
     "export.columns.some": { one: "{n} of {total} columns", other: "{n} of {total} columns" },
     "export.generate": "Generate code",
     "export.step2.eyebrow": "2. Generated code",
-    "export.copy": "Copy",
+    "export.copy": "Copy the code",
     "export.formulaHint.before":
       "Only the structure (column types) is guaranteed faithful. For a formula column, the " +
       "original formula is copied back exactly as stored (Grist’s ",
