@@ -205,36 +205,50 @@ async function afterCreation(grist, requested, created) {
  * widget. Returns a note about whatever was not applied.
  */
 async function applyDetails(grist, tables) {
-  const pending = tables.flatMap(({ id, columns }) =>
-    columns.filter((col) => col.description || col.visibleColId || isUntied(col)).map((col) => ({ ...col, tableId: id }))
-  );
-  const described = tables.filter((table) => table.description);
-  if (pending.length === 0 && described.length === 0) return "";
+  const { columns, described } = detailsOf(tables);
+  if (columns.length === 0 && described.length === 0) return "";
 
   try {
-    const schema = described.length > 0 || pending.some((col) => col.visibleColId) ? await fetchDocSchema(grist) : null;
-    const actions = described.flatMap(({ id, description }) => {
-      const section = schema.tables.find((table) => table.tableId === id)?.rawViewSectionRef;
-      return section ? [["UpdateRecord", "_grist_Views_section", section, { description }]] : [];
-    });
-    const unfound = [];
-    for (const col of pending) {
-      const displayRef = col.visibleColId ? displayColumnRef(schema, col) : null;
-      if (col.visibleColId && !displayRef) unfound.push(col);
-      const changes = {
-        ...(col.description && { description: col.description }),
-        ...(displayRef && { visibleCol: displayRef }),
-        ...(isUntied(col) && { untieColIdFromLabel: true }),
-      };
-      if (Object.keys(changes).length > 0) actions.push(["ModifyColumn", col.tableId, col.id, changes]);
-      if (displayRef) actions.push(["SetDisplayFormula", col.tableId, null, columnRef(schema, col.tableId, col.id), `$${col.id}.${col.visibleColId}`]);
-    }
+    const schema = described.length > 0 || columns.some((col) => col.visibleColId) ? await fetchDocSchema(grist) : null;
+    const actions = [...descriptionActions(schema, described), ...columns.flatMap((col) => columnActions(schema, col))];
     if (actions.length > 0) await grist.docApi.applyUserActions(actions);
-    return unfound.map((col) => ` ${t("warn.visibleColMissing", { colId: col.id, visibleColId: col.visibleColId, target: splitType(col.type).arg })}`).join("");
+    return columns.filter((col) => col.visibleColId && !displayColumnRef(schema, col)).map(visibleColMissing).join("");
   } catch (err) {
     return t("import.note.refineFailed", { error: reportError(err) });
   }
 }
+
+/** What the creation could not apply in `tables`: the columns (with their `tableId`) that have a description, a display column or an id that stays as written, and the tables that have a description. */
+function detailsOf(tables) {
+  const columns = tables.flatMap(({ id, columns }) =>
+    columns.filter((col) => col.description || col.visibleColId || isUntied(col)).map((col) => ({ ...col, tableId: id }))
+  );
+  return { columns, described: tables.filter((table) => table.description) };
+}
+
+/** The actions that give the tables of `described` their descriptions, written on the raw data widget. */
+const descriptionActions = (schema, described) =>
+  described.flatMap(({ id, description }) => {
+    const section = schema.tables.find((table) => table.tableId === id)?.rawViewSectionRef;
+    return section ? [["UpdateRecord", "_grist_Views_section", section, { description }]] : [];
+  });
+
+/** The actions that give `col` its description, its display column and the independence of its id, whichever it has. */
+function columnActions(schema, col) {
+  const displayRef = col.visibleColId ? displayColumnRef(schema, col) : null;
+  const changes = {
+    ...(col.description && { description: col.description }),
+    ...(displayRef && { visibleCol: displayRef }),
+    ...(isUntied(col) && { untieColIdFromLabel: true }),
+  };
+  return [
+    ...(Object.keys(changes).length > 0 ? [["ModifyColumn", col.tableId, col.id, changes]] : []),
+    ...(displayRef ? [["SetDisplayFormula", col.tableId, null, columnRef(schema, col.tableId, col.id), `$${col.id}.${col.visibleColId}`]] : []),
+  ];
+}
+
+/** What is said of a display column that its table does not have, with the space that separates it from what precedes it. */
+const visibleColMissing = (col) => ` ${t("warn.visibleColMissing", { colId: col.id, visibleColId: col.visibleColId, target: splitType(col.type).arg })}`;
 
 /**
  * Links each pair of two-way reference columns (`[{ tableId, id }, { tableId, id }]`): Grist then

@@ -1,216 +1,124 @@
-import { $, el, checklistItem, restoreFocus, statusWriter, syncMasterCheckbox } from "./dom.js";
-import { fetchDocSchema, buildExportSchema, findReferencedTables, omitFromExport } from "./schema.js";
+/**
+ * The Export tab: the tables of the document are listed, the ones ticked (and what is kept of them) are written as
+ * Code View text. The list (exportTables), the banner of the tables referred to (exportRefs) and the code (exportOutput)
+ * are its parts; this module reads the document and makes them work together. `ctx` is
+ * { grist, ui, setStatus, state, output, tables, banner, showElements }.
+ */
+
+import { $, byIds, restoreFocus, statusWriter } from "./dom.js";
+import { fetchDocSchema, buildExportSchema, omitFromExport } from "./schema.js";
 import { elementCounts } from "./elements.js";
 import { elementsPicker } from "./elementsPicker.js";
-import { queryMatcher } from "./search.js";
 import { generateCode } from "./codeGenerator.js";
 import { callGrist, reportError } from "./util.js";
 import { t, tn, onLocaleChange } from "./i18n.js";
+import { createTableList } from "./exportTables.js";
+import { createRefsBanner, missingTables } from "./exportRefs.js";
+import { createOutput } from "./exportOutput.js";
 
 export function initExportTab(grist) {
-  const tableList = $("export-table-list");
-  const searchRow = $("export-search-row");
-  const searchInput = $("export-search");
-  const searchStatus = $("export-search-status");
-  const selectAllRow = $("export-select-all-row");
-  const selectAll = $("export-select-all");
-  const selectAllText = $("export-select-all-text");
-  const tablesEmpty = $("export-tables-empty");
-  const refreshBtn = $("refresh-tables-btn");
-  const generateBtn = $("generate-btn");
-  const outputBlock = $("export-output-block");
-  const output = $("export-output");
-  const copyBtn = $("copy-btn");
-  const copyStatus = $("copy-status");
-  const refsBanner = $("export-refs-banner");
-  const includeBtn = $("refs-include-btn");
-  const dismissBtn = $("refs-dismiss-btn");
-  const elementsBox = $("export-elements");
-  const refsIntro = $("export-refs-banner-intro");
-  const refsList = $("export-refs-list");
-  const announcement = $("export-announcement");
+  const ui = byIds({ refreshBtn: "refresh-tables-btn", generateBtn: "generate-btn", elementsBox: "export-elements" });
   const setStatus = statusWriter($("export-status-region"));
-
   if (!grist) {
-    refreshBtn.disabled = true;
+    ui.refreshBtn.disabled = true;
     setStatus(t("error.noGristApi"), "error");
     return { activate() {} };
   }
 
-  let docSchema = null;
-  let loaded = false;
-  let busy = false; // the list is being read, or the code generated
-  const omitted = new Set(); // the elements (see elements.js) the user leaves out of the code
-  const showElements = elementsPicker($("export-elements-list"), (element, kept) => {
-    if (kept) omitted.delete(element);
-    else omitted.add(element);
+  // docSchema: the document's tables and columns; busy: the list is being read, or the code generated;
+  // omitted: the elements (see elements.js) the user leaves out of the code
+  const state = { docSchema: null, loaded: false, busy: false, omitted: new Set() };
+  const ctx = { grist, ui, setStatus, state, output: createOutput() };
+  ctx.showElements = elementsPicker($("export-elements-list"), (element, kept) => {
+    if (kept) state.omitted.delete(element);
+    else state.omitted.add(element);
   });
-  let dismissed = null; // the tables the user chose to do without, as missingTables().key
+  ctx.tables = createTableList({ onChange: () => refresh(ctx) });
+  ctx.banner = createRefsBanner({ onInclude: () => include(ctx), onDismiss: () => dismiss(ctx) });
 
-  refreshBtn.addEventListener("click", loadTables);
-  generateBtn.addEventListener("click", onGenerate);
-  copyBtn.addEventListener("click", onCopy);
-  tableList.addEventListener("change", refresh);
-  searchInput.addEventListener("input", refresh);
-  searchInput.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && searchInput.value) {
-      searchInput.value = ""; // like the search fields of the browsers that clear them
-      refresh();
-    }
-  });
-  selectAll.addEventListener("change", () => {
-    for (const input of tableList.querySelectorAll("li:not([hidden]) input")) input.checked = selectAll.checked; // those shown: the others are not in sight
-    refresh();
-  });
-  includeBtn.addEventListener("click", onInclude);
-  dismissBtn.addEventListener("click", () => {
-    dismissed = missingTables().key;
-    updateRefsBanner();
-    generateBtn.focus({ preventScroll: true }); // the banner, which had the focus, is gone: the next step is here
-  });
-  onLocaleChange(refresh);
-
-  const selected = () => Array.from(tableList.querySelectorAll("input:checked"), (input) => input.value);
-
-  /** The tables the ticked ones refer to without those being ticked themselves. */
-  function missingTables() {
-    const referencedBy = docSchema ? findReferencedTables(docSchema.tables, docSchema.allColumns, selected()) : new Map();
-    const ids = Array.from(referencedBy.keys());
-    return { referencedBy, ids, key: ids.join("\0") };
-  }
-
-  /** Shows the tables the search holds (all of them when nothing is searched) and returns their boxes. */
-  function filterTables() {
-    const matches = queryMatcher(searchInput.value);
-    const shown = [];
-    for (const item of tableList.children) {
-      const box = item.querySelector("input");
-      item.hidden = !matches(box.value);
-      if (!item.hidden) shown.push(box);
-    }
-    return shown;
-  }
-
-  /** What the search found, written where it is typed and read by a screen reader, with the ticked tables it hides; nothing when nothing is searched. */
-  function renderSearchStatus(shown, ticked) {
-    const query = searchInput.value.trim();
-    const total = tableList.children.length;
-    const hiddenTicked = ticked - shown.filter((box) => box.checked).length;
-    const found = shown.length === 0 ? t("export.search.none", { query }) : tn("export.search.count", shown.length, { total });
-    const text = query && total > 0 ? [found, hiddenTicked > 0 && tn("export.search.hiddenTicked", hiddenTicked)].filter(Boolean).join(" ") : "";
-    if (searchStatus.textContent !== text) searchStatus.textContent = text; // a screen reader says again what is written again
-  }
-
-  function refresh() {
-    const shown = filterTables();
-    const ticked = selected().length;
-    syncMasterCheckbox(selectAll, shown.filter((box) => box.checked).length, shown.length);
-    selectAll.disabled = shown.length === 0;
-    selectAllText.textContent = t(searchInput.value.trim() ? "export.selectAllShown" : "export.selectAll");
-    renderSearchStatus(shown, ticked);
-    generateBtn.disabled = busy || ticked === 0;
-    const schema = docSchema ? buildExportSchema(docSchema.tables, docSchema.allColumns, selected()) : [];
-    elementsBox.hidden = !showElements(elementCounts(schema.flatMap((table) => table.columns), schema), (element) => !omitted.has(element));
-    updateRefsBanner();
-  }
-
-  /** Actualiser and Générer wait for each other: the list is not read again while the code is generated, nor the code generated twice. */
-  function setBusy(value) {
-    busy = refreshBtn.disabled = value;
-    refresh();
-  }
-
-  /** Reads the document's tables again, keeping the ones that were ticked. */
-  async function loadTables() {
-    const kept = new Set(selected());
-    setStatus(t("export.status.loading"));
-    outputBlock.hidden = tablesEmpty.hidden = searchRow.hidden = selectAllRow.hidden = true;
-    dismissed = null;
-    tableList.replaceChildren();
-    setBusy(true);
-    try {
-      docSchema = await callGrist(fetchDocSchema(grist));
-      setStatus(null);
-      tablesEmpty.hidden = docSchema.tables.length > 0;
-      searchRow.hidden = selectAllRow.hidden = docSchema.tables.length === 0;
-      tableList.replaceChildren(...docSchema.tables.map((table) => checklistItem(table.tableId, table.tableId, kept.has(table.tableId))));
-    } catch (err) {
-      setStatus(t("export.error.fetchTables", { error: reportError(err) }), "error");
-    } finally {
-      setBusy(false);
-      restoreFocus(refreshBtn);
-    }
-  }
-
-  /** Generating without the referenced tables is allowed: Import then keeps a reference only if its table exists where it imports. */
-  function updateRefsBanner() {
-    const { referencedBy, ids, key } = missingTables();
-    refsBanner.hidden = ids.length === 0 || key === dismissed;
-    if (refsBanner.hidden) {
-      announcement.textContent = "";
-      return;
-    }
-    const intro = tn("export.refs.intro", ids.length);
-    refsIntro.textContent = intro;
-    if (announcement.textContent !== intro) announcement.textContent = intro; // a screen reader says again what is written again
-    includeBtn.textContent = tn("export.refs.include", ids.length);
-    dismissBtn.textContent = tn("export.refs.dismiss", ids.length);
-    refsList.replaceChildren(
-      ...ids.map((tableId) => el("li", { text: t("export.refs.item", { tableId, columns: referencedBy.get(tableId).join(", ") }) }))
-    );
-  }
-
-  function onInclude() {
-    const { ids } = missingTables();
-    for (const input of tableList.querySelectorAll("input")) if (ids.includes(input.value)) input.checked = true;
-    if (!ids.every(queryMatcher(searchInput.value))) searchInput.value = ""; // the tables just included are to be seen, whatever was searched
-    refresh(); // the tables just included may refer to others
-    if (refsBanner.hidden) generateBtn.focus({ preventScroll: true }); // the button that had the focus is gone with the banner
-  }
-
-  async function onGenerate() {
-    if (selected().length === 0) return;
-    setStatus(t("export.status.generating"));
-    setBusy(true);
-    try {
-      docSchema = await callGrist(fetchDocSchema(grist)); // columns may have changed since the list was loaded
-      const schema = omitFromExport(buildExportSchema(docSchema.tables, docSchema.allColumns, selected()), omitted);
-      output.value = generateCode(schema);
-      outputBlock.hidden = false;
-      setCopyStatus("");
-      const columns = schema.reduce((total, table) => total + table.columns.length, 0);
-      setStatus(t("export.success.generated", { tablesPhrase: tn("common.tablesCount", schema.length), columnsPhrase: tn("common.columnsCount", columns) }), "success");
-      outputBlock.scrollIntoView({ block: "start" });
-    } catch (err) {
-      setStatus(t("export.error.generateFailed", { error: reportError(err) }), "error");
-    } finally {
-      setBusy(false);
-      restoreFocus(generateBtn);
-    }
-  }
-
-  /** The outcome of Copier: a short confirmation, or what to do instead, which is a message since the user has to act on it. */
-  function setCopyStatus(message, level = "hint") {
-    copyStatus.className = level === "hint" ? "hint" : `status status-${level}`;
-    copyStatus.textContent = message;
-  }
-
-  async function onCopy() {
-    output.focus();
-    output.select();
-    try {
-      await navigator.clipboard.writeText(output.value);
-      setCopyStatus(t("export.copy.done"));
-    } catch {
-      setCopyStatus(t("export.copy.fallback"), "info");
-    }
-  }
+  ui.refreshBtn.addEventListener("click", () => loadTables(ctx));
+  ui.generateBtn.addEventListener("click", () => generate(ctx));
+  onLocaleChange(() => refresh(ctx));
 
   return {
     activate() {
-      if (loaded) return;
-      loaded = true;
-      loadTables();
+      if (state.loaded) return;
+      state.loaded = true;
+      loadTables(ctx);
     },
   };
+}
+
+const missing = ({ state, tables }) => missingTables(state.docSchema, tables.selected());
+
+/** Writes again what depends on the tables ticked: the list, the button, the elements offered, the banner. */
+function refresh(ctx) {
+  const { ui, state, tables, banner, showElements } = ctx;
+  tables.render();
+  const selected = tables.selected();
+  ui.generateBtn.disabled = state.busy || selected.length === 0;
+  const schema = state.docSchema ? buildExportSchema(state.docSchema.tables, state.docSchema.allColumns, selected) : [];
+  ui.elementsBox.hidden = !showElements(elementCounts(schema.flatMap((table) => table.columns), schema), (element) => !state.omitted.has(element));
+  banner.render(missing(ctx));
+}
+
+/** Actualiser and Générer wait for each other: the list is not read again while the code is generated, nor the code generated twice. */
+function setBusy(ctx, value) {
+  ctx.state.busy = ctx.ui.refreshBtn.disabled = value;
+  refresh(ctx);
+}
+
+/** Inclure ces tables: the tables the ticked ones refer to are ticked too. */
+function include(ctx) {
+  ctx.tables.tick(missing(ctx).ids);
+  refresh(ctx); // the tables just included may refer to others
+  if (ctx.banner.isHidden()) ctx.ui.generateBtn.focus({ preventScroll: true }); // the button that had the focus is gone with the banner
+}
+
+/** Continuer sans elles. */
+function dismiss(ctx) {
+  ctx.banner.dismiss(missing(ctx));
+  ctx.ui.generateBtn.focus({ preventScroll: true }); // the banner, which had the focus, is gone: the next step is here
+}
+
+/** Reads the document's tables again, keeping the ones that were ticked. */
+async function loadTables(ctx) {
+  const { grist, ui, state, setStatus, tables, banner, output } = ctx;
+  const kept = new Set(tables.selected());
+  setStatus(t("export.status.loading"));
+  output.hide();
+  tables.hide();
+  banner.reset();
+  setBusy(ctx, true);
+  try {
+    state.docSchema = await callGrist(fetchDocSchema(grist));
+    setStatus(null);
+    tables.show(state.docSchema.tables, kept);
+  } catch (err) {
+    setStatus(t("export.error.fetchTables", { error: reportError(err) }), "error");
+  } finally {
+    setBusy(ctx, false);
+    restoreFocus(ui.refreshBtn);
+  }
+}
+
+/** Writes the code of the tables ticked, with the elements that are kept. */
+async function generate(ctx) {
+  const { grist, ui, state, setStatus, tables, output } = ctx;
+  if (tables.selected().length === 0) return;
+  setStatus(t("export.status.generating"));
+  setBusy(ctx, true);
+  try {
+    state.docSchema = await callGrist(fetchDocSchema(grist)); // columns may have changed since the list was loaded
+    const schema = omitFromExport(buildExportSchema(state.docSchema.tables, state.docSchema.allColumns, tables.selected()), state.omitted);
+    output.show(generateCode(schema));
+    const columns = schema.reduce((total, table) => total + table.columns.length, 0);
+    setStatus(t("export.success.generated", { tablesPhrase: tn("common.tablesCount", schema.length), columnsPhrase: tn("common.columnsCount", columns) }), "success");
+    output.reveal();
+  } catch (err) {
+    setStatus(t("export.error.generateFailed", { error: reportError(err) }), "error");
+  } finally {
+    setBusy(ctx, false);
+    restoreFocus(ui.generateBtn);
+  }
 }

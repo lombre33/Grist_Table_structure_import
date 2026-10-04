@@ -41,45 +41,48 @@ function stringEnd(text, at) {
  * Python reads them: after a backslash, or inside brackets, over comments and line breaks.
  */
 function stringRanges(text) {
-  const ranges = [];
-  let joined = null; // the string, or the strings, being read
-  let depth = 0; // brackets open: only outside them does a line break end a statement
-  const endJoined = () => {
-    if (joined) ranges.push(joined);
-    joined = null;
-  };
-  for (let i = 0; i < text.length; ) {
-    const ch = text[i];
-    WORD.lastIndex = i;
-    const word = WORD.exec(text)?.[0] ?? "";
-    const quote = i + (STRING_PREFIX.test(word) ? word.length : 0);
-    if (isQuote(text[quote])) {
-      const end = stringEnd(text, quote);
-      if (end === -1) {
-        endJoined(); // opened and never closed: not a string, the quotes mean nothing
-        i = quote + 3;
-      } else {
-        joined = [joined?.[0] ?? i, end];
-        i = end;
-      }
-    } else if (ch === "#") {
-      i = text.indexOf("\n", i) === -1 ? text.length : text.indexOf("\n", i);
-    } else if (ch === "\n") {
-      if (depth === 0) endJoined();
-      i++;
-    } else if (ch === "\\" && text[i + 1] === "\n") {
-      i += 2;
-    } else if (/\s/.test(ch)) {
-      i++;
-    } else {
-      endJoined(); // a name, a number, an operator or a bracket
-      if ("([{".includes(ch)) depth++;
-      else if (")]}".includes(ch)) depth = Math.max(0, depth - 1);
-      i += Math.max(word.length, 1);
-    }
+  const scan = { ranges: [], joined: null, depth: 0 }; // joined: the string, or the strings, being read; depth: the brackets open
+  for (let i = 0; i < text.length; ) i = scanFrom(text, i, scan);
+  endJoined(scan);
+  return scan.ranges;
+}
+
+function endJoined(scan) {
+  if (scan.joined) scan.ranges.push(scan.joined);
+  scan.joined = null;
+}
+
+const lineEnd = (text, from) => (text.indexOf("\n", from) === -1 ? text.length : text.indexOf("\n", from));
+const nextDepth = (depth, ch) => ("([{".includes(ch) ? depth + 1 : ")]}".includes(ch) ? Math.max(0, depth - 1) : depth);
+
+/** Reads what starts at `i`, a string, a comment, a space or something of the code; returns where the next thing starts. */
+function scanFrom(text, i, scan) {
+  WORD.lastIndex = i;
+  const word = WORD.exec(text)?.[0] ?? "";
+  const quote = i + (STRING_PREFIX.test(word) ? word.length : 0);
+  if (isQuote(text[quote])) return scanString(text, i, quote, scan);
+  const ch = text[i];
+  if (ch === "#") return lineEnd(text, i);
+  if (ch === "\n") {
+    if (scan.depth === 0) endJoined(scan); // only outside brackets does a line break end a statement
+    return i + 1;
   }
-  endJoined();
-  return ranges;
+  if (ch === "\\" && text[i + 1] === "\n") return i + 2;
+  if (/\s/.test(ch)) return i + 1;
+  endJoined(scan); // a name, a number, an operator or a bracket
+  scan.depth = nextDepth(scan.depth, ch);
+  return i + Math.max(word.length, 1);
+}
+
+/** The string whose opening quotes are at `quote` (its prefix starting at `i`): one more for the string being joined, or none when it is never closed. */
+function scanString(text, i, quote, scan) {
+  const end = stringEnd(text, quote);
+  if (end === -1) {
+    endJoined(scan); // opened and never closed: not a string, the quotes mean nothing
+    return quote + 3;
+  }
+  scan.joined = [scan.joined?.[0] ?? i, end];
+  return end;
 }
 
 /**

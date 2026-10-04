@@ -498,10 +498,17 @@ assets/                logo Grist Factory (voir SECURITY.md)
 js/theme-init.js       applique le thème et la langue mémorisés avant le premier affichage
                        (et masque la page française d'un lecteur de l'anglais jusqu'à sa traduction)
 js/app.js              point d'entrée : onglets, initialisation
-js/importTab.js        onglet Import : câblage du DOM
+js/importTab.js        onglet Import : assemble les quatre modules ci-dessous
+js/importUi.js         ... les éléments de la page que l'onglet utilise
+js/importState.js      ... ce que l'onglet retient (analyse, choix, éléments laissés de côté)
+js/importView.js       ... ce qu'il affiche (aperçu, avertissements, boutons)
+js/importFlow.js       ... ce qu'il fait (analyser, effacer, créer, ajouter aux colonnes d'une table)
 js/importer.js         logique de l'import sans DOM : résolution des colonnes, identifiants,
                        formules, création en un lot, puis détails et références bidirectionnelles
-js/exportTab.js        onglet Export
+js/exportTab.js        onglet Export : lit le document et assemble les trois modules ci-dessous
+js/exportTables.js     ... la liste des tables, sa recherche et la case qui les prend toutes
+js/exportRefs.js       ... le bandeau des tables que les tables cochées référencent
+js/exportOutput.js     ... le code généré et le bouton Copier
 js/search.js           recherche dans une liste : mots, casse et accents ignorés
 js/elements.js         éléments d'une colonne (libellés, choix, formules...) : comptes et retrait, pour Import et Export
 js/elementsPicker.js   le groupe de cases à cocher de ces éléments (DOM), commun aux deux onglets

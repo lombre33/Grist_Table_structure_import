@@ -2,6 +2,9 @@
 
 export const $ = (id) => document.getElementById(id);
 
+/** The elements of the page whose ids are listed: `byIds({ list: "export-table-list" })` is `{ list: <that element> }`. */
+export const byIds = (ids) => Object.fromEntries(Object.entries(ids).map(([name, id]) => [name, $(id)]));
+
 export function el(tag, attrs = {}, children = []) {
   const node = document.createElement(tag);
   for (const [key, value] of Object.entries(attrs)) {
