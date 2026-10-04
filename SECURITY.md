@@ -228,7 +228,7 @@ GitHub Pages, `pages.yml`, ne part que s'il passe) :
   et l'interface complète.
 
 Les actions GitHub utilisées sont référencées par l'empreinte du commit d'une version
-précise (`actions/checkout@<40 caractères> # v4.4.0`...), non par une étiquette qu'un
+précise (`actions/checkout@<40 caractères> # v7.0.1`...), non par une étiquette qu'un
 dépôt peut déplacer ; `test/security.test.mjs` refuse toute action qui ne l'est pas, et
 `.github/dependabot.yml` demande chaque semaine la mise à jour de ces empreintes (et
 chaque mois celle des deux dépendances de développement, Playwright et axe-core).
