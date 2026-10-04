@@ -241,8 +241,12 @@ métadonnées est un élément que le groupe **Éléments à importer** laisse d
 1. Ouvrez l'onglet **Export**. La liste des tables de ce document se charge
    automatiquement (bouton **Actualiser la liste** pour la relire, sans perdre les tables
    déjà cochées).
-2. Cochez une ou plusieurs tables (la case **Tout cocher** les sélectionne toutes). Sous
-   la liste, le groupe **Éléments à exporter** liste ce que ces tables contiennent au-delà
+2. Cochez une ou plusieurs tables (la case **Tout cocher** les sélectionne toutes). Un champ
+   de recherche, au-dessus de la liste, filtre les tables au fil de la frappe (sans tenir
+   compte des majuscules, des accents ni de l'ordre des mots) : les tables cochées que la
+   recherche masque restent cochées, et exportées, ce que le champ rappelle ; la case du
+   dessus (**Cocher les tables affichées**) n'agit alors que sur celles qui le sont, et
+   **Échap** efface la recherche. Sous la liste, le groupe **Éléments à exporter** liste ce que ces tables contiennent au-delà
    du type de leurs colonnes (libellés, descriptions, listes de choix, options d'affichage,
    colonnes d'affichage, liens bidirectionnels, formules), avec le nombre de colonnes
    concernées. Tout est coché par défaut : décochez ce que le code ne doit pas contenir (le
@@ -471,6 +475,7 @@ js/importTab.js        onglet Import : câblage du DOM
 js/importer.js         logique de l'import sans DOM : résolution des colonnes, identifiants,
                        formules, création en un lot, puis détails et références bidirectionnelles
 js/exportTab.js        onglet Export
+js/search.js           recherche dans une liste : mots, casse et accents ignorés
 js/elements.js         éléments d'une colonne (libellés, choix, formules...) : comptes et retrait, pour Import et Export
 js/elementsPicker.js   le groupe de cases à cocher de ces éléments (DOM), commun aux deux onglets
 js/parser.js           lecture du code source (motifs fixes + scanner de parenthèses, jamais exécuté)

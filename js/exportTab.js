@@ -2,14 +2,19 @@ import { $, el, checklistItem, restoreFocus, statusWriter, syncMasterCheckbox } 
 import { fetchDocSchema, buildExportSchema, findReferencedTables, omitFromExport } from "./schema.js";
 import { elementCounts } from "./elements.js";
 import { elementsPicker } from "./elementsPicker.js";
+import { queryMatcher } from "./search.js";
 import { generateCode } from "./codeGenerator.js";
 import { callGrist, reportError } from "./util.js";
 import { t, tn, onLocaleChange } from "./i18n.js";
 
 export function initExportTab(grist) {
   const tableList = $("export-table-list");
+  const searchRow = $("export-search-row");
+  const searchInput = $("export-search");
+  const searchStatus = $("export-search-status");
   const selectAllRow = $("export-select-all-row");
   const selectAll = $("export-select-all");
+  const selectAllText = $("export-select-all-text");
   const tablesEmpty = $("export-tables-empty");
   const refreshBtn = $("refresh-tables-btn");
   const generateBtn = $("generate-btn");
@@ -46,8 +51,15 @@ export function initExportTab(grist) {
   generateBtn.addEventListener("click", onGenerate);
   copyBtn.addEventListener("click", onCopy);
   tableList.addEventListener("change", refresh);
+  searchInput.addEventListener("input", refresh);
+  searchInput.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && searchInput.value) {
+      searchInput.value = ""; // like the search fields of the browsers that clear them
+      refresh();
+    }
+  });
   selectAll.addEventListener("change", () => {
-    for (const input of tableList.querySelectorAll("input")) input.checked = selectAll.checked;
+    for (const input of tableList.querySelectorAll("li:not([hidden]) input")) input.checked = selectAll.checked; // those shown: the others are not in sight
     refresh();
   });
   includeBtn.addEventListener("click", onInclude);
@@ -67,9 +79,35 @@ export function initExportTab(grist) {
     return { referencedBy, ids, key: ids.join("\0") };
   }
 
+  /** Shows the tables the search holds (all of them when nothing is searched) and returns their boxes. */
+  function filterTables() {
+    const matches = queryMatcher(searchInput.value);
+    const shown = [];
+    for (const item of tableList.children) {
+      const box = item.querySelector("input");
+      item.hidden = !matches(box.value);
+      if (!item.hidden) shown.push(box);
+    }
+    return shown;
+  }
+
+  /** What the search found, written where it is typed and read by a screen reader, with the ticked tables it hides; nothing when nothing is searched. */
+  function renderSearchStatus(shown, ticked) {
+    const query = searchInput.value.trim();
+    const total = tableList.children.length;
+    const hiddenTicked = ticked - shown.filter((box) => box.checked).length;
+    const found = shown.length === 0 ? t("export.search.none", { query }) : tn("export.search.count", shown.length, { total });
+    const text = query && total > 0 ? [found, hiddenTicked > 0 && tn("export.search.hiddenTicked", hiddenTicked)].filter(Boolean).join(" ") : "";
+    if (searchStatus.textContent !== text) searchStatus.textContent = text; // a screen reader says again what is written again
+  }
+
   function refresh() {
+    const shown = filterTables();
     const ticked = selected().length;
-    syncMasterCheckbox(selectAll, ticked, tableList.querySelectorAll("input").length);
+    syncMasterCheckbox(selectAll, shown.filter((box) => box.checked).length, shown.length);
+    selectAll.disabled = shown.length === 0;
+    selectAllText.textContent = t(searchInput.value.trim() ? "export.selectAllShown" : "export.selectAll");
+    renderSearchStatus(shown, ticked);
     generateBtn.disabled = busy || ticked === 0;
     const columns = docSchema ? buildExportSchema(docSchema.tables, docSchema.allColumns, selected()).flatMap((table) => table.columns) : [];
     elementsBox.hidden = !showElements(elementCounts(columns), (element) => !omitted.has(element));
@@ -86,7 +124,7 @@ export function initExportTab(grist) {
   async function loadTables() {
     const kept = new Set(selected());
     setStatus(t("export.status.loading"));
-    outputBlock.hidden = tablesEmpty.hidden = selectAllRow.hidden = true;
+    outputBlock.hidden = tablesEmpty.hidden = searchRow.hidden = selectAllRow.hidden = true;
     dismissed = null;
     tableList.replaceChildren();
     setBusy(true);
@@ -94,7 +132,7 @@ export function initExportTab(grist) {
       docSchema = await callGrist(fetchDocSchema(grist));
       setStatus(null);
       tablesEmpty.hidden = docSchema.tables.length > 0;
-      selectAllRow.hidden = docSchema.tables.length === 0;
+      searchRow.hidden = selectAllRow.hidden = docSchema.tables.length === 0;
       tableList.replaceChildren(...docSchema.tables.map((table) => checklistItem(table.tableId, table.tableId, kept.has(table.tableId))));
     } catch (err) {
       setStatus(t("export.error.fetchTables", { error: reportError(err) }), "error");
@@ -125,6 +163,7 @@ export function initExportTab(grist) {
   function onInclude() {
     const { ids } = missingTables();
     for (const input of tableList.querySelectorAll("input")) if (ids.includes(input.value)) input.checked = true;
+    if (!ids.every(queryMatcher(searchInput.value))) searchInput.value = ""; // the tables just included are to be seen, whatever was searched
     refresh(); // the tables just included may refer to others
     if (refsBanner.hidden) generateBtn.focus({ preventScroll: true }); // the button that had the focus is gone with the banner
   }

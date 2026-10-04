@@ -272,6 +272,7 @@ label,
 
 textarea,
 input[type="text"],
+input[type="search"],
 select {
   width: 100%;
   border: 1.5px solid var(--field-border);
@@ -297,12 +298,18 @@ input[aria-invalid="true"] {
 }
 
 select,
-input[type="text"] {
+input[type="text"],
+input[type="search"] {
   font-family: var(--font-chrome);
+}
+
+input[type="search"] {
+  appearance: none;
 }
 
 textarea:focus,
 input[type="text"]:focus,
+input[type="search"]:focus,
 select:focus {
   outline: 2.5px solid var(--accent);
   outline-offset: 1px;
@@ -610,6 +617,16 @@ label + .hint {
   accent-color: var(--accent);
 }
 
+/* Export: the search of a table, above the list */
+
+.search {
+  margin: 0 0 10px;
+}
+
+#export-search-status:empty {
+  margin: 0;
+}
+
 /* The elements of the columns (labels, choices, formulas…) that Export and Import let the user leave out: a few short rows side by side. */
 
 .elements {
@@ -835,6 +852,7 @@ dialog#settings-dialog::backdrop {
 #columns-preview th,
 .table-id-entry label,
 .checklist span,
+#export-search-status,
 #warnings-list li,
 .field-error,
 .refs-list li {

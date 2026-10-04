@@ -195,10 +195,15 @@
 
     <div class="block">
       <h2 class="eyebrow" id="export-tables-label" data-i18n="export.step1.eyebrow">1. Tables à exporter</h2>
+      <div id="export-search-row" class="search" hidden>
+        <label class="sr-only" for="export-search" data-i18n="export.search.label">Rechercher une table</label>
+        <input type="search" id="export-search" autocomplete="off" spellcheck="false" aria-controls="export-table-list" placeholder="Rechercher une table…" data-i18n-placeholder="export.search.placeholder">
+        <p id="export-search-status" class="hint" aria-live="polite"></p>
+      </div>
       <div id="export-select-all-row" class="option" hidden>
         <label>
           <input type="checkbox" id="export-select-all">
-          <span data-i18n="export.selectAll">Tout cocher</span>
+          <span id="export-select-all-text" data-i18n="export.selectAll">Tout cocher</span>
         </label>
       </div>
       <ul id="export-table-list" class="checklist" aria-labelledby="export-tables-label"></ul>

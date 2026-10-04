@@ -70,6 +70,11 @@ const hidden = (page, id) => page.evaluate((target) => document.getElementById(t
 const count = (page, selector) => page.locator(selector).count();
 
 
+/** The tables of the Export tab that are shown, and those that are ticked (shown or not). */
+const shownTables = (page) => page.$$eval("#export-table-list li:not([hidden])", (items) => items.map((item) => item.textContent));
+const tickedTables = (page) => page.$$eval("#export-table-list input:checked", (boxes) => boxes.map((box) => box.value));
+const ALL_TABLES = ["Existing_Table", "Other_Table", "Standalone_Table"];
+
 /** Ticks a table of the Export tab, once its list is there. */
 const tick = async (page, tableId) => {
   await page.waitForSelector("#export-table-list input");
@@ -496,6 +501,8 @@ const TESTS = [
     await page.click("#generate-btn");
     await page.waitForSelector("#export-output-block:not([hidden])");
     assert.equal(await overflows(), false, "export");
+    await page.fill("#export-search", "Very_long_".repeat(12));
+    assert.equal(await overflows(), false, "a long search, said back");
   }],
 
   ["Accessibility: every checkbox of the preview is a target of at least 24 px, whatever its row", async (page) => {
@@ -621,6 +628,132 @@ const TESTS = [
     await tick(page, "Existing_Table");
     assert.equal(await page.getByRole("group", { name: "Éléments à exporter" }).count(), 1);
     assert.equal(await page.getByRole("checkbox", { name: /^Listes de choix 1 colonne$/ }).count(), 1);
+  }],
+
+  ["Export: typing a name narrows the list as it is typed, whatever the case or the order of the words", async (page) => {
+    await page.click("#tab-export");
+    await page.waitForSelector("#export-table-list input");
+    assert.equal(await hidden(page, "export-search-row"), false);
+    assert.deepEqual(await shownTables(page), ALL_TABLES);
+    assert.equal(await textOf(page, "#export-search-status"), "", "nothing is said about a search that is not made");
+
+    await page.fill("#export-search", "stand");
+    assert.deepEqual(await shownTables(page), ["Standalone_Table"]);
+    assert.equal(await textOf(page, "#export-search-status"), "1 table affichée sur 3.");
+    await page.fill("#export-search", "OTHER");
+    assert.deepEqual(await shownTables(page), ["Other_Table"]);
+    await page.fill("#export-search", "table ex");
+    assert.deepEqual(await shownTables(page), ["Existing_Table"], "the words in any order");
+    await page.fill("#export-search", "_t");
+    assert.deepEqual(await shownTables(page), ALL_TABLES);
+    assert.equal(await textOf(page, "#export-search-status"), "3 tables affichées sur 3.");
+    await page.fill("#export-search", "");
+    assert.deepEqual(await shownTables(page), ALL_TABLES);
+    assert.equal(await textOf(page, "#export-search-status"), "");
+  }],
+
+  ["Export: a search that finds nothing says so, and has nothing to tick; Escape clears it", async (page) => {
+    await page.click("#tab-export");
+    await page.waitForSelector("#export-table-list input");
+    await page.fill("#export-search", "zzz");
+    assert.deepEqual(await shownTables(page), []);
+    assert.equal(await textOf(page, "#export-search-status"), "Aucune table ne correspond à « zzz ».");
+    assert.equal(await page.isDisabled("#export-select-all"), true);
+
+    // an event of our own, which no browser answers by clearing the field itself: only the widget can
+    await page.evaluate(() => document.getElementById("export-search").dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    assert.equal(await page.inputValue("#export-search"), "");
+    assert.deepEqual(await shownTables(page), ALL_TABLES);
+    assert.equal(await page.isDisabled("#export-select-all"), false);
+
+    await page.fill("#export-search", "stand");
+    await page.press("#export-search", "Escape");
+    assert.equal(await page.inputValue("#export-search"), "", "and the key itself");
+  }],
+
+  ["Export: the tables ticked that a search hides stay ticked, are said, and are exported; the box on top ticks only what is shown", async (page) => {
+    await page.click("#tab-export");
+    await tick(page, "Existing_Table");
+    await page.fill("#export-search", "stand");
+    assert.equal(await textOf(page, "#export-search-status"), "1 table affichée sur 3. 1 table cochée est masquée.");
+    assert.equal(await textOf(page, "#export-select-all-text"), "Cocher les tables affichées");
+
+    await page.check("#export-select-all");
+    assert.deepEqual(await tickedTables(page), ["Existing_Table", "Standalone_Table"], "Other_Table, which is hidden, is not ticked with them");
+    assert.equal(await page.isChecked("#export-select-all"), true, "all that is shown is ticked");
+    await page.uncheck("#export-select-all");
+    assert.deepEqual(await tickedTables(page), ["Existing_Table"], "nor is Existing_Table unticked, which is hidden");
+
+    await page.check("#export-select-all");
+    await page.click("#generate-btn");
+    await page.waitForSelector("#export-output-block:not([hidden])");
+    const code = await page.inputValue("#export-output");
+    assert.deepEqual(["class Existing_Table", "class Standalone_Table", "class Other_Table"].map((text) => code.includes(text)), [true, true, false]);
+
+    await page.fill("#export-search", "");
+    assert.equal(await textOf(page, "#export-select-all-text"), "Tout cocher");
+    assert.equal(await page.evaluate(() => document.getElementById("export-select-all").indeterminate), true, "two of three");
+  }],
+
+  ["Export: the search stays when the list is read again, and follows the language", async (page) => {
+    await page.click("#tab-export");
+    await page.waitForSelector("#export-table-list input");
+    await page.fill("#export-search", "stand");
+    await page.click("#refresh-tables-btn");
+    await page.waitForFunction(() => !document.getElementById("refresh-tables-btn").disabled);
+    assert.deepEqual(await shownTables(page), ["Standalone_Table"]);
+    assert.equal(await page.inputValue("#export-search"), "stand");
+
+    await page.click("#settings-btn");
+    await page.click('label.segmented-option:has(input[value="en"])');
+    assert.equal(await textOf(page, "#export-search-status"), "1 table shown of 3.");
+    assert.equal(await textOf(page, "#export-select-all-text"), "Select the tables shown");
+    assert.equal(await page.getAttribute("#export-search", "placeholder"), "Search tables…");
+    await page.click("#settings-close-btn");
+    await page.fill("#export-search", "zzz");
+    assert.equal(await textOf(page, "#export-search-status"), "No table matches “zzz”.");
+  }],
+
+  ["Export: the tables the banner asks to include are shown, whatever was searched", async (page) => {
+    await page.click("#tab-export");
+    await tick(page, "Existing_Table");
+    await page.fill("#export-search", "exist");
+    assert.deepEqual(await shownTables(page), ["Existing_Table"]);
+    await page.click("#refs-include-btn");
+    assert.equal(await page.inputValue("#export-search"), "", "Other_Table, just ticked, was hidden");
+    assert.deepEqual(await shownTables(page), ALL_TABLES);
+    assert.deepEqual(await tickedTables(page), ["Existing_Table", "Other_Table"]);
+  }],
+
+  ["Export: a search that shows the tables included keeps what was typed", async (page) => {
+    await page.click("#tab-export");
+    await tick(page, "Existing_Table");
+    await page.fill("#export-search", "table");
+    await page.click("#refs-include-btn");
+    assert.equal(await page.inputValue("#export-search"), "table");
+    assert.deepEqual(await tickedTables(page), ["Existing_Table", "Other_Table"]);
+  }],
+
+  ["Export: what a search writes is text, never markup, and has no effect on the page", async (page) => {
+    await page.click("#tab-export");
+    await page.waitForSelector("#export-table-list input");
+    await page.fill("#export-search", "<img src=x onerror=alert(1)>");
+    assert.equal(await textOf(page, "#export-search-status"), "Aucune table ne correspond à « <img src=x onerror=alert(1)> ».");
+    assert.equal(await count(page, "#export-search-status img"), 0);
+  }],
+
+  ["Accessibility: the search field has a name, and its result is announced", async (page) => {
+    await page.click("#tab-export");
+    await page.waitForSelector("#export-table-list input");
+    assert.equal(await page.getByRole("searchbox", { name: "Rechercher une table" }).count(), 1);
+    assert.equal(await page.getAttribute("#export-search-status", "aria-live"), "polite");
+    await page.evaluate(() => {
+      window.writes = 0;
+      new MutationObserver((records) => (window.writes += records.length)).observe(document.getElementById("export-search-status"), { childList: true, characterData: true, subtree: true });
+    });
+    await page.fill("#export-search", "stand");
+    await page.fill("#export-search", "standa");
+    assert.equal(await page.evaluate(() => window.writes), 1, "typing more of the same finding does not have it said again");
   }],
 
   ["Export: a failed copy says what to do instead, in a message of its own", async (page) => {
@@ -837,6 +970,23 @@ const SCREENS = [
       await page.locator("#export-table-list li", { hasText: "Existing_Table" }).locator("input").check();
       await page.click("#generate-btn");
       await page.waitForSelector("#export-output-block:not([hidden])");
+    },
+  ],
+  [
+    "the Export tab searched for a table, with a ticked table that the search hides",
+    async (page) => {
+      await page.click("#tab-export");
+      await page.waitForSelector("#export-table-list input");
+      await page.locator("#export-table-list li", { hasText: "Existing_Table" }).locator("input").check();
+      await page.fill("#export-search", "stand");
+    },
+  ],
+  [
+    "the Export tab searched for a table that is not there",
+    async (page) => {
+      await page.click("#tab-export");
+      await page.waitForSelector("#export-table-list input");
+      await page.fill("#export-search", "zzz");
     },
   ],
   ["the Réglages dialog", async (page) => page.click("#settings-btn")],
