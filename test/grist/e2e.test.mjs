@@ -2,7 +2,7 @@
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { launchWidget } from "../browser/widgetPage.mjs";
-import { analyse, apply, choice, offered, previewRows, warnings } from "../browser/driver.mjs";
+import { analyse, apply, isElementKept, keepElement, leaveOutElement, offered, previewRows, warnings } from "../browser/driver.mjs";
 import { instance, column, columnRef, addTable, buildSource, expectedAfterImport, snapshot, tableDescriptions } from "./support.mjs";
 
 const widget = await launchWidget();
@@ -46,11 +46,11 @@ test("a real Code View with formulas: left out by default, created and computed 
   inWidget(async (page, doc) => {
     const text = "@grist.UserTable\nclass Calc:\n  A = grist.Int()\n\n  def _default_Start(rec, table, value, user):\n    return rec.A + 100\n  Start = grist.Int()\n\n  @grist.formulaType(grist.Int())\n  def Double(rec, table):\n    return rec.A * 2\n";
     await analyse(page, text);
-    assert.equal(await page.getByRole("checkbox", { name: /Formules/ }).isChecked(), false);
+    assert.equal(await isElementKept(page, "import", "Formules"), false);
     assert.deepEqual(await previewRows(page), ["AEntier", "StartEntier formule de déclenchement", "DoubleEntier formule"]);
     assert.match((await warnings(page)).join(" "), /créées vides : Start, Double/);
 
-    await page.getByRole("checkbox", { name: /Formules/ }).check();
+    await keepElement(page, "import", "Formules");
     assert.deepEqual(await warnings(page), []);
     await apply(page);
     assert.deepEqual((await snapshot(doc)).Calc.map((col) => [col.id, col.isFormula, col.formula]), [["A", false, ""], ["Start", false, "rec.A + 100"], ["Double", true, "rec.A * 2"]]);
@@ -195,8 +195,8 @@ test("elements left out in the Export tab, then others in the Import tab, are mi
     "[x] Liens bidirectionnels (2 colonnes)",
     "[x] Formules (1 colonne)",
   ]);
-  await choice(exporter, "export", "Descriptions des colonnes").uncheck();
-  await choice(exporter, "export", "Formules").uncheck();
+  await leaveOutElement(exporter, "export", "Descriptions des colonnes");
+  await leaveOutElement(exporter, "export", "Formules");
   await exporter.click("#generate-btn");
   await exporter.waitForFunction(() => document.getElementById("export-output").value.includes("class Members"));
   const text = await exporter.inputValue("#export-output");
@@ -219,7 +219,7 @@ test("elements left out in the Export tab, then others in the Import tab, are mi
       "[x] Colonne affichée des références (1 colonne)",
       "[x] Liens bidirectionnels (2 colonnes)",
     ]); // only what the text has
-    await choice(page, "import", "Liens bidirectionnels").uncheck();
+    await leaveOutElement(page, "import", "Liens bidirectionnels");
     assert.match(await apply(page), /^2 tables créées \(Members, Teams\)/);
 
     const after = await snapshot(target);
@@ -235,7 +235,7 @@ test("an existing table: columns are matched ignoring case, and only the new one
   inWidget(async (page, doc) => {
     await addTable(doc, "Contacts", [column("Name"), column("Email")]);
     await analyse(page, "@grist.UserTable\nclass X:\n  name = grist.Text()\n  Age = grist.Int(description='Years')\n  EMAIL = grist.Text()\n");
-    await page.click('label.mode-card:has(input[value="existing"])');
+    await page.click('label.segmented-option:has(input[value="existing"])');
     await page.selectOption("#target-table-select", { label: "Contacts" });
     assert.deepEqual(await previewRows(page), ["nameTexteDéjà présente", "AgeEntierNouvelle", "EMAILTexteDéjà présente"]);
 

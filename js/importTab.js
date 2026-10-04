@@ -3,10 +3,10 @@
  * The tab is made of its elements (importUi), what it holds (importState), what it shows (importView) and what it does (importFlow).
  */
 
-import { statusWriter, syncCheckedClass } from "./dom.js";
+import { statusWriter } from "./dom.js";
 import { elementsPicker } from "./elementsPicker.js";
 import { t, onLocaleChange } from "./i18n.js";
-import { importUi } from "./importUi.js";
+import { importUi, markChosenMode } from "./importUi.js";
 import { freshExisting, freshState, toggleElement } from "./importState.js";
 import { onChecklistChange, onModeChange, onSelectAll, render, renderExisting, updateModeUI } from "./importView.js";
 import { analyze, apply, clearAll, clearResults } from "./importFlow.js";
@@ -28,10 +28,10 @@ export function initImportTab(grist) {
       toggleElement(ctx.state, element, kept);
       ctx.render();
     },
-    { formulas: "formulas-hint" }
+    { describedBy: { formulas: "formulas-hint" }, summary: ui.elementsSummary }
   );
   wire(ctx);
-  syncCheckedClass(ui.modeRadios, "is-checked", ".mode-card");
+  markChosenMode(ui);
   updateModeUI(ctx);
 }
 
@@ -40,8 +40,9 @@ function wire(ctx) {
   const { ui, state } = ctx;
   ui.analyzeBtn.addEventListener("click", () => analyze(ctx));
   ui.clearBtn.addEventListener("click", () => clearAll(ctx));
-  ui.sourceInput.addEventListener("input", () => {
+  ui.sourceInput.addEventListener("input", (event) => {
     if (state.parsed.length > 0 && !state.busy) clearResults(ctx); // what is shown is no longer what is written
+    if (event.inputType === "insertFromPaste" && !state.busy && ui.sourceInput.value.trim()) analyze(ctx); // a pasted code has nothing more to wait for
   });
   ui.sourceSelect.addEventListener("change", () => {
     state.existing = freshExisting(Number(ui.sourceSelect.value));

@@ -2,7 +2,7 @@
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { launchWidget } from "../browser/widgetPage.mjs";
-import { analyse, apply } from "../browser/driver.mjs";
+import { analyse, apply, keepElement } from "../browser/driver.mjs";
 import { instance, rows, column, addTable, buildSource, snapshot, tableDescriptions } from "./support.mjs";
 
 const widget = await launchWidget();
@@ -72,7 +72,7 @@ test("Export in one document, Import in another, both through Grist's own interf
   const target = await instance.newDoc("in Grist: target");
   const importer = await openWidgetIn(target);
   await analyse(importer.frame, text);
-  await importer.frame.getByRole("checkbox", { name: /Formules/ }).check();
+  await keepElement(importer.frame, "import", "Formules");
   assert.match(await apply(importer.frame), /^2 tables créées \(Members, Teams\)/);
   assert.deepEqual(importer.errors, []);
   await importer.page.close();
@@ -90,7 +90,7 @@ test("columns added to an existing table show up in its page", async () => {
   await addTable(doc, "Contacts", [column("Name")]);
   const { frame, page, errors } = await openWidgetIn(doc);
   await analyse(frame, "@grist.UserTable\nclass X:\n  name = grist.Text()\n  Email = grist.Text(description='Pro')\n");
-  await frame.click('label.mode-card:has(input[value="existing"])');
+  await frame.click('label.segmented-option:has(input[value="existing"])');
   await frame.selectOption("#target-table-select", { label: "Contacts" });
   assert.equal(await apply(frame), "1 colonne ajoutée à « Contacts ».");
   assert.deepEqual(errors, []);

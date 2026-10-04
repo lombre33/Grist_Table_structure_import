@@ -4,13 +4,13 @@
  */
 
 import { parseGristSchema } from "./parser.js";
-import { el, checklistItem, restoreFocus, syncCheckedClass } from "./dom.js";
+import { el, checklistItem, restoreFocus } from "./dom.js";
 import { fetchDocSchema } from "./schema.js";
 import { addColumns, createTables } from "./importer.js";
 import { sumCounts } from "./elements.js";
 import { callGrist, reportError } from "./util.js";
 import { t, tn } from "./i18n.js";
-import { modeOf } from "./importUi.js";
+import { markChosenMode, modeOf } from "./importUi.js";
 import { batchOf, newEntry, resetState, withFormulas } from "./importState.js";
 import { fillTargetSelect, render, renderElements, renderTableIds, renderWarnings, targetTable, updateModeUI } from "./importView.js";
 
@@ -54,7 +54,7 @@ function showNothingFound(ctx) {
   for (const list of [ui.columnsBody, ui.tableIdsList, ui.checklist]) list.replaceChildren();
   ui.sourcePickerRow.hidden = ui.checklistRow.hidden = ui.tableIdRow.hidden = ui.targetRow.hidden = true;
   ui.actionBtn.disabled = true;
-  ui.previewHeading.textContent = t("import.step3.none");
+  ui.previewHeading.textContent = t("import.step2.none");
   renderElements(ctx, sumCounts([]));
   renderWarnings(ctx);
   ui.announcement.textContent = t("import.announce.none");
@@ -91,7 +91,7 @@ export function clearAll(ctx) {
   const { ui } = ctx;
   ui.sourceInput.value = "";
   for (const radio of ui.modeRadios) radio.checked = radio.value === "create";
-  syncCheckedClass(ui.modeRadios, "is-checked", ".mode-card");
+  markChosenMode(ui);
   clearResults(ctx);
   ui.sourceInput.focus();
 }

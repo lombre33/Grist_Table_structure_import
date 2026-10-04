@@ -65,7 +65,7 @@ test("the French written in the markup is the dictionary's, so nothing changes w
     assert.equal(tidy(decode(text)), tidy(STRINGS.fr[key]), key);
     checked++;
   }
-  for (const [tag, kind, key] of html.matchAll(/<[^>]*data-i18n-(aria-label|placeholder)="([^"]+)"[^>]*>/g).map((match) => [match[0], match[1], match[2]])) {
+  for (const [tag, kind, key] of html.matchAll(/<[^>]*data-i18n-(aria-label|placeholder|title)="([^"]+)"[^>]*>/g).map((match) => [match[0], match[1], match[2]])) {
     assert.equal(tidy(decode(tag.match(new RegExp(`(?<=\\s)${kind}="([^"]*)"`))[1])), tidy(STRINGS.fr[key]), key);
     checked++;
   }

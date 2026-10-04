@@ -58,13 +58,24 @@ function recordTable(metadata, tableId) {
   sections.description.push("");
 }
 
-export function fakeGrist({ delay = 0 } = {}) {
+/** The tables of `metadata` whose id is not in `only` are gone (their columns stay, which nothing reads). */
+function keepOnly(metadata, only) {
+  const tables = metadata._grist_Tables;
+  const kept = tables.tableId.map((tableId) => only.includes(tableId));
+  for (const key of Object.keys(tables)) tables[key] = tables[key].filter((_, i) => kept[i]);
+}
+
+/** `extraTables` more tables (Ledger_1, Ledger_2…), without a column, for a long list; `onlyTables` lists the ids of the tables the document has, for a short one. */
+export function fakeGrist({ delay = 0, extraTables = 0, onlyTables = null } = {}) {
   const calls = [];
   const metadata = structuredClone({ _grist_Tables: TABLES, _grist_Tables_column: COLUMNS, _grist_Views_section: SECTIONS });
+  if (onlyTables) keepOnly(metadata, onlyTables);
+  const extraIds = Array.from({ length: extraTables }, (_, i) => `Ledger_${i + 1}`);
+  for (const tableId of extraIds) recordTable(metadata, tableId);
   return {
     calls,
     docApi: {
-      listTables: async () => TABLES.tableId,
+      listTables: async () => [...TABLES.tableId, ...extraIds],
       fetchTable: async (tableId) => metadata[tableId] ?? Promise.reject(new Error(`unstubbed fetchTable(${tableId})`)),
       applyUserActions: async (actions) => {
         calls.push(actions);

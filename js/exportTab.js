@@ -17,7 +17,7 @@ import { createRefsBanner, missingTables } from "./exportRefs.js";
 import { createOutput } from "./exportOutput.js";
 
 export function initExportTab(grist) {
-  const ui = byIds({ refreshBtn: "refresh-tables-btn", generateBtn: "generate-btn", elementsBox: "export-elements" });
+  const ui = byIds({ refreshBtn: "refresh-tables-btn", generateBtn: "generate-btn", elementsBox: "export-elements", elementsSummary: "export-elements-state" });
   const setStatus = statusWriter($("export-status-region"));
   if (!grist) {
     ui.refreshBtn.disabled = true;
@@ -29,10 +29,15 @@ export function initExportTab(grist) {
   // omitted: the elements (see elements.js) the user leaves out of the code
   const state = { docSchema: null, loaded: false, busy: false, omitted: new Set() };
   const ctx = { grist, ui, setStatus, state, output: createOutput() };
-  ctx.showElements = elementsPicker($("export-elements-list"), (element, kept) => {
-    if (kept) state.omitted.delete(element);
-    else state.omitted.add(element);
-  });
+  ctx.showElements = elementsPicker(
+    $("export-elements-list"),
+    (element, kept) => {
+      if (kept) state.omitted.delete(element);
+      else state.omitted.add(element);
+      refresh(ctx); // the summary of the choice
+    },
+    { summary: ui.elementsSummary }
+  );
   ctx.tables = createTableList({ onChange: () => refresh(ctx) });
   ctx.banner = createRefsBanner({ onInclude: () => include(ctx), onDismiss: () => dismiss(ctx) });
 

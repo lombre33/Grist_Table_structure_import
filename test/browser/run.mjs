@@ -8,7 +8,7 @@ import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { launchWidget } from "./widgetPage.mjs";
 import { fakeGrist } from "./fakeGrist.mjs";
-import { analyse, apply, choice, description, offered, previewRows, textOf, warnings } from "./driver.mjs";
+import { analyse, apply, choice, description, isElementKept, keepElement, leaveOutElement, offered, previewRows, textOf, unfold, warnings } from "./driver.mjs";
 import { violations } from "./a11y.mjs";
 
 const MULTI = `import grist
@@ -74,6 +74,8 @@ const count = (page, selector) => page.locator(selector).count();
 const shownTables = (page) => page.$$eval("#export-table-list li:not([hidden])", (items) => items.map((item) => item.textContent));
 const tickedTables = (page) => page.$$eval("#export-table-list input:checked", (boxes) => boxes.map((box) => box.value));
 const ALL_TABLES = ["Existing_Table", "Other_Table", "Standalone_Table"];
+/** The same with five more tables (`extraTables: 5`): enough for the search to be offered. */
+const EVERY_TABLE = ["Existing_Table", "Ledger_1", "Ledger_2", "Ledger_3", "Ledger_4", "Ledger_5", "Other_Table", "Standalone_Table"];
 
 /** Clicks Générer le code and returns the code, once it is written. */
 const generate = async (page) => {
@@ -121,7 +123,7 @@ const TESTS = [
 
   ["Import: an existing table gets AddVisibleColumn, never the plain AddColumn", async (page, grist) => {
     await analyse(page, "@grist.UserTable\nclass X:\n  NewCol = grist.Text()\n");
-    await page.click('label.mode-card:has(input[value="existing"])');
+    await page.click('label.segmented-option:has(input[value="existing"])');
     await page.selectOption("#target-table-select", { label: "Existing_Table" });
     await apply(page);
     assert.deepEqual(grist.calls.flat().map(([name]) => name), ["AddVisibleColumn"]);
@@ -190,7 +192,7 @@ const TESTS = [
 
   ["Import: a column already in the table cannot be ticked, and is not counted", async (page) => {
     await analyse(page, "@grist.UserTable\nclass X:\n  Name = grist.Text()\n  Fresh = grist.Text()\n");
-    await page.click('label.mode-card:has(input[value="existing"])');
+    await page.click('label.segmented-option:has(input[value="existing"])');
     await page.selectOption("#target-table-select", { label: "Existing_Table" });
     assert.equal(await page.locator("#columns-preview-body input:disabled").count(), 1);
     assert.equal(await textOf(page, "#action-btn"), "Ajouter 1 colonne à « Existing_Table »", "the button names what it will change");
@@ -199,7 +201,7 @@ const TESTS = [
   ["Import: a column already in the table raises no note, since it is not imported", async (page) => {
     await analyse(page, "@grist.UserTable\nclass X:\n  Name = grist.Mystery()\n\n  @grist.formulaType(grist.Int())\n  def Computed(rec, table):\n    return 1\n  Fresh = grist.Text()\n");
     assert.equal((await warnings(page)).length, 2, "to create the table, both are noted");
-    await page.click('label.mode-card:has(input[value="existing"])');
+    await page.click('label.segmented-option:has(input[value="existing"])');
     await page.selectOption("#target-table-select", { label: "Existing_Table" });
     assert.deepEqual(await warnings(page), [], "Name and Computed are in Existing_Table already");
   }],
@@ -207,14 +209,14 @@ const TESTS = [
   ["Import: the formulas option goes with the tables, and is unticked at every analysis", async (page, grist) => {
     await analyse(page, WITH_FORMULA);
     assert.equal(await hidden(page, "import-elements"), false);
-    await choice(page, "import", "Formules").check();
+    await keepElement(page, "import", "Formules");
     await analyse(page, WITH_FORMULA);
-    assert.equal(await choice(page, "import", "Formules").isChecked(), false, "what was decided for a text that is no longer there");
-    await choice(page, "import", "Formules").check();
+    assert.equal(await isElementKept(page, "import", "Formules"), false, "what was decided for a text that is no longer there");
+    await keepElement(page, "import", "Formules");
     await analyse(page, "nothing to read here");
     assert.equal(await hidden(page, "import-elements"), true);
     await analyse(page, WITH_FORMULA);
-    assert.equal(await choice(page, "import", "Formules").isChecked(), false);
+    assert.equal(await isElementKept(page, "import", "Formules"), false);
     await apply(page);
     assert.deepEqual(grist.calls[0][0][2].map((col) => [col.id, col.isFormula]), [["A", false], ["Double", false]]);
   }],
@@ -239,7 +241,7 @@ const TESTS = [
       throw new Error("unreadable");
     };
     await analyse(page, MULTI);
-    await page.click('label.mode-card:has(input[value="existing"])');
+    await page.click('label.segmented-option:has(input[value="existing"])');
     assert.equal(await textOf(page, "#target-table-error"), "Impossible de charger la liste des tables de ce document.");
     await page.click("#settings-btn");
     await page.click('label.segmented-option:has(input[value="en"])');
@@ -294,11 +296,12 @@ const TESTS = [
 
     await analyse(page, WITH_FORMULA);
     assert.equal(await hidden(page, "import-elements"), false);
+    await unfold(page, "import");
     assert.equal(await page.getByRole("checkbox", { name: /Formules/ }).isChecked(), false);
     assert.match(await textOf(page, "#warnings-list"), /créées vides : Double/);
     assert.deepEqual(await previewRows(page), ["AEntier", "DoubleEntier formule"]);
 
-    await choice(page, "import", "Formules").check();
+    await keepElement(page, "import", "Formules");
     assert.equal(await hidden(page, "warnings-block"), true, "nothing is lost, so nothing is said");
     await apply(page);
     const [[, , columns]] = grist.calls[0];
@@ -318,10 +321,10 @@ const TESTS = [
 
   ["Import: the formulas of an existing table's new columns follow the same option", async (page, grist) => {
     await analyse(page, WITH_FORMULA.replace("A = grist.Int()", "Fresh = grist.Int()"));
-    await page.click('label.mode-card:has(input[value="existing"])');
+    await page.click('label.segmented-option:has(input[value="existing"])');
     await page.selectOption("#target-table-select", { label: "Existing_Table" });
     assert.equal(await hidden(page, "import-elements"), false);
-    await choice(page, "import", "Formules").check();
+    await keepElement(page, "import", "Formules");
     await apply(page);
     const added = grist.calls.flat().map(([name, , id, payload]) => [name, id, payload.isFormula, payload.formula]);
     assert.deepEqual(added, [["AddVisibleColumn", "Fresh", false, ""], ["AddVisibleColumn", "Double", true, "rec.A * 2"]]);
@@ -377,8 +380,8 @@ const TESTS = [
 
   ["Import: the choices made stay while the preview changes, and are made again at every analysis", async (page) => {
     await analyse(page, ALL_ELEMENTS);
-    await choice(page, "import", "Libellés").uncheck();
-    await choice(page, "import", "Formules").check();
+    await leaveOutElement(page, "import", "Libellés");
+    await keepElement(page, "import", "Formules");
     await page.locator("#table-multi-select input").nth(1).uncheck();
     await page.locator("#table-multi-select input").nth(1).check();
     assert.deepEqual((await offered(page, "import")).filter((item) => /Libellés|Formules/.test(item)), ["[ ] Libellés (1 colonne)", "[x] Formules (1 colonne)"]);
@@ -389,8 +392,8 @@ const TESTS = [
 
   ["Import: an element left out is not created, and the others are", async (page, grist) => {
     await analyse(page, ALL_ELEMENTS);
-    await choice(page, "import", "Listes de choix").uncheck();
-    await choice(page, "import", "Libellés").uncheck();
+    await leaveOutElement(page, "import", "Listes de choix");
+    await leaveOutElement(page, "import", "Libellés");
     await apply(page);
     const [[, , tasks], [, , people]] = grist.calls[0];
     assert.deepEqual(tasks.map((col) => [col.id, col.label, col.widgetOptions && JSON.parse(col.widgetOptions)]), [["Title", "Title", undefined], ["Status", "Status", { alignment: "center" }], ["Owner", "Owner", undefined], ["Late", "Late", undefined]]);
@@ -401,7 +404,7 @@ const TESTS = [
 
   ["Import: with every element left out, only the id and the type of each column are sent", async (page, grist) => {
     await analyse(page, ALL_ELEMENTS);
-    for (const name of EVERY_ELEMENT.slice(0, 6)) await choice(page, "import", name).uncheck();
+    for (const name of EVERY_ELEMENT.slice(0, 6)) await leaveOutElement(page, "import", name);
     assert.equal(await hidden(page, "warnings-block"), false, "the formulas are still said to be created empty");
     assert.equal(await page.getByText("Références bidirectionnelles créées comme références simples").count(), 0, "a link that was left out is no plain reference that was meant to be a link");
     await apply(page);
@@ -413,7 +416,7 @@ const TESTS = [
   ["Import: an existing table's elements are those of the columns that will be added", async (page) => {
     await analyse(page, "@grist.UserTable\nclass X:\n  Name = grist.Text(label='Nom')\n  Fresh = grist.Text(description='Neuve')\n");
     assert.deepEqual(await offered(page, "import"), ["[x] Libellés (1 colonne)", "[x] Descriptions des colonnes (1 colonne)"]);
-    await page.click('label.mode-card:has(input[value="existing"])');
+    await page.click('label.segmented-option:has(input[value="existing"])');
     await page.selectOption("#target-table-select", { label: "Existing_Table" });
     assert.deepEqual(await offered(page, "import"), ["[x] Descriptions des colonnes (1 colonne)"], "Name is in the table already: its label is not imported");
     await page.selectOption("#target-table-select", { label: "Standalone_Table" });
@@ -422,10 +425,10 @@ const TESTS = [
 
   ["Import: the elements left out are not added to an existing table either", async (page, grist) => {
     await analyse(page, "@grist.UserTable\nclass X:\n  Fresh = grist.Choice(choices=['a'], label='Nouvelle', description='Une note', widget_options='{\"alignment\":\"center\"}')\n");
-    await page.click('label.mode-card:has(input[value="existing"])');
+    await page.click('label.segmented-option:has(input[value="existing"])');
     await page.selectOption("#target-table-select", { label: "Existing_Table" });
-    await choice(page, "import", "Listes de choix").uncheck();
-    await choice(page, "import", "Libellés").uncheck();
+    await leaveOutElement(page, "import", "Listes de choix");
+    await leaveOutElement(page, "import", "Libellés");
     await apply(page);
     const [[[, , id, payload]], followUp] = grist.calls;
     assert.deepEqual([id, payload.label, JSON.parse(payload.widgetOptions)], ["Fresh", "Fresh", { alignment: "center" }]);
@@ -435,14 +438,14 @@ const TESTS = [
   ["Import: a reference to a table that is nowhere offers neither its display column nor its link", async (page) => {
     await analyse(page, ALL_ELEMENTS);
     await page.locator("#table-multi-select input").nth(1).uncheck();
-    await page.click('label.mode-card:has(input[value="existing"])');
+    await page.click('label.segmented-option:has(input[value="existing"])');
     await page.selectOption("#target-table-select", { label: "Standalone_Table" });
     assert.deepEqual((await offered(page, "import")).filter((item) => /affichée|bidirectionnels|Format/.test(item)), ["[x] Format des cellules (1 colonne)"], "Owner became Any: it has neither");
   }],
 
   ["Import: the elements are named in the language of the page, and keep their ticks when it changes", async (page) => {
     await analyse(page, ALL_ELEMENTS);
-    await choice(page, "import", "Libellés").uncheck();
+    await leaveOutElement(page, "import", "Libellés");
     await page.click("#settings-btn");
     await page.click('label.segmented-option:has(input[value="en"])');
     assert.deepEqual(await offered(page, "import"), [
@@ -454,7 +457,7 @@ const TESTS = [
       "[x] Two-way links (2 columns)",
       "[ ] Formulas (1 column)",
     ]);
-    assert.equal(await textOf(page, "#import-elements legend"), "Elements to import");
+    assert.equal(await textOf(page, "#import-elements-title"), "Elements to import");
   }],
 
   ["Import: two-way references created together are marked, and one left alone is said to become a plain reference", async (page) => {
@@ -498,8 +501,10 @@ const TESTS = [
     await analyse(page, RICH_SOURCE);
     assert.equal(await overflows(), false, "preview");
     await analyse(page, ALL_ELEMENTS);
-    assert.equal(await overflows(), false, "preview with every element");
-    await page.click('label.mode-card:has(input[value="existing"])');
+    assert.equal(await overflows(), false, "preview with every element, folded");
+    await unfold(page, "import");
+    assert.equal(await overflows(), false, "preview with every element, unfolded");
+    await page.click('label.segmented-option:has(input[value="existing"])');
     await page.selectOption("#target-table-select", { label: "Existing_Table" });
     assert.equal(await overflows(), false, "existing table");
     await page.click("#tab-export");
@@ -510,7 +515,7 @@ const TESTS = [
     assert.equal(await overflows(), false, "export");
     await page.fill("#export-search", "Very_long_".repeat(12));
     assert.equal(await overflows(), false, "a long search, said back");
-  }],
+  }, { extraTables: 5 }],
 
   ["Accessibility: every checkbox of the preview is a target of at least 24 px, whatever its row", async (page) => {
     await analyse(page, MULTI);
@@ -519,6 +524,7 @@ const TESTS = [
     for (const [width, height] of sizes) assert.ok(width >= 24 && height >= 24, `${width} x ${height}`);
 
     await analyse(page, ALL_ELEMENTS);
+    await unfold(page, "import");
     const boxes = await page.$$eval("#import-elements-list li:not([hidden]) label", (labels) => labels.map((label) => [label.offsetWidth, label.offsetHeight]));
     assert.equal(boxes.length, 7);
     for (const [width, height] of boxes) assert.ok(width >= 24 && height >= 24, `${width} x ${height}`);
@@ -597,42 +603,45 @@ const TESTS = [
     const everything = await generate();
     for (const [name, written] of Object.entries(WRITTEN)) assert.ok(everything.includes(written), `${name} is written by default`);
 
-    await choice(page, "export", "Formules").uncheck();
-    await choice(page, "export", "Colonne affichée des références").uncheck();
+    await leaveOutElement(page, "export", "Formules");
+    await leaveOutElement(page, "export", "Colonne affichée des références");
     const text = await generate();
     for (const [name, written] of Object.entries(WRITTEN)) assert.equal(text.includes(written), !["Formules", "Colonne affichée des références"].includes(name), name);
     assert.match(text, /\n {2}Computed = grist\.Numeric\(\)\n/, "the column is still there, as plain data");
 
-    for (const name of Object.keys(WRITTEN)) await choice(page, "export", name).uncheck();
+    for (const name of Object.keys(WRITTEN)) await leaveOutElement(page, "export", name);
     assert.match(await generate(), /class Existing_Table:\n {2}Name = grist\.Text\(\)\n {2}Age = grist\.Int\(\)\n {2}Mood = grist\.Choice\(\)\n {2}Owner = grist\.Reference\('Other_Table'\)\n {2}Computed = grist\.Numeric\(\)\n/, "the types alone, the columns that were formulas last as in Code View");
   }],
 
   ["Export: the choices made stay when the tables ticked change, when the list is read again and when the language changes", async (page) => {
     await page.click("#tab-export");
     await tick(page, "Existing_Table");
-    await choice(page, "export", "Formules").uncheck();
+    await leaveOutElement(page, "export", "Formules");
     await tick(page, "Standalone_Table");
     await page.locator("#export-table-list li", { hasText: "Existing_Table" }).locator("input").uncheck();
     assert.equal(await hidden(page, "export-elements"), true);
     await page.locator("#export-table-list li", { hasText: "Existing_Table" }).locator("input").check();
     await page.click("#refresh-tables-btn");
     await page.waitForFunction(() => !document.getElementById("refresh-tables-btn").disabled);
-    assert.equal(await choice(page, "export", "Formules").isChecked(), false);
-    assert.equal(await choice(page, "export", "Libellés").isChecked(), true);
+    assert.equal(await isElementKept(page, "export", "Formules"), false);
+    assert.equal(await isElementKept(page, "export", "Libellés"), true);
 
     await page.click("#settings-btn");
     await page.click('label.segmented-option:has(input[value="en"])');
     assert.deepEqual((await offered(page, "export")).filter((item) => /Formulas|Labels/.test(item)), ["[x] Labels (1 column)", "[ ] Formulas (1 column)"]);
-    assert.equal(await textOf(page, "#export-elements legend"), "Elements to export");
+    assert.equal(await textOf(page, "#export-elements-title"), "Elements to export");
   }],
 
   ["Accessibility: each group is named, and each of its boxes says what it is and how many columns carry it", async (page) => {
     await analyse(page, ALL_ELEMENTS);
+    assert.equal(await page.getByRole("group", { name: "Éléments à importer" }).count(), 0, "folded, it is not read");
+    await unfold(page, "import");
     assert.equal(await page.getByRole("group", { name: "Éléments à importer" }).count(), 1);
     assert.equal(await page.getByRole("checkbox", { name: /^Liens bidirectionnels 2 colonnes$/ }).count(), 1);
     assert.equal(await description(page, "#import-elements-list li:not([hidden]) input[aria-labelledby$='twoWay-count']"), "Deux références qui se mettent à jour l’une l’autre.");
     await page.click("#tab-export");
     await tick(page, "Existing_Table");
+    await unfold(page, "export");
     assert.equal(await page.getByRole("group", { name: "Éléments à exporter" }).count(), 1);
     assert.equal(await page.getByRole("checkbox", { name: /^Listes de choix 1 colonne$/ }).count(), 1);
   }],
@@ -641,23 +650,23 @@ const TESTS = [
     await page.click("#tab-export");
     await page.waitForSelector("#export-table-list input");
     assert.equal(await hidden(page, "export-search-row"), false);
-    assert.deepEqual(await shownTables(page), ALL_TABLES);
+    assert.deepEqual(await shownTables(page), EVERY_TABLE);
     assert.equal(await textOf(page, "#export-search-status"), "", "nothing is said about a search that is not made");
 
     await page.fill("#export-search", "stand");
     assert.deepEqual(await shownTables(page), ["Standalone_Table"]);
-    assert.equal(await textOf(page, "#export-search-status"), "1 table affichée sur 3.");
+    assert.equal(await textOf(page, "#export-search-status"), "1 table affichée sur 8.");
     await page.fill("#export-search", "OTHER");
     assert.deepEqual(await shownTables(page), ["Other_Table"]);
     await page.fill("#export-search", "table ex");
     assert.deepEqual(await shownTables(page), ["Existing_Table"], "the words in any order");
     await page.fill("#export-search", "_t");
-    assert.deepEqual(await shownTables(page), ALL_TABLES);
-    assert.equal(await textOf(page, "#export-search-status"), "3 tables affichées sur 3.");
+    assert.deepEqual(await shownTables(page), ALL_TABLES, "the three that have a _t in their id");
+    assert.equal(await textOf(page, "#export-search-status"), "3 tables affichées sur 8.");
     await page.fill("#export-search", "");
-    assert.deepEqual(await shownTables(page), ALL_TABLES);
+    assert.deepEqual(await shownTables(page), EVERY_TABLE);
     assert.equal(await textOf(page, "#export-search-status"), "");
-  }],
+  }, { extraTables: 5 }],
 
   ["Export: a search that finds nothing says so, and has nothing to tick; Escape clears it", async (page) => {
     await page.click("#tab-export");
@@ -670,19 +679,19 @@ const TESTS = [
     // an event of our own, which no browser answers by clearing the field itself: only the widget can
     await page.evaluate(() => document.getElementById("export-search").dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
     assert.equal(await page.inputValue("#export-search"), "");
-    assert.deepEqual(await shownTables(page), ALL_TABLES);
+    assert.deepEqual(await shownTables(page), EVERY_TABLE);
     assert.equal(await page.isDisabled("#export-select-all"), false);
 
     await page.fill("#export-search", "stand");
     await page.press("#export-search", "Escape");
     assert.equal(await page.inputValue("#export-search"), "", "and the key itself");
-  }],
+  }, { extraTables: 5 }],
 
   ["Export: the tables ticked that a search hides stay ticked, are said, and are exported; the box on top ticks only what is shown", async (page) => {
     await page.click("#tab-export");
     await tick(page, "Existing_Table");
     await page.fill("#export-search", "stand");
-    assert.equal(await textOf(page, "#export-search-status"), "1 table affichée sur 3. 1 table cochée est masquée.");
+    assert.equal(await textOf(page, "#export-search-status"), "1 table affichée sur 8. 1 table cochée est masquée.");
     assert.equal(await textOf(page, "#export-select-all-text"), "Cocher les tables affichées");
 
     await page.check("#export-select-all");
@@ -699,8 +708,8 @@ const TESTS = [
 
     await page.fill("#export-search", "");
     assert.equal(await textOf(page, "#export-select-all-text"), "Tout cocher");
-    assert.equal(await page.evaluate(() => document.getElementById("export-select-all").indeterminate), true, "two of three");
-  }],
+    assert.equal(await page.evaluate(() => document.getElementById("export-select-all").indeterminate), true, "two of eight");
+  }, { extraTables: 5 }],
 
   ["Export: the search stays when the list is read again, and follows the language", async (page) => {
     await page.click("#tab-export");
@@ -713,13 +722,13 @@ const TESTS = [
 
     await page.click("#settings-btn");
     await page.click('label.segmented-option:has(input[value="en"])');
-    assert.equal(await textOf(page, "#export-search-status"), "1 table shown of 3.");
+    assert.equal(await textOf(page, "#export-search-status"), "1 table shown of 8.");
     assert.equal(await textOf(page, "#export-select-all-text"), "Select the tables shown");
     assert.equal(await page.getAttribute("#export-search", "placeholder"), "Search tables…");
     await page.click("#settings-close-btn");
     await page.fill("#export-search", "zzz");
     assert.equal(await textOf(page, "#export-search-status"), "No table matches “zzz”.");
-  }],
+  }, { extraTables: 5 }],
 
   ["Export: the tables the banner asks to include are shown, whatever was searched", async (page) => {
     await page.click("#tab-export");
@@ -728,9 +737,9 @@ const TESTS = [
     assert.deepEqual(await shownTables(page), ["Existing_Table"]);
     await page.click("#refs-include-btn");
     assert.equal(await page.inputValue("#export-search"), "", "Other_Table, just ticked, was hidden");
-    assert.deepEqual(await shownTables(page), ALL_TABLES);
+    assert.deepEqual(await shownTables(page), EVERY_TABLE);
     assert.deepEqual(await tickedTables(page), ["Existing_Table", "Other_Table"]);
-  }],
+  }, { extraTables: 5 }],
 
   ["Export: a search that shows the tables included keeps what was typed", async (page) => {
     await page.click("#tab-export");
@@ -739,7 +748,7 @@ const TESTS = [
     await page.click("#refs-include-btn");
     assert.equal(await page.inputValue("#export-search"), "table");
     assert.deepEqual(await tickedTables(page), ["Existing_Table", "Other_Table"]);
-  }],
+  }, { extraTables: 5 }],
 
   ["Export: what a search writes is text, never markup, and has no effect on the page", async (page) => {
     await page.click("#tab-export");
@@ -747,7 +756,7 @@ const TESTS = [
     await page.fill("#export-search", "<img src=x onerror=alert(1)>");
     assert.equal(await textOf(page, "#export-search-status"), "Aucune table ne correspond à « <img src=x onerror=alert(1)> ».");
     assert.equal(await count(page, "#export-search-status img"), 0);
-  }],
+  }, { extraTables: 5 }],
 
   ["Accessibility: the search field has a name, and its result is announced", async (page) => {
     await page.click("#tab-export");
@@ -761,7 +770,7 @@ const TESTS = [
     await page.fill("#export-search", "stand");
     await page.fill("#export-search", "standa");
     assert.equal(await page.evaluate(() => window.writes), 1, "typing more of the same finding does not have it said again");
-  }],
+  }, { extraTables: 5 }],
 
   ["Export: the description of a table is an element of its own, counted in tables, and written as the first line of its class", async (page) => {
     await page.click("#tab-export");
@@ -769,7 +778,7 @@ const TESTS = [
     assert.deepEqual(await offered(page, "export"), ["[x] Descriptions des tables (1 table)"]);
     assert.match(await generate(page), /\nclass Other_Table:\n {2}'Table liée, pour le choix des valeurs\.'\n {2}Label = grist\.Text\(\)\n/);
 
-    await choice(page, "export", "Descriptions des tables").uncheck();
+    await leaveOutElement(page, "export", "Descriptions des tables");
     assert.doesNotMatch(await generate(page), /Table liée/);
     assert.match(await generate(page), /\nclass Other_Table:\n {2}Label = grist\.Text\(\)\n/);
 
@@ -793,7 +802,7 @@ const TESTS = [
 
   ["Import: with the descriptions of the tables left out, no table is given one", async (page, grist) => {
     await analyse(page, "@grist.UserTable\nclass Tasks:\n  'Les tâches à faire'\n  A = grist.Text()\n");
-    await choice(page, "import", "Descriptions des tables").uncheck();
+    await leaveOutElement(page, "import", "Descriptions des tables");
     await apply(page);
     assert.equal(grist.calls.length, 1, "nothing to add once the table is created");
   }],
@@ -801,7 +810,7 @@ const TESTS = [
   ["Import: the table that receives columns keeps its own description: the one of the text is not offered", async (page, grist) => {
     await analyse(page, "@grist.UserTable\nclass X:\n  'La table du texte'\n  Fresh = grist.Text()\n");
     assert.deepEqual(await offered(page, "import"), ["[x] Descriptions des tables (1 table)"]);
-    await page.click('label.mode-card:has(input[value="existing"])');
+    await page.click('label.segmented-option:has(input[value="existing"])');
     await page.selectOption("#target-table-select", { label: "Other_Table" });
     assert.equal(await hidden(page, "import-elements"), true, "nothing else in the text, and a table already there is not modified");
     await apply(page);
@@ -932,7 +941,7 @@ const TESTS = [
       return Object.fromEntries(Object.entries(data).map(([key, values]) => [key, [...values, fresh[key]]]));
     };
     await analyse(page, "@grist.UserTable\nclass X:\n  Fresh = grist.Text()\n");
-    await page.click('label.mode-card:has(input[value="existing"])');
+    await page.click('label.segmented-option:has(input[value="existing"])');
     await page.selectOption("#target-table-select", { label: "Existing_Table" });
     await apply(page);
     assert.equal(await page.isDisabled("#action-btn"), true);
@@ -976,6 +985,253 @@ const TESTS = [
     await page.click("#settings-close-btn");
     assert.equal(await page.evaluate(() => document.getElementById("settings-dialog").open), false);
   }],
+
+  ["Import: the elements are folded, and what is chosen is written on their summary", async (page) => {
+    await analyse(page, ALL_ELEMENTS);
+    const folded = () => page.evaluate(() => !document.getElementById("import-elements").open);
+    assert.equal(await folded(), true, "folded until asked");
+    assert.equal(await textOf(page, "#import-elements-state"), "Sans formules", "the formulas are left out until the user asks for them");
+
+    await keepElement(page, "import", "Formules");
+    assert.equal(await folded(), false, "unfolded to reach the box");
+    assert.equal(await textOf(page, "#import-elements-state"), "Tous");
+    await leaveOutElement(page, "import", "Libellés");
+    assert.equal(await textOf(page, "#import-elements-state"), "Sans libellés");
+    await leaveOutElement(page, "import", "Listes de choix");
+    assert.equal(await textOf(page, "#import-elements-state"), "Sans libellés, listes de choix", "two left out are named");
+    await leaveOutElement(page, "import", "Format des cellules");
+    assert.equal(await textOf(page, "#import-elements-state"), "4 sur 7", "more are counted");
+    for (const name of EVERY_ELEMENT) await leaveOutElement(page, "import", name);
+    assert.equal(await textOf(page, "#import-elements-state"), "Aucun");
+
+    await analyse(page, ALL_ELEMENTS);
+    assert.equal(await folded(), false, "the group stays as the user left it");
+    assert.equal(await textOf(page, "#import-elements-state"), "Sans formules");
+  }],
+
+  ["Import: the summary of the elements opens and closes with the keyboard, and the group is read only once it is open", async (page) => {
+    await analyse(page, ALL_ELEMENTS);
+    await page.focus("#import-elements summary");
+    await page.keyboard.press("Enter");
+    assert.equal(await page.evaluate(() => document.getElementById("import-elements").open), true);
+    assert.equal(await page.getByRole("group", { name: "Éléments à importer" }).count(), 1);
+    await page.keyboard.press("Space");
+    assert.equal(await page.evaluate(() => document.getElementById("import-elements").open), false);
+    assert.equal(await page.getByRole("group", { name: "Éléments à importer" }).count(), 0);
+  }],
+
+  ["Import: the summary of the elements speaks the language of the page", async (page) => {
+    await analyse(page, ALL_ELEMENTS);
+    assert.equal(await textOf(page, "#import-elements-state"), "Without formulas");
+    await keepElement(page, "import", "Formulas");
+    assert.equal(await textOf(page, "#import-elements-state"), "All");
+    await leaveOutElement(page, "import", "Labels");
+    await leaveOutElement(page, "import", "Choice lists");
+    await leaveOutElement(page, "import", "Cell format");
+    assert.equal(await textOf(page, "#import-elements-state"), "4 of 7");
+    await page.click("#settings-btn");
+    await page.click('label.segmented-option:has(input[value="fr"])');
+    assert.equal(await textOf(page, "#import-elements-state"), "4 sur 7", "written again with the language");
+  }, { locale: "en" }],
+
+  ["Export: the summary of the elements says what the export keeps", async (page) => {
+    await page.click("#tab-export");
+    await tick(page, "Existing_Table");
+    assert.equal(await page.evaluate(() => document.getElementById("export-elements").open), false, "folded until asked");
+    assert.equal(await textOf(page, "#export-elements-state"), "Tous");
+    await leaveOutElement(page, "export", "Formules");
+    assert.equal(await textOf(page, "#export-elements-state"), "Sans formules");
+    await page.click("#export-elements summary");
+    assert.equal(await page.evaluate(() => document.getElementById("export-elements").open), false, "folded again by the user");
+    assert.equal(await textOf(page, "#export-elements-state"), "Sans formules", "what is chosen does not depend on what is shown");
+  }],
+
+  ["Import: the mode is two options of a segmented control, and what it does is written under it", async (page) => {
+    await analyse(page, TYPES);
+    assert.equal(await page.getByRole("radiogroup", { name: /Que faire de ce code/ }).count(), 1);
+    assert.equal(await count(page, '#mode-block input[name="import-mode"]'), 2);
+    assert.equal(await textOf(page, "#mode-hint"), "Crée une table dédiée avec toutes les colonnes détectées. Recommandé.");
+    assert.equal(await page.getByRole("radiogroup", { name: /Que faire de ce code/ }).getAttribute("aria-describedby"), "mode-hint");
+
+    await page.focus('input[name="import-mode"][value="create"]');
+    await page.keyboard.press("ArrowRight");
+    assert.equal(await page.isChecked('input[name="import-mode"][value="existing"]'), true, "the arrow keys move from one to the other");
+    assert.equal(await textOf(page, "#mode-hint"), "Ajoute uniquement les colonnes qui manquent à une table de ce document.");
+    assert.equal(await page.$eval('input[value="existing"]', (box) => box.closest("label").classList.contains("is-checked")), true);
+    assert.equal(await page.$eval('input[value="create"]', (box) => box.closest("label").classList.contains("is-checked")), false);
+
+    await page.click("#clear-btn");
+    assert.equal(await page.isChecked('input[name="import-mode"][value="create"]'), true, "Effacer goes back to a new table");
+    assert.equal(await page.$eval('input[value="create"]', (box) => box.closest("label").classList.contains("is-checked")), true, "and marks it");
+    assert.equal(await page.$eval('input[value="existing"]', (box) => box.closest("label").classList.contains("is-checked")), false);
+    await analyse(page, TYPES);
+    assert.equal(await textOf(page, "#mode-hint"), "Crée une table dédiée avec toutes les colonnes détectées. Recommandé.");
+  }],
+
+  ["Import: the description of the mode follows the language", async (page) => {
+    await analyse(page, TYPES);
+    assert.equal(await textOf(page, "#mode-hint"), "Creates a dedicated table with every detected column. Recommended.");
+    assert.equal(await page.getByRole("radiogroup", { name: "What to do with this code?" }).count(), 1);
+    await page.click('label.segmented-option:has(input[value="existing"])');
+    assert.equal(await textOf(page, "#mode-hint"), "Only adds the columns missing from a table of this document.");
+  }, { locale: "en" }],
+
+  ["Import: a code that is pasted is analysed at once, a typed one waits for Analyser", async (page) => {
+    const paste = (text) =>
+      page.evaluate((value) => {
+        const box = document.getElementById("source-input");
+        box.value = value;
+        box.dispatchEvent(new InputEvent("input", { inputType: "insertFromPaste", bubbles: true }));
+      }, text);
+    await paste("@grist.UserTable\nclass Pasted:\n  A = grist.Text()\n");
+    await page.waitForFunction(() => !document.getElementById("preview-section").hidden && !document.getElementById("analyze-btn").disabled);
+    assert.equal(await page.inputValue("#table-ids-list input"), "Pasted", "the preview is there, with nobody having clicked");
+
+    await page.fill("#source-input", "@grist.UserTable\nclass Typed:\n  B = grist.Text()\n");
+    assert.equal(await hidden(page, "preview-section"), true, "typing takes the preview away and does not make another");
+
+    await paste("   \n");
+    assert.equal(await hidden(page, "preview-section"), true, "nothing pasted but blanks: nothing to analyse");
+    await paste("@grist.UserTable\nclass Again:\n  C = grist.Text()\n");
+    await page.waitForFunction(() => document.querySelector("#table-ids-list input")?.value === "Again");
+  }],
+
+  ["Export: the search is offered from seven tables, and the box that takes them all from two", async (page) => {
+    await page.click("#tab-export");
+    await page.waitForSelector("#export-table-list input");
+    assert.equal(await hidden(page, "export-search-row"), true, "three tables are read faster than a name is typed");
+    assert.equal(await hidden(page, "export-select-all-row"), false);
+    assert.deepEqual(await shownTables(page), ALL_TABLES);
+  }],
+
+  ["Export: seven tables have a search", async (page) => {
+    await page.click("#tab-export");
+    await page.waitForSelector("#export-table-list input");
+    assert.equal(await hidden(page, "export-search-row"), false);
+    assert.equal((await shownTables(page)).length, 7);
+  }, { extraTables: 4 }],
+
+  ["Export: six tables have none", async (page) => {
+    await page.click("#tab-export");
+    await page.waitForSelector("#export-table-list input");
+    assert.equal(await hidden(page, "export-search-row"), true);
+    assert.equal((await shownTables(page)).length, 6);
+  }, { extraTables: 3 }],
+
+  ["Export: a single table has neither a search nor a box for all", async (page) => {
+    await page.click("#tab-export");
+    await page.waitForSelector("#export-table-list input");
+    assert.equal(await hidden(page, "export-search-row"), true);
+    assert.equal(await hidden(page, "export-select-all-row"), true);
+    assert.deepEqual(await shownTables(page), ["Standalone_Table"]);
+    assert.equal(await hidden(page, "export-tables-empty"), true);
+  }, { onlyTables: ["Standalone_Table"] }],
+
+  ["Export: two tables have a box for all, but no search", async (page) => {
+    await page.click("#tab-export");
+    await page.waitForSelector("#export-table-list input");
+    assert.equal(await hidden(page, "export-search-row"), true);
+    assert.equal(await hidden(page, "export-select-all-row"), false);
+    assert.deepEqual(await shownTables(page), ["Existing_Table", "Standalone_Table"]);
+  }, { onlyTables: ["Existing_Table", "Standalone_Table"] }],
+
+  ["Export: a search typed for a long list is gone once the list is short, so that it filters nothing out of sight", async (page, grist) => {
+    await page.click("#tab-export");
+    await page.waitForSelector("#export-table-list input");
+    await page.fill("#export-search", "stand");
+    assert.deepEqual(await shownTables(page), ["Standalone_Table"]);
+
+    const read = grist.docApi.fetchTable;
+    grist.docApi.fetchTable = async (name) => {
+      const table = structuredClone(await read(name));
+      if (name !== "_grist_Tables") return table;
+      const kept = table.tableId.map((tableId) => !tableId.startsWith("Ledger_"));
+      for (const key of Object.keys(table)) table[key] = table[key].filter((_, i) => kept[i]);
+      return table;
+    };
+    await page.click("#refresh-tables-btn");
+    await page.waitForFunction(() => !document.getElementById("refresh-tables-btn").disabled);
+    assert.equal(await hidden(page, "export-search-row"), true);
+    assert.equal(await page.inputValue("#export-search"), "");
+    assert.deepEqual(await shownTables(page), ALL_TABLES);
+  }, { extraTables: 5 }],
+
+  ["Accessibility: the icon buttons have a name and a tooltip, and keep them in the other language", async (page) => {
+    const ICONS = [
+      ["clear-btn", "Effacer", "Clear"],
+      ["refresh-tables-btn", "Actualiser la liste", "Refresh the list"],
+      ["copy-btn", "Copier", "Copy"],
+    ];
+    for (const [id, fr] of ICONS) {
+      assert.equal(await page.getAttribute(`#${id}`, "aria-label"), fr, id);
+      assert.equal(await page.getAttribute(`#${id}`, "title"), fr, id);
+      assert.equal(await page.$eval(`#${id}`, (button) => button.textContent.trim()), "", `${id} has no text: its icon is hidden from the readers`);
+      assert.equal(await page.$eval(`#${id} svg`, (icon) => icon.getAttribute("aria-hidden")), "true", id);
+    }
+    await page.click("#settings-btn");
+    await page.click('label.segmented-option:has(input[value="en"])');
+    for (const [id, , en] of ICONS) {
+      assert.equal(await page.getAttribute(`#${id}`, "aria-label"), en, id);
+      assert.equal(await page.getAttribute(`#${id}`, "title"), en, id);
+    }
+  }],
+
+  ["Export: the copy button shows a tick for a moment once the code is copied", async (page) => {
+    await page.evaluate(() => Object.defineProperty(navigator, "clipboard", { value: { writeText: async () => {} }, configurable: true }));
+    await page.click("#tab-export");
+    await tick(page, "Existing_Table");
+    await generate(page);
+    const done = () => page.$eval("#copy-btn", (button) => button.classList.contains("is-done"));
+    assert.equal(await done(), false);
+    await page.click("#copy-btn");
+    await page.waitForSelector("#copy-btn.is-done");
+    assert.equal(await textOf(page, "#copy-status"), "Copié.");
+    assert.equal(await page.$eval("#copy-btn .icon-done", (icon) => getComputedStyle(icon).display !== "none"), true, "the tick is shown");
+    assert.equal(await page.$eval("#copy-btn .icon-copy", (icon) => getComputedStyle(icon).display), "none", "instead of the copy");
+    await page.waitForFunction(() => !document.getElementById("copy-btn").classList.contains("is-done"), null, { timeout: 5000 });
+    await page.click("#copy-btn");
+    await page.waitForSelector("#copy-btn.is-done");
+    await generate(page);
+    assert.equal(await done(), false, "a new code starts without it");
+    assert.equal(await textOf(page, "#copy-status"), "");
+  }],
+
+  ["Import: a code pasted while the tables are being created is left for later: the creation is not disturbed", async (page) => {
+    await analyse(page, TYPES);
+    await page.click("#action-btn");
+    await page.evaluate(() => {
+      const box = document.getElementById("source-input");
+      box.value = "@grist.UserTable\nclass Later:\n  A = grist.Text()\n";
+      box.dispatchEvent(new InputEvent("input", { inputType: "insertFromPaste", bubbles: true }));
+    });
+    await page.waitForTimeout(150);
+    assert.equal(await page.isDisabled("#analyze-btn"), true, "an analysis would give back the button that the creation took");
+    await page.waitForSelector("#import-status-region .status-success");
+    assert.equal(await page.isDisabled("#analyze-btn"), false);
+  }, { delay: 600 }],
+
+  ["Accessibility: what takes the focus is never hidden under the bar of the action", async (page) => {
+    await page.setViewportSize({ width: 520, height: 560 });
+    await analyse(page, ALL_ELEMENTS);
+    await unfold(page, "import");
+    const last = page.locator("#import-elements-list li:not([hidden]) input").last();
+    await last.evaluate((box) => window.scrollBy(0, box.getBoundingClientRect().bottom - (innerHeight - 20))); // it ends 20 px above the bottom of the pane, where the bar is
+    await last.focus();
+    const [bottom, barTop] = await last.evaluate((box) => [box.getBoundingClientRect().bottom, document.getElementById("create-actions").getBoundingClientRect().top]);
+    assert.ok(bottom <= barTop, `the box ends at ${bottom} px, under the bar that starts at ${barTop} px`);
+  }],
+
+  ["the action of a block stays in reach: Générer le code is in view on a tall list, and in the flow on a very short pane", async (page) => {
+    await page.setViewportSize({ width: 600, height: 560 });
+    await page.click("#tab-export");
+    await page.waitForSelector("#export-table-list input");
+    assert.equal(await page.$eval("#generate-btn", (button) => getComputedStyle(button.parentElement).position), "sticky");
+    const bottom = await page.$eval("#generate-btn", (button) => button.getBoundingClientRect().bottom);
+    assert.ok(bottom <= 560, `the button ends at ${bottom} px of a 560 px pane, whatever the scroll`);
+
+    await page.setViewportSize({ width: 600, height: 400 });
+    assert.equal(await page.$eval("#generate-btn", (button) => getComputedStyle(button.parentElement).position), "static", "a pane this short is not shared with a bar");
+  }, { extraTables: 20 }],
 ];
 
 const widget = await launchWidget();
@@ -1025,7 +1281,7 @@ const SCREENS = [
     "the Import preview of an existing table",
     async (page) => {
       await analyse(page, RICH_SOURCE);
-      await page.click('label.mode-card:has(input[value="existing"])');
+      await page.click('label.segmented-option:has(input[value="existing"])');
       await page.selectOption("#target-table-select", { label: "Existing_Table" });
     },
   ],
@@ -1056,6 +1312,22 @@ const SCREENS = [
       await page.fill("#export-search", "zzz");
     },
   ],
+  [
+    "the Import preview with its elements unfolded",
+    async (page) => {
+      await analyse(page, RICH_SOURCE);
+      await unfold(page, "import");
+    },
+  ],
+  [
+    "the Export tab with its elements unfolded",
+    async (page) => {
+      await page.click("#tab-export");
+      await page.waitForSelector("#export-table-list input");
+      await page.locator("#export-table-list li", { hasText: "Existing_Table" }).locator("input").check();
+      await unfold(page, "export");
+    },
+  ],
   ["the Réglages dialog", async (page) => page.click("#settings-btn")],
 ];
 
@@ -1063,7 +1335,7 @@ for (const theme of ["light", "dark"]) {
   for (const locale of ["fr", "en"]) {
     test(`axe-core finds nothing to fix on the main screens (${theme}, ${locale})`, async () => {
       for (const [name, setup] of SCREENS) {
-        const page = await widget.open(fakeGrist(), { locale, bypassCSP: true });
+        const page = await widget.open(fakeGrist({ extraTables: 5 }), { locale, bypassCSP: true });
         try {
           await page.evaluate((value) => (document.documentElement.dataset.theme = value), theme);
           await setup(page);

@@ -202,6 +202,44 @@ h1 {
   height: 18px;
 }
 
+/* The icon buttons that act on a whole block sit in its head, beside its title. */
+.icon-btn-sm {
+  width: 30px;
+  height: 30px;
+}
+
+.icon-btn-sm svg {
+  width: 16px;
+  height: 16px;
+}
+
+.block-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.block-head .eyebrow {
+  margin: 0;
+}
+
+/* The copy button shows a tick for a moment once the code is copied. */
+.icon-btn .icon-done,
+.icon-btn.is-done .icon-copy {
+  display: none;
+}
+
+.icon-btn.is-done .icon-done {
+  display: block;
+}
+
+.icon-btn.is-done {
+  color: var(--success);
+  border-color: var(--success);
+}
+
 .brand-logo {
   display: block;
   width: 28px;
@@ -361,60 +399,11 @@ button.btn:disabled {
   cursor: not-allowed;
 }
 
-/* Import mode picker */
+/* Import mode: the two choices of a segmented control (see .segmented), a little larger than in the settings. */
 
-.mode-picker {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-
-@media (max-width: 480px) {
-  .mode-picker {
-    grid-template-columns: 1fr;
-  }
-}
-
-.mode-card {
-  display: block;
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 12px;
-  cursor: pointer;
-  position: relative;
-}
-
-.mode-card:hover:not(.is-checked) {
-  border-color: var(--border-strong);
-}
-
-.mode-card.is-checked {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-}
-
-.mode-radio {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  width: 16px;
-  height: 16px;
-  accent-color: var(--accent);
-}
-
-.mode-card-title {
-  display: block;
-  font-weight: 800;
-  font-size: 0.9rem;
-  padding-right: 22px;
-  margin-bottom: 4px;
-}
-
-.mode-card-desc {
-  display: block;
-  color: var(--muted);
-  font-size: 0.82rem;
-  line-height: 1.35;
+.mode-picker .segmented-option {
+  padding: 9px 8px;
+  font-size: 0.85rem;
 }
 
 /* Columns preview table */
@@ -627,22 +616,63 @@ label + .hint {
   margin: 0;
 }
 
-/* The elements of the columns (labels, choices, formulas…) that Export and Import let the user leave out: a few short rows side by side. */
+/* The elements of the columns (labels, choices, formulas…) that Export and Import let the user leave out: folded, with what is chosen written on the summary; a few short rows side by side once unfolded. */
 
 .elements {
   margin: 14px 0 0;
-  padding: 0;
-  border: 0;
   min-width: 0;
 }
 
-.elements legend {
-  padding: 0;
+.elements summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  padding: 5px 0;
+  cursor: pointer;
+  list-style: none;
+}
+
+.elements summary::-webkit-details-marker {
+  display: none;
+}
+
+.elements summary::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  margin: 0 4px 2px 3px;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(-45deg);
+}
+
+.elements[open] > summary::before {
+  margin-bottom: 4px;
+  transform: rotate(45deg);
+}
+
+.elements summary:focus-visible {
+  outline: 2.5px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.elements summary .eyebrow {
+  margin: 0;
+}
+
+.elements-state {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.elements[open] > summary {
+  margin-bottom: 6px;
 }
 
 .elements-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(12.5rem, 1fr));
   max-height: none;
   overflow: visible;
 }
@@ -668,6 +698,15 @@ label + .hint {
   min-width: 0;
 }
 
+/* The name and the count share a line while they fit: the count goes under the name rather than squeezing it. */
+.element-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0 8px;
+}
+
 .element-hint {
   font-size: 0.75rem;
   font-weight: 400;
@@ -681,6 +720,10 @@ label + .hint {
 
 #export-output {
   min-height: 200px;
+}
+
+#copy-status:empty {
+  display: none;
 }
 
 .hint {
@@ -891,6 +934,24 @@ html[data-pending-locale] body {
   }
 }
 
+/* The action of a block stays in reach while the block is longer than the pane; a very short pane (a page zoomed in) keeps it in the flow, where it takes no room from the content. */
+@media (min-height: 480px) {
+  html {
+    scroll-padding-bottom: 5rem;
+  }
+
+  .actions-sticky {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    margin: 14px -18px -18px;
+    padding: 12px 18px;
+    border-top: 1px solid var(--border);
+    border-radius: 0 0 var(--radius) var(--radius);
+    background: var(--surface);
+  }
+}
+
 /* A short pane, which a Grist widget often is: the title and the code box are what the buttons need above them. */
 @media (max-height: 640px) {
   .shell {
@@ -910,8 +971,7 @@ html[data-pending-locale] body {
 /* High-contrast modes drop backgrounds: keep what they said (selected, framed) as outlines and borders. */
 @media (forced-colors: active) {
   .tab[aria-selected="true"],
-  .segmented-option.is-checked,
-  .mode-card.is-checked {
+  .segmented-option.is-checked {
     outline: 2px solid Highlight;
     outline-offset: -2px;
   }

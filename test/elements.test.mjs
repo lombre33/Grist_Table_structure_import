@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { ELEMENTS, ELEMENT_KEYS, ELEMENT_UNITS, elementCounts, omitElements, omitTable, sumCounts } from "../js/elements.js";
+import { choiceSummary } from "../js/elementsPicker.js";
+import { plain } from "./helpers.mjs";
 
 const none = Object.fromEntries(ELEMENTS.map((element) => [element, 0]));
 
@@ -97,4 +99,21 @@ test("omitTable takes the description of a table out when it is omitted, and not
   assert.deepEqual(omitTable(table, new Set(["tableDescriptions"])), { tableId: "T", description: null, columns: [] });
   assert.deepEqual(omitTable(table, new Set(["descriptions", "labels"])), table);
   assert.equal(table.description, "About T", "not changed");
+});
+
+test("the summary of the choice says all, none, the one or two left out by name, or how many are kept", () => {
+  const offered = ["labels", "choices", "options", "formulas"];
+  const summary = (...left) => plain(choiceSummary(offered, (element) => !left.includes(element)));
+  assert.equal(summary(), "Tous");
+  assert.equal(summary("formulas"), "Sans formules");
+  assert.equal(summary("labels", "formulas"), "Sans libellés, formules", "in the order of the elements, not of the choices");
+  assert.equal(summary("formulas", "labels"), "Sans libellés, formules");
+  assert.equal(summary("labels", "choices", "formulas"), "1 sur 4", "from three, the names would be longer than the count");
+  assert.equal(summary("labels", "choices", "options", "formulas"), "Aucun");
+});
+
+test("a single element on offer is all or none, never a count", () => {
+  assert.equal(plain(choiceSummary(["labels"], () => true)), "Tous");
+  assert.equal(plain(choiceSummary(["labels"], () => false)), "Aucun");
+  assert.equal(plain(choiceSummary([], () => true)), "Tous", "nothing to choose from is not a choice left out");
 });

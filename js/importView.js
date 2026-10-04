@@ -3,12 +3,12 @@
  * fields of the tables to create, the notes, the button. `ctx` is { grist, ui, state, setStatus, render, showElements }.
  */
 
-import { el, syncCheckedClass, syncMasterCheckbox } from "./dom.js";
+import { el, syncMasterCheckbox } from "./dom.js";
 import { existingColumnIds } from "./schema.js";
 import { checkTableId, isComputed, linkedColumns, resolveColumns, twoWayWarnings } from "./importer.js";
 import { elementCounts, sumCounts } from "./elements.js";
 import { t, tn, typeLabel } from "./i18n.js";
-import { modeOf } from "./importUi.js";
+import { markChosenMode, modeOf } from "./importUi.js";
 import { batchOf, documentTableIds, newEntry, tickableColumns, withFormulas } from "./importState.js";
 
 const COMPUTED_TAGS = { formula: "import.preview.formula", trigger: "import.preview.trigger" };
@@ -16,7 +16,8 @@ const COMPUTED_TAGS = { formula: "import.preview.formula", trigger: "import.prev
 /** Writes the preview again, for the mode that is chosen. */
 export function render(ctx) {
   const { ui, state } = ctx;
-  ui.previewHeading.textContent = t(state.parsed.length > 0 ? "import.step3.eyebrow" : "import.step3.none");
+  ui.previewHeading.textContent = t(state.parsed.length > 0 ? "import.step2.eyebrow" : "import.step2.none");
+  ui.modeHint.textContent = t(modeOf(ui) === "existing" ? "import.mode.existing.desc" : "import.mode.create.desc");
   renderTargetProblem(ctx);
   return modeOf(ui) === "existing" ? renderExisting(ctx) : renderCreate(ctx);
 }
@@ -47,7 +48,7 @@ export function fillTargetSelect({ ui, state }) {
 }
 
 export function onModeChange(ctx) {
-  syncCheckedClass(ctx.ui.modeRadios, "is-checked", ".mode-card");
+  markChosenMode(ctx.ui);
   updateModeUI(ctx);
   render(ctx);
 }

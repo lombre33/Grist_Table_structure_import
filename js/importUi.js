@@ -1,4 +1,4 @@
-import { byIds } from "./dom.js";
+import { byIds, syncCheckedClass } from "./dom.js";
 
 /** The elements of the Import tab, by name: what the other modules of the tab read and write. */
 export const importUi = () => ({
@@ -7,6 +7,7 @@ export const importUi = () => ({
     analyzeBtn: "analyze-btn",
     clearBtn: "clear-btn",
     modeBlock: "mode-block",
+    modeHint: "mode-hint",
     previewSection: "preview-section",
     previewHeading: "preview-heading",
     sourcePickerRow: "table-picker-row",
@@ -25,6 +26,7 @@ export const importUi = () => ({
     columnsBody: "columns-preview-body",
     elementsBox: "import-elements",
     elementsList: "import-elements-list",
+    elementsSummary: "import-elements-state",
     formulasHint: "formulas-hint",
     warningsBlock: "warnings-block",
     warningsList: "warnings-list",
@@ -35,6 +37,9 @@ export const importUi = () => ({
   }),
   modeRadios: Array.from(document.querySelectorAll('input[name="import-mode"]')),
 });
+
+/** Marks the option of the mode that is chosen: the styles do not rely on :has(). */
+export const markChosenMode = (ui) => syncCheckedClass(ui.modeRadios, "is-checked", ".segmented-option");
 
 /** What the user chose to do with the code: "create" (a new table) or "existing" (columns added to a table of the document). */
 export const modeOf = (ui) => ui.modeRadios.find((radio) => radio.checked)?.value ?? "create";

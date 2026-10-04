@@ -7,6 +7,8 @@ import { byIds, checklistItem, syncMasterCheckbox } from "./dom.js";
 import { queryMatcher } from "./search.js";
 import { t, tn } from "./i18n.js";
 
+const SEARCH_FROM = 7; // a shorter list is read faster than a table is typed
+
 const tableListUi = () =>
   byIds({
     list: "export-table-list",
@@ -85,7 +87,9 @@ export function createTableList({ onChange }) {
     /** Lists the tables (`[{ tableId }]`), those of `kept` being ticked. */
     show(tables, kept) {
       ui.empty.hidden = tables.length > 0;
-      ui.searchRow.hidden = ui.selectAllRow.hidden = tables.length === 0;
+      ui.searchRow.hidden = tables.length < SEARCH_FROM;
+      ui.selectAllRow.hidden = tables.length < 2;
+      if (ui.searchRow.hidden) ui.search.value = ""; // what was typed for a longer list cannot be seen, nor undone
       ui.list.replaceChildren(...tables.map((table) => checklistItem(table.tableId, table.tableId, kept.has(table.tableId))));
     },
 

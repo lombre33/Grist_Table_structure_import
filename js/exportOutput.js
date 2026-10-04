@@ -3,8 +3,19 @@
 import { byIds } from "./dom.js";
 import { t } from "./i18n.js";
 
+const DONE_FOR_MS = 2000; // how long the button of a copy that worked shows a tick
+
 export function createOutput() {
   const ui = byIds({ block: "export-output-block", code: "export-output", copyBtn: "copy-btn", copyStatus: "copy-status" });
+
+  let tickTimer;
+
+  /** The button shows a tick for a moment: it has no text to say that the copy worked. */
+  function flashTick(on) {
+    clearTimeout(tickTimer);
+    ui.copyBtn.classList.toggle("is-done", on);
+    if (on) tickTimer = setTimeout(() => flashTick(false), DONE_FOR_MS);
+  }
 
   /** The outcome of Copier: a short confirmation, or what to do instead, which is a message since the user has to act on it. */
   function setCopyStatus(message, level = "hint") {
@@ -18,6 +29,7 @@ export function createOutput() {
     try {
       await navigator.clipboard.writeText(ui.code.value);
       setCopyStatus(t("export.copy.done"));
+      flashTick(true);
     } catch {
       setCopyStatus(t("export.copy.fallback"), "info");
     }
@@ -28,6 +40,7 @@ export function createOutput() {
       ui.code.value = code;
       ui.block.hidden = false;
       setCopyStatus("");
+      flashTick(false);
     },
     hide() {
       ui.block.hidden = true;

@@ -29,6 +29,26 @@ const exactly = (text) => new RegExp(`^${text.replace(/[.*+?^${}()|[\]\\]/g, "\\
 export const choice = (page, tab, name) =>
   page.locator(`#${tab}-elements-list li`).filter({ has: page.locator(".element-name", { hasText: exactly(name) }) }).locator("input");
 
+/** Unfolds the group of elements of a tab if it is folded: its boxes can be used only then. */
+export async function unfold(page, tab) {
+  const group = page.locator(`#${tab}-elements`);
+  if (!(await group.evaluate((details) => details.open))) await group.locator("summary").click();
+}
+
+/** What the user does with a box of the group, unfolding the group first. */
+export const keepElement = async (page, tab, name) => {
+  await unfold(page, tab);
+  await choice(page, tab, name).check();
+};
+export const leaveOutElement = async (page, tab, name) => {
+  await unfold(page, tab);
+  await choice(page, tab, name).uncheck();
+};
+export const isElementKept = async (page, tab, name) => {
+  await unfold(page, tab);
+  return choice(page, tab, name).isChecked();
+};
+
 /** What a group offers, as the screen shows it: for each element that is shown, whether it is ticked, its name and its count. */
 export const offered = async (page, tab) =>
   (

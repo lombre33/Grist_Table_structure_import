@@ -21,9 +21,11 @@ l'ajout de colonnes dans le document Grist courant, via l'API officielle du widg
 1. Dans le document Grist source, ouvrez la table à dupliquer puis son menu **Code View**
    pour obtenir son code (voir exemple ci-dessous) — ou utilisez l'onglet **Export** de ce
    même widget sur ce document.
-2. Dans le document Grist de destination, ouvrez l'onglet **Import**, collez le code dans
-   la zone de texte, puis cliquez sur **Analyser**.
-3. Choisissez ce qu'il doit se passer :
+2. Dans le document Grist de destination, ouvrez l'onglet **Import** et collez le code dans
+   la zone de texte : il est analysé dès qu'il est collé (le bouton **Analyser** sert pour
+   un texte tapé ou modifié).
+3. Choisissez ce qu'il doit se passer, avec le sélecteur qui ouvre l'aperçu (la ligne
+   dessous décrit le choix en cours) :
    - **Nouvelle table** (recommandé, sélectionné par défaut) : crée une table dédiée avec
      toutes les colonnes détectées. Si le texte collé contient plusieurs tables, elles
      sont toutes cochées par défaut ; décochez celles à ne pas créer. L'aperçu affiche
@@ -42,9 +44,11 @@ l'ajout de colonnes dans le document Grist courant, via l'API officielle du widg
    colonne a sa propre case à cocher (cochée par défaut, la case de l'en-tête les coche ou
    les décoche toutes) pour l'exclure individuellement de l'action, en plus de la sélection
    par table ; une colonne décochée est grisée. Sous l'aperçu, le groupe **Éléments à
-   importer** liste ce que le texte contient au-delà du type des colonnes (voir plus bas) :
-   tout y est coché par défaut, sauf les formules. Cliquez ensuite sur le bouton d'action.
-   Le bouton **Effacer**, à côté d'Analyser, réinitialise entièrement l'onglet pour
+   importer**, replié, liste ce que le texte contient au-delà du type des colonnes (voir plus
+   bas) : tout y est coché par défaut, sauf les formules, et son résumé dit ce qui sera
+   importé (« Tous », « Sans formules », « 4 sur 7 »…). Cliquez ensuite sur le bouton
+   d'action, qui reste affiché en bas de l'aperçu pendant qu'on le parcourt. L'icône
+   **Effacer** (✕), en haut à droite de l'étape 1, réinitialise entièrement l'onglet pour
    recommencer avec un autre texte.
 
 Le widget ne modifie ni ne supprime jamais une colonne ou une table existante : en mode
@@ -130,7 +134,8 @@ fin le dit.
 #### Choisir les éléments à importer
 
 Le type de chaque colonne est toujours importé. Le groupe **Éléments à importer**, sous
-l'aperçu, laisse choisir d'un coup ce que le texte apporte en plus :
+l'aperçu (replié : un clic sur son titre le déplie, et son résumé dit déjà ce qui est
+choisi), laisse choisir d'un coup ce que le texte apporte en plus :
 
 | Élément                             | Ce que le texte en dit                                                          |
 | ----------------------------------- | ------------------------------------------------------------------------------- |
@@ -248,22 +253,24 @@ métadonnées est un élément que le groupe **Éléments à importer** laisse d
 ## Export
 
 1. Ouvrez l'onglet **Export**. La liste des tables de ce document se charge
-   automatiquement (bouton **Actualiser la liste** pour la relire, sans perdre les tables
-   déjà cochées).
-2. Cochez une ou plusieurs tables (la case **Tout cocher** les sélectionne toutes). Un champ
-   de recherche, au-dessus de la liste, filtre les tables au fil de la frappe (sans tenir
-   compte des majuscules, des accents ni de l'ordre des mots) : les tables cochées que la
-   recherche masque restent cochées, et exportées, ce que le champ rappelle ; la case du
-   dessus (**Cocher les tables affichées**) n'agit alors que sur celles qui le sont, et
-   **Échap** efface la recherche. Sous la liste, le groupe **Éléments à exporter** liste ce
-   que ces tables contiennent au-delà du type de leurs colonnes (libellés, descriptions des
-   colonnes et des tables, listes de choix, format des cellules, colonne affichée des
-   références, liens bidirectionnels, formules), avec le nombre de colonnes (ou de tables)
-   concernées et, sous chaque nom, ce qu'il est. Tout est coché par défaut : décochez ce que
-   le code ne doit pas contenir (le type de chaque colonne est toujours exporté). Cliquez
-   ensuite sur **Générer le code**.
-3. Copiez le code affiché (bouton **Copier**, ou sélection manuelle du texte) et
-   collez-le où vous en avez besoin — par exemple dans l'onglet **Import** de ce même
+   automatiquement (icône **Actualiser la liste** ↻, en haut à droite de l'étape, pour la
+   relire, sans perdre les tables déjà cochées).
+2. Cochez une ou plusieurs tables (la case **Tout cocher** les sélectionne toutes, dès deux
+   tables). À partir de sept tables, un champ de recherche, au-dessus de la liste, filtre
+   les tables au fil de la frappe (sans tenir compte des majuscules, des accents ni de
+   l'ordre des mots) : les tables cochées que la recherche masque restent cochées, et
+   exportées, ce que le champ rappelle ; la case du dessus (**Cocher les tables affichées**)
+   n'agit alors que sur celles qui le sont, et **Échap** efface la recherche. Sous la liste,
+   le groupe **Éléments à exporter**, replié, liste ce que ces tables contiennent au-delà du
+   type de leurs colonnes (libellés, descriptions des colonnes et des tables, listes de
+   choix, format des cellules, colonne affichée des références, liens bidirectionnels,
+   formules), avec le nombre de colonnes (ou de tables) concernées et, sous chaque nom, ce
+   qu'il est. Tout est coché par défaut et le résumé du groupe le dit (« Tous », « Sans
+   formules »…) : dépliez-le pour décocher ce que le code ne doit pas contenir (le type de
+   chaque colonne est toujours exporté). Cliquez ensuite sur **Générer le code**, bouton
+   qui reste affiché en bas du cadre pendant qu'on le parcourt.
+3. Copiez le code affiché (icône **Copier**, qui montre un ✓ un instant, ou sélection
+   manuelle du texte) et collez-le où vous en avez besoin — par exemple dans l'onglet **Import** de ce même
    widget, ouvert sur un autre document.
 
 Le format généré suit celui de la vraie « Code View » de Grist : mêmes lignes

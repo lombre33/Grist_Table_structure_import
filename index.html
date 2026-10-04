@@ -106,36 +106,42 @@
   <section id="panel-import" class="panel" role="tabpanel" aria-labelledby="tab-import">
 
     <div class="block">
-      <h2 class="eyebrow" data-i18n="import.step1.eyebrow">1. Code source</h2>
+      <div class="block-head">
+        <h2 class="eyebrow" data-i18n="import.step1.eyebrow">1. Code source</h2>
+        <button id="clear-btn" type="button" class="icon-btn icon-btn-sm" aria-label="Effacer" title="Effacer" data-i18n-aria-label="import.clear" data-i18n-title="import.clear">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="9"></circle>
+          <line x1="9" y1="9" x2="15" y2="15"></line>
+          <line x1="15" y1="9" x2="9" y2="15"></line>
+        </svg>
+        </button>
+      </div>
       <label for="source-input" data-i18n="import.step1.label">Code Python d’une table</label>
-      <p id="source-hint" class="hint" data-i18n="import.step1.hint">À copier depuis le menu &laquo;&nbsp;Code View&nbsp;&raquo; de la table, dans le document d’origine, ou depuis l’onglet Export de ce widget (qui garde en plus les choix détaillés).</p>
-      <textarea id="source-input" rows="12" spellcheck="false" aria-describedby="source-hint"
+      <p id="source-hint" class="hint" data-i18n="import.step1.hint">À copier depuis &laquo;&nbsp;Code View&nbsp;&raquo; dans le document d’origine, ou depuis l’onglet Export de ce widget. Il est analysé dès qu’il est collé.</p>
+      <textarea id="source-input" rows="6" spellcheck="false" aria-describedby="source-hint"
         data-i18n-placeholder="import.step1.placeholder"
         placeholder="@grist.UserTable&#10;class MaTable:&#10;  MaColonne = grist.Text()"></textarea>
       <div class="actions">
         <button id="analyze-btn" type="button" class="btn btn-primary" data-i18n="import.analyze">Analyser</button>
-        <button id="clear-btn" type="button" class="btn btn-ghost" data-i18n="import.clear">Effacer</button>
-      </div>
-    </div>
-
-    <div id="mode-block" class="block" hidden>
-      <h2 class="eyebrow" id="mode-heading" data-i18n="import.step2.eyebrow">2. Que faire de ce code&nbsp;?</h2>
-      <div class="mode-picker" role="radiogroup" aria-labelledby="mode-heading">
-        <label class="mode-card">
-          <input type="radio" name="import-mode" value="create" class="mode-radio" checked>
-          <span class="mode-card-title" data-i18n="import.mode.create.title">Nouvelle table</span>
-          <span class="mode-card-desc" data-i18n="import.mode.create.desc">Crée une table dédiée avec toutes les colonnes détectées. Recommandé.</span>
-        </label>
-        <label class="mode-card">
-          <input type="radio" name="import-mode" value="existing" class="mode-radio">
-          <span class="mode-card-title" data-i18n="import.mode.existing.title">Table existante</span>
-          <span class="mode-card-desc" data-i18n="import.mode.existing.desc">Ajoute uniquement les colonnes qui manquent à une table de ce document.</span>
-        </label>
       </div>
     </div>
 
     <section id="preview-section" class="block" hidden aria-labelledby="preview-heading">
-      <h2 class="eyebrow" id="preview-heading">3. Vérification avant application</h2>
+      <h2 class="eyebrow" id="preview-heading">2. Vérification avant application</h2>
+
+      <div id="mode-block" class="field" hidden>
+        <div class="segmented mode-picker" role="radiogroup" aria-label="Que faire de ce code&nbsp;?" data-i18n-aria-label="import.mode.label" aria-describedby="mode-hint">
+          <label class="segmented-option">
+            <input type="radio" name="import-mode" value="create" checked>
+            <span data-i18n="import.mode.create.title">Nouvelle table</span>
+          </label>
+          <label class="segmented-option">
+            <input type="radio" name="import-mode" value="existing">
+            <span data-i18n="import.mode.existing.title">Table existante</span>
+          </label>
+        </div>
+        <p id="mode-hint" class="hint"></p>
+      </div>
 
       <div id="table-picker-row" class="field" hidden>
         <label for="table-select" data-i18n="import.tablePicker.label">Table à importer (plusieurs trouvées)</label>
@@ -170,19 +176,24 @@
         <tbody id="columns-preview-body"></tbody>
       </table>
 
-      <fieldset id="import-elements" class="elements" hidden>
-        <legend class="eyebrow" data-i18n="import.elements.legend">Éléments à importer</legend>
-        <ul id="import-elements-list" class="checklist elements-list"></ul>
-        <p class="hint" data-i18n="import.elements.hint">Seuls les éléments présents dans le texte collé sont proposés&nbsp;; le type de chaque colonne est toujours importé.</p>
-        <p id="formulas-hint" class="hint" hidden data-i18n="import.formulas.hint">Les formules s’exécutent dans ce document dès leur création&nbsp;: ne cochez «&nbsp;Formules&nbsp;» que pour du code de confiance. Sans cela, ces colonnes sont créées vides.</p>
-      </fieldset>
+      <details id="import-elements" class="elements" hidden>
+        <summary>
+          <span class="eyebrow" id="import-elements-title" data-i18n="import.elements.legend">Éléments à importer</span>
+          <span id="import-elements-state" class="elements-state"></span>
+        </summary>
+        <div role="group" aria-labelledby="import-elements-title">
+          <ul id="import-elements-list" class="checklist elements-list"></ul>
+          <p class="hint" data-i18n="import.elements.hint">Seuls les éléments présents dans le texte collé sont proposés&nbsp;; le type de chaque colonne est toujours importé.</p>
+          <p id="formulas-hint" class="hint" hidden data-i18n="import.formulas.hint">Les formules s’exécutent dans ce document dès leur création&nbsp;: ne cochez «&nbsp;Formules&nbsp;» que pour du code de confiance. Sans cela, ces colonnes sont créées vides.</p>
+        </div>
+      </details>
 
       <div id="warnings-block" hidden>
         <h3 class="eyebrow" data-i18n="import.warnings.eyebrow">Remarques</h3>
         <ul id="warnings-list"></ul>
       </div>
 
-      <div id="create-actions" class="actions">
+      <div id="create-actions" class="actions actions-sticky">
         <button id="action-btn" type="button" class="btn btn-primary" disabled>Créer la table dans ce document</button>
       </div>
     </section>
@@ -194,7 +205,15 @@
   <section id="panel-export" class="panel" role="tabpanel" aria-labelledby="tab-export" hidden>
 
     <div class="block">
-      <h2 class="eyebrow" id="export-tables-label" data-i18n="export.step1.eyebrow">1. Tables à exporter</h2>
+      <div class="block-head">
+        <h2 class="eyebrow" id="export-tables-label" data-i18n="export.step1.eyebrow">1. Tables à exporter</h2>
+        <button id="refresh-tables-btn" type="button" class="icon-btn icon-btn-sm" aria-label="Actualiser la liste" title="Actualiser la liste" data-i18n-aria-label="export.refresh" data-i18n-title="export.refresh">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M20 12a8 8 0 1 1-2.5-5.8"></path>
+          <polyline points="20 4 20 9 15 9"></polyline>
+        </svg>
+        </button>
+      </div>
       <div id="export-search-row" class="search" hidden>
         <label class="sr-only" for="export-search" data-i18n="export.search.label">Rechercher une table</label>
         <input type="search" id="export-search" autocomplete="off" spellcheck="false" aria-controls="export-table-list" placeholder="Rechercher une table…" data-i18n-placeholder="export.search.placeholder">
@@ -218,25 +237,37 @@
         </div>
       </div>
 
-      <fieldset id="export-elements" class="elements" hidden>
-        <legend class="eyebrow" data-i18n="export.elements.legend">Éléments à exporter</legend>
-        <ul id="export-elements-list" class="checklist elements-list"></ul>
-        <p class="hint" data-i18n="export.elements.hint">Le type de chaque colonne est toujours exporté.</p>
-      </fieldset>
+      <details id="export-elements" class="elements" hidden>
+        <summary>
+          <span class="eyebrow" id="export-elements-title" data-i18n="export.elements.legend">Éléments à exporter</span>
+          <span id="export-elements-state" class="elements-state"></span>
+        </summary>
+        <div role="group" aria-labelledby="export-elements-title">
+          <ul id="export-elements-list" class="checklist elements-list"></ul>
+          <p class="hint" data-i18n="export.elements.hint">Le type de chaque colonne est toujours exporté.</p>
+        </div>
+      </details>
 
-      <div class="actions">
-        <button id="refresh-tables-btn" type="button" class="btn btn-ghost" data-i18n="export.refresh">Actualiser la liste</button>
+      <div class="actions actions-sticky">
         <button id="generate-btn" type="button" class="btn btn-primary" disabled data-i18n="export.generate">Générer le code</button>
       </div>
     </div>
 
     <div id="export-output-block" class="block" hidden>
-      <h2 class="eyebrow" id="export-output-label" data-i18n="export.step2.eyebrow">2. Code généré</h2>
-      <textarea id="export-output" rows="16" readonly spellcheck="false" aria-labelledby="export-output-label"></textarea>
-      <div class="actions">
-        <button id="copy-btn" type="button" class="btn" data-i18n="export.copy">Copier</button>
-        <span id="copy-status" aria-live="polite"></span>
+      <div class="block-head">
+        <h2 class="eyebrow" id="export-output-label" data-i18n="export.step2.eyebrow">2. Code généré</h2>
+        <button id="copy-btn" type="button" class="icon-btn icon-btn-sm" aria-label="Copier" title="Copier" data-i18n-aria-label="export.copy" data-i18n-title="export.copy">
+          <svg class="icon-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="8" y="8" width="12" height="12" rx="2"></rect>
+            <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path>
+          </svg>
+          <svg class="icon-done" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="5 12.5 10 17.5 19 7.5"></polyline>
+          </svg>
+        </button>
       </div>
+      <textarea id="export-output" rows="14" readonly spellcheck="false" aria-labelledby="export-output-label"></textarea>
+      <p id="copy-status" aria-live="polite"></p>
       <p class="hint">
         <span data-i18n="export.formulaHint.before">Seule la structure (types de colonnes) est garantie fidèle. Pour une colonne de formule, la formule d’origine est recopiée telle que stockée (syntaxe </span><code>$Colonne</code><span data-i18n="export.formulaHint.after"> de Grist) quand elle existe, sinon remplacée par la valeur par défaut du type — comme le fait Grist lui-même pour une formule vide.</span>
       </p>
