@@ -2,8 +2,9 @@
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { launchWidget } from "../browser/widgetPage.mjs";
-import { analyse, apply } from "../browser/driver.mjs";
-import { instance, rows, column, addTable, buildSource, snapshot } from "./support.mjs";
+import { analyse, apply, keepElement } from "../browser/driver.mjs";
+import { instance, column, addTable, buildSource, snapshot, tableDescriptions } from "./support.mjs";
+import { zipRows } from "../../js/schema.js";
 
 const widget = await launchWidget();
 const context = await widget.browser.newContext();
@@ -25,7 +26,7 @@ const isKnownCspNoise = (text) => text.includes("inline style") && text.includes
 
 /** Opens `doc` on a page showing the widget; returns the page, the widget's frame and what it logged as errors. */
 async function openWidgetIn(doc) {
-  const [table] = rows(await doc.fetchTable("_grist_Tables"));
+  const [table] = zipRows(await doc.fetchTable("_grist_Tables"));
   const { retValues } = await doc.apply([["CreateViewSection", table.id, 0, "custom", null, null]]);
   const { sectionRef, viewRef } = retValues[0];
   const customView = JSON.stringify({ mode: "url", url: widget.url, access: "full", pluginId: "", sectionId: "", renderAfterReady: false });
@@ -57,7 +58,7 @@ test("Export in one document, Import in another, both through Grist's own interf
       { id: "Mood", type: "Choice", widgetOptions: { choices: ["Content (ok)", "it's"], alignment: "center" } },
       { id: "Shout", type: "Text", formula: "$Mood.upper()" },
     ],
-  });
+  }, { descriptions: { Teams: "Les équipes" } });
 
   const exporter = await openWidgetIn(source);
   await exporter.frame.click("#tab-export");
@@ -72,7 +73,7 @@ test("Export in one document, Import in another, both through Grist's own interf
   const target = await instance.newDoc("in Grist: target");
   const importer = await openWidgetIn(target);
   await analyse(importer.frame, text);
-  await importer.frame.check("#with-formulas");
+  await keepElement(importer.frame, "import", "Formules");
   assert.match(await apply(importer.frame), /^2 tables créées \(Members, Teams\)/);
   assert.deepEqual(importer.errors, []);
   await importer.page.close();
@@ -81,6 +82,7 @@ test("Export in one document, Import in another, both through Grist's own interf
   assert.deepEqual(after.Members, before.Members);
   assert.deepEqual(after.Teams, before.Teams);
   assert.equal(after.Teams[0].description, "Nom de l'équipe\nsur deux lignes");
+  assert.equal((await tableDescriptions(target)).Teams, "Les équipes", "the description of the table, written to its raw data widget through the plugin API");
   assert.deepEqual([after.Members[0].reverseCol, after.Members.at(-1).formula], ["Roster", "$Mood.upper()"], "the two-way link and the formula came through the plugin API");
 });
 
@@ -89,7 +91,7 @@ test("columns added to an existing table show up in its page", async () => {
   await addTable(doc, "Contacts", [column("Name")]);
   const { frame, page, errors } = await openWidgetIn(doc);
   await analyse(frame, "@grist.UserTable\nclass X:\n  name = grist.Text()\n  Email = grist.Text(description='Pro')\n");
-  await frame.click('label.mode-card:has(input[value="existing"])');
+  await frame.click('label.segmented-option:has(input[value="existing"])');
   await frame.selectOption("#target-table-select", { label: "Contacts" });
   assert.equal(await apply(frame), "1 colonne ajoutée à « Contacts ».");
   assert.deepEqual(errors, []);
@@ -97,9 +99,9 @@ test("columns added to an existing table show up in its page", async () => {
 
   assert.deepEqual((await snapshot(doc)).Contacts.map((col) => [col.id, col.description]), [["Name", ""], ["Email", "Pro"]]);
 
-  const [contacts] = rows(await doc.fetchTable("_grist_Tables")).filter((table) => table.tableId === "Contacts");
-  const pageSections = rows(await doc.fetchTable("_grist_Views_section")).filter((section) => section.tableRef === contacts.id && section.parentId !== 0);
-  const shown = rows(await doc.fetchTable("_grist_Views_section_field")).filter((field) => pageSections.some((section) => section.id === field.parentId));
+  const [contacts] = zipRows(await doc.fetchTable("_grist_Tables")).filter((table) => table.tableId === "Contacts");
+  const pageSections = zipRows(await doc.fetchTable("_grist_Views_section")).filter((section) => section.tableRef === contacts.id && section.parentId !== 0);
+  const shown = zipRows(await doc.fetchTable("_grist_Views_section_field")).filter((field) => pageSections.some((section) => section.id === field.parentId));
   const email = (await doc.columns("Contacts")).find((col) => col.colId === "Email");
   assert.ok(shown.some((field) => field.colRef === email.id), "the new column is in the table's grid");
 });

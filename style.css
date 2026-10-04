@@ -143,6 +143,7 @@ body {
   margin-bottom: 20px;
 }
 
+/* Lets the title shrink and wrap beside the controls, rather than push them out of a narrow pane. */
 .masthead-text {
   min-width: 0;
 }
@@ -200,6 +201,51 @@ h1 {
 .icon-btn svg {
   width: 18px;
   height: 18px;
+}
+
+/* The icon buttons that act on a whole block sit in its head, beside its title. */
+.icon-btn-sm {
+  width: 30px;
+  height: 30px;
+}
+
+.icon-btn-sm svg {
+  width: 16px;
+  height: 16px;
+}
+
+.block-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.block-head .eyebrow {
+  margin: 0;
+}
+
+/* A button with an icon beside its label: the copy button shows a tick in place of its icon for a moment once the code is copied. */
+button.btn-with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-with-icon svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.btn-with-icon .icon-done,
+.btn-with-icon.is-done .icon-copy {
+  display: none;
+}
+
+.btn-with-icon.is-done .icon-done {
+  display: block;
 }
 
 .brand-logo {
@@ -272,6 +318,7 @@ label,
 
 textarea,
 input[type="text"],
+input[type="search"],
 select {
   width: 100%;
   border: 1.5px solid var(--field-border);
@@ -297,12 +344,18 @@ input[aria-invalid="true"] {
 }
 
 select,
-input[type="text"] {
+input[type="text"],
+input[type="search"] {
   font-family: var(--font-chrome);
+}
+
+input[type="search"] {
+  appearance: none;
 }
 
 textarea:focus,
 input[type="text"]:focus,
+input[type="search"]:focus,
 select:focus {
   outline: 2.5px solid var(--accent);
   outline-offset: 1px;
@@ -354,60 +407,11 @@ button.btn:disabled {
   cursor: not-allowed;
 }
 
-/* Import mode picker */
+/* Import mode: the two choices of a segmented control (see .segmented), a little larger than in the settings. */
 
-.mode-picker {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-
-@media (max-width: 480px) {
-  .mode-picker {
-    grid-template-columns: 1fr;
-  }
-}
-
-.mode-card {
-  display: block;
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 12px;
-  cursor: pointer;
-  position: relative;
-}
-
-.mode-card:hover:not(.is-checked) {
-  border-color: var(--border-strong);
-}
-
-.mode-card.is-checked {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-}
-
-.mode-radio {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  width: 16px;
-  height: 16px;
-  accent-color: var(--accent);
-}
-
-.mode-card-title {
-  display: block;
-  font-weight: 800;
-  font-size: 0.9rem;
-  padding-right: 22px;
-  margin-bottom: 4px;
-}
-
-.mode-card-desc {
-  display: block;
-  color: var(--muted);
-  font-size: 0.82rem;
-  line-height: 1.35;
+.mode-picker .segmented-option {
+  padding: 9px 8px;
+  font-size: 0.85rem;
 }
 
 /* Columns preview table */
@@ -418,6 +422,7 @@ table#columns-preview {
   margin-top: 4px;
 }
 
+/* 1% makes the table give this column no more than its box needs. */
 #columns-preview th.col-checkbox,
 #columns-preview td.col-checkbox {
   width: 1%;
@@ -489,6 +494,12 @@ table#columns-preview {
   font-size: 0.82rem;
   color: var(--muted);
   margin-bottom: 3px;
+}
+
+/* The description a table will have, shown under the field of its id: the user's own words, so in italics. */
+.table-description {
+  margin: 4px 0 0;
+  font-style: italic;
 }
 
 .tag {
@@ -570,8 +581,9 @@ label + .hint {
   margin-bottom: 3px;
 }
 
-/* Export checklist (also reused by the Import tab's multi-table picker) */
+/* Export checklist (also reused by the Import tab's multi-table picker, and by the choice of the elements to keep) */
 
+/* A long list scrolls in its block, not the whole pane, so that the action stays near. */
 .checklist {
   list-style: none;
   margin: 0;
@@ -610,8 +622,202 @@ label + .hint {
   accent-color: var(--accent);
 }
 
+/* Export: the row of a table holds its box and the button that unfolds the choice of its columns, a box for each. */
+
+.table-row {
+  display: flex;
+  align-items: center;
+}
+
+/* The name takes what the button leaves, and wraps. */
+.table-row > label {
+  flex: 1;
+  min-width: 0;
+}
+
+.columns-toggle {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 6px;
+  min-width: 28px;
+  min-height: 28px;
+  margin-right: 6px;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.columns-toggle:hover {
+  color: var(--ink);
+}
+
+.columns-toggle:focus-visible {
+  outline: 2.5px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* The chevron is two borders turned, not an icon: it points right when folded, down when unfolded. */
+.columns-toggle::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  margin: 0 3px 2px 2px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+}
+
+.columns-toggle[aria-expanded="true"]::after {
+  margin-bottom: 4px;
+  transform: rotate(45deg);
+}
+
+/* A row that is unfolded lets the list grow: the choice of columns is not read through two boxes that scroll. */
+#export-table-list:has(.columns-toggle[aria-expanded="true"]) {
+  max-height: none;
+}
+
+/* The columns of a table: a list of their own, which scrolls when the table has many. */
+.columns-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 11rem;
+  margin: 0 8px 8px 38px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--border);
+  overflow-y: auto;
+}
+
+.checklist .columns-list label {
+  padding: 4px 6px;
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
+/* Export: the search of a table, above the list */
+
+.search {
+  margin: 0 0 10px;
+}
+
+#export-search-status:empty {
+  margin: 0;
+}
+
+/* The elements of the columns (labels, choices, formulas…) that Export and Import let the user leave out: folded, with what is chosen written on the summary; a few short rows side by side once unfolded. */
+
+.elements {
+  margin: 14px 0 0;
+  min-width: 0;
+}
+
+.elements summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  padding: 5px 0;
+  cursor: pointer;
+  list-style: none;
+}
+
+.elements summary::-webkit-details-marker {
+  display: none;
+}
+
+.elements summary::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  margin: 0 4px 2px 3px;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(-45deg);
+}
+
+.elements[open] > summary::before {
+  margin-bottom: 4px;
+  transform: rotate(45deg);
+}
+
+.elements summary:focus-visible {
+  outline: 2.5px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.elements summary .eyebrow {
+  margin: 0;
+}
+
+.elements-state {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.elements[open] > summary {
+  margin-bottom: 6px;
+}
+
+.elements-list {
+  max-height: none;
+  overflow: visible;
+}
+
+.elements-list li {
+  display: flex;
+}
+
+.elements-list label {
+  flex: 1;
+  align-items: flex-start;
+}
+
+.elements-list input[type="checkbox"] {
+  margin-top: 1px;
+}
+
+.element-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+/* The name and the count share a line while they fit: the count goes under the name rather than squeezing it. */
+.element-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0 8px;
+}
+
+.element-hint {
+  font-size: 0.75rem;
+  font-weight: 400;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+.elements-list .tag {
+  margin-left: auto;
+}
+
 #export-output {
   min-height: 200px;
+}
+
+#copy-status:empty {
+  display: none;
 }
 
 .hint {
@@ -670,6 +876,11 @@ label + .hint {
   color: var(--info);
 }
 
+.status-warning {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
 .status-success {
   background: var(--success-soft);
   color: var(--success);
@@ -680,9 +891,9 @@ label + .hint {
   color: var(--danger);
 }
 
-/* Réglages (settings) dialog */
+/* The dialogs: Réglages, and the confirmation Import asks for before it writes in the document */
 
-dialog#settings-dialog {
+dialog.dialog {
   border: none;
   border-radius: var(--radius);
   padding: 0;
@@ -692,8 +903,50 @@ dialog#settings-dialog {
   box-shadow: var(--shadow-float);
 }
 
-dialog#settings-dialog::backdrop {
+dialog.dialog::backdrop {
   background: rgba(20, 24, 36, 0.45);
+}
+
+/* The confirmation: what will be added, any warning, what is never touched, and the two buttons. */
+
+.dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px 18px 6px;
+}
+
+.dialog-body p {
+  margin: 0;
+}
+
+.dialog-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+/* Many tables or columns scroll in the dialog; its buttons stay in view. */
+.confirm-list {
+  max-height: 12rem;
+  margin: 0;
+  padding-left: 1.2rem;
+  overflow-y: auto;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.confirm-list li {
+  overflow-wrap: anywhere;
+}
+
+.dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 18px 18px;
 }
 
 .settings-header {
@@ -744,6 +997,7 @@ dialog#settings-dialog::backdrop {
   text-align: center;
 }
 
+/* The radio stays in the page for the keyboard and for screen readers; the label around it is what is seen. */
 .segmented-option input {
   position: absolute;
   opacity: 0;
@@ -803,8 +1057,11 @@ dialog#settings-dialog::backdrop {
 #columns-preview th,
 .table-id-entry label,
 .checklist span,
+/* A long identifier has no space to wrap at: it is broken rather than left to overflow the pane. */
+#export-search-status,
 #warnings-list li,
 .field-error,
+.table-description,
 .refs-list li {
   overflow-wrap: anywhere;
 }
@@ -818,6 +1075,24 @@ html[data-pending-locale] body {
 @keyframes reveal {
   to {
     visibility: visible;
+  }
+}
+
+/* The action of a block stays in reach while the block is longer than the pane; a very short pane (a page zoomed in) keeps it in the flow, where it takes no room from the content. */
+@media (min-height: 480px) {
+  html {
+    scroll-padding-bottom: 5rem;
+  }
+
+  .actions-sticky {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    margin: 14px -18px -18px;
+    padding: 12px 18px;
+    border-top: 1px solid var(--border);
+    border-radius: 0 0 var(--radius) var(--radius);
+    background: var(--surface);
   }
 }
 
@@ -840,13 +1115,12 @@ html[data-pending-locale] body {
 /* High-contrast modes drop backgrounds: keep what they said (selected, framed) as outlines and borders. */
 @media (forced-colors: active) {
   .tab[aria-selected="true"],
-  .segmented-option.is-checked,
-  .mode-card.is-checked {
+  .segmented-option.is-checked {
     outline: 2px solid Highlight;
     outline-offset: -2px;
   }
 
-  dialog#settings-dialog,
+  dialog.dialog,
   .status,
   #warnings-block {
     border: 1px solid CanvasText;

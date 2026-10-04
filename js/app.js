@@ -1,3 +1,12 @@
+/**
+ * The entry point: it announces the widget to Grist, asks for the access it needs and sets the two tabs and the
+ * Réglages dialog going.
+ *
+ * "full" is the level that lets the widget read Grist's metadata tables (`_grist_Tables`, `_grist_Tables_column` and
+ * `_grist_Views_section`, which Export and the checks of Import read) and create tables and columns. It never reads or
+ * writes the rows of a table; the README (« Accès demandé à Grist ») says what is read and written, and when.
+ */
+
 import { $ } from "./dom.js";
 import { initSettings } from "./settings.js";
 import { initImportTab } from "./importTab.js";
@@ -10,6 +19,7 @@ grist?.ready({ requiredAccess: "full" });
 const exportTab = initExportTab(grist);
 initImportTab(grist);
 
+/** The tabs, in the order of the tablist: each has a button `tab-<name>` and a panel `panel-<name>`. */
 const TABS = ["import", "export"];
 
 function activate(name) {

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readdirSync } from "node:fs";
-import { STRINGS, tn, typeLabel } from "../js/i18n.js";
+import { STRINGS, translatePlural, typeLabel } from "../js/i18n.js";
 import { plain, read } from "./helpers.mjs";
 
 test("typeLabel gives a readable name, with the target or time zone when there is one", () => {
@@ -13,9 +13,9 @@ test("typeLabel gives a readable name, with the target or time zone when there i
 });
 
 test("tn follows the plural rules of the language: in French zero is singular", () => {
-  assert.equal(tn("common.columnsCount", 0), "0 colonne");
-  assert.equal(tn("common.columnsCount", 1), "1 colonne");
-  assert.equal(tn("common.columnsCount", 2), "2 colonnes");
+  assert.equal(translatePlural("common.columnsCount", 0), "0 colonne");
+  assert.equal(translatePlural("common.columnsCount", 1), "1 colonne");
+  assert.equal(translatePlural("common.columnsCount", 2), "2 colonnes");
 });
 
 const [, i18nCode] = read("js/i18n.js").split("const LOCALE_KEY");
@@ -65,7 +65,7 @@ test("the French written in the markup is the dictionary's, so nothing changes w
     assert.equal(tidy(decode(text)), tidy(STRINGS.fr[key]), key);
     checked++;
   }
-  for (const [tag, kind, key] of html.matchAll(/<[^>]*data-i18n-(aria-label|placeholder)="([^"]+)"[^>]*>/g).map((match) => [match[0], match[1], match[2]])) {
+  for (const [tag, kind, key] of html.matchAll(/<[^>]*data-i18n-(aria-label|placeholder|title)="([^"]+)"[^>]*>/g).map((match) => [match[0], match[1], match[2]])) {
     assert.equal(tidy(decode(tag.match(new RegExp(`(?<=\\s)${kind}="([^"]*)"`))[1])), tidy(STRINGS.fr[key]), key);
     checked++;
   }

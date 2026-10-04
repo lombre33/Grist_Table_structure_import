@@ -6,7 +6,8 @@ simplement (revue de code manuelle ou outillée), en vue d'un audit.
 ## Ce que fait réellement le widget
 
 Les actions possibles, toutes via l'API officielle du widget (`grist.docApi`), jamais
-davantage :
+davantage. Aucune des écritures ci-dessous n'est envoyée avant que l'utilisateur ait confirmé,
+dans une boîte de dialogue qui résume ce qui sera ajouté (Annuler ou Échap n'écrit rien) :
 
 - **Import, mode « Nouvelle table »** : crée les tables cochées (action `AddTable`, toutes
   dans un seul appel, donc tout ou rien) dans le document où le widget est ouvert, à
@@ -26,24 +27,29 @@ davantage :
   de la colonne d'affichage, indépendance de l'identifiant vis-à-vis du libellé —
   `untieColIdFromLabel`, que `AddTable` ignore aussi) puis `SetDisplayFormula` (fait
   afficher la valeur cible), exactement les actions que l'interface Grist envoie pour
-  « SHOW COLUMN ». Elles
+  « SHOW COLUMN ». Pour une table créée dont le texte donne une description (la chaîne qui
+  ouvre sa classe), le même appel contient `UpdateRecord` sur `_grist_Views_section`, le
+  widget « Données brutes » de la table, où Grist garde la description d'une table
+  (`AddTable` ne la reçoit pas). Ces actions
   utilisent les identifiants que Grist a réellement créés (ceux qu'il renvoie, qu'il peut
-  avoir réécrits) et ne ciblent **jamais** que des colonnes créées par le premier appel —
-  jamais une colonne préexistante. Un échec de ce second appel n'annule pas la création
-  déjà faite ; il est signalé séparément à l'utilisateur.
+  avoir réécrits) et ne ciblent **jamais** que des colonnes ou des tables créées par le
+  premier appel — jamais une colonne ou une table préexistante. Un échec de ce second appel
+  n'annule pas la création déjà faite ; il est signalé séparément à l'utilisateur.
 - **Import, références bidirectionnelles** : pour deux colonnes de référence créées par le
   même appel et qui se désignent l'une l'autre (`reverse_of`), un dernier appel envoie
   `ModifyColumn` avec `reverseCol` (l'action que Grist utilise pour relier deux colonnes).
   Il ne cible, lui aussi, que des colonnes créées par le premier appel : relier une colonne
   qui existait déjà réécrirait ses valeurs. Un échec est signalé sans annuler la création.
-- **Import, formules (option)** : si l'utilisateur coche **Reprendre aussi les formules**
-  (décochée à chaque analyse), les colonnes de formule et les formules de déclenchement
-  du texte sont envoyées à Grist avec le même appel `AddTable` / `AddVisibleColumn`
-  (champs `isFormula` et `formula` de la définition de colonne). Voir « Le texte collé
-  n'est jamais exécuté » ci-dessous : le widget ne les évalue pas, Grist si.
+- **Import, formules (option)** : si l'utilisateur coche **Formules** dans le groupe
+  **Éléments à importer** (décoché à chaque analyse), les colonnes de formule et les
+  formules de déclenchement du texte sont envoyées à Grist avec le même appel
+  `AddTable` / `AddVisibleColumn` (champs `isFormula` et `formula` de la définition de
+  colonne). Voir « Le texte collé n'est jamais exécuté » ci-dessous : le widget ne les
+  évalue pas, Grist si.
 - **Export** : lecture seule. Le widget lit la structure des tables de ce document
-  (`grist.docApi.fetchTable` sur les tables de métadonnées `_grist_Tables` et
-  `_grist_Tables_column` — voir « Lecture des tables de métadonnées » ci-dessous) et
+  (`grist.docApi.fetchTable` sur les tables de métadonnées `_grist_Tables`,
+  `_grist_Tables_column` et `_grist_Views_section` — voir « Lecture des tables de
+  métadonnées » ci-dessous) et
   affiche le code généré à l'écran ; rien n'est modifié dans le document, rien n'est
   envoyé où que ce soit. L'utilisateur copie le texte lui-même s'il veut l'utiliser
   ailleurs.
@@ -59,9 +65,10 @@ soit son type réel.
 
 ## Lecture des tables de métadonnées
 
-Les modes « Table existante » et « Export » lisent `_grist_Tables` et
-`_grist_Tables_column` — les tables internes où Grist décrit lui-même la structure du
-document (identifiants de table, colonnes, types...). Ce n'est pas un accès caché ou
+Les modes « Table existante » et « Export » lisent `_grist_Tables`,
+`_grist_Tables_column` et `_grist_Views_section` — les tables internes où Grist décrit
+lui-même la structure du document (identifiants de table, colonnes, types, et, pour la
+description d'une table, son widget « Données brutes »). Ce n'est pas un accès caché ou
 détourné : c'est le mécanisme normal `grist.docApi.fetchTable(tableId)` de l'API
 publique du widget, appliqué à ces tables comme à n'importe quelle autre — l'implémentation
 côté Grist (`GristDocAPIImpl.fetchTable`, dans `app/client/components/WidgetFrame.ts`
@@ -92,17 +99,24 @@ parseur à des milliers de textes d'entrée mutés au hasard (graine fixe) : il 
 d'exception et s'arrête toujours vite.
 
 Les **formules** sont le seul cas où du texte collé finit par s'exécuter, et ce n'est pas
-dans le widget : sans l'option **Reprendre aussi les formules**, aucune colonne n'est
-créée avec une formule (`isFormula: false`, `formula: ""` dans chaque définition envoyée ;
+dans le widget : sans l'option **Formules** du groupe **Éléments à importer**, aucune
+colonne n'est créée avec une formule (`isFormula: false`, `formula: ""` dans chaque définition envoyée ;
 `test/grist/importer.test.mjs` le vérifie dans un vrai document, même pour un texte qui
 contient du code). Avec l'option, le corps des fonctions est recopié tel quel dans le
 champ `formula` d'une colonne, que Grist évalue dans son propre bac à sable Python
 exactement comme une formule saisie dans une cellule : le widget n'ajoute ni ne retire
 aucun pouvoir à ce code, et ne l'interprète pas (`js/parser.js` n'en lit que l'indentation et
 les chaînes, pour savoir où la fonction s'arrête).
-La case est décochée par défaut, accompagnée d'une mise en garde (« n'activez cette option
-que pour du code de confiance »), précisément parce que l'origine d'un texte collé est
-inconnue.
+L'option est décochée par défaut, et à chaque analyse, accompagnée d'une mise en garde
+(« ne cochez “Formules” que pour du code de confiance »), précisément parce que l'origine
+d'un texte collé est inconnue. La boîte de confirmation, affichée avant toute écriture, la
+répète et nomme les colonnes dont la formule contient le mot `REQUEST` : sur une instance
+où cette fonction de Grist est activée, une formule peut s'en servir pour envoyer des
+données du document vers un autre serveur (le widget lui-même ne fait aucune requête).
+Les autres éléments du groupe (libellés, descriptions des colonnes et des tables, listes de
+choix, format des cellules, colonne affichée des références, liens bidirectionnels) ne font
+que retirer, au choix de l'utilisateur, une partie de ce que l'import aurait appliqué :
+ils n'ajoutent aucun appel ni aucun pouvoir.
 
 ## Métadonnées de colonne capturées à l'export (choix, styles, `widget_options`)
 
@@ -180,7 +194,10 @@ chargement, dans ce même navigateur. Le widget s'exécutant dans un `<iframe>`
 intégré par Grist, l'accès au stockage peut être partitionné ou bloqué par le
 navigateur (protections anti-tracking tierces) : chaque lecture/écriture est entourée
 d'un `try/catch` et une indisponibilité ne casse rien, elle fait simplement revenir le
-réglage à sa valeur par défaut (thème système, français) au chargement suivant.
+réglage à sa valeur par défaut (thème système, français) au chargement suivant. Un test
+vérifie dans le code que ces deux clés sont les seules, et que seuls `js/storage.js` et
+`js/theme-init.js` touchent au stockage ; un autre, dans le navigateur, qu'un import et un export
+complets ne laissent rien dans `localStorage`, `sessionStorage`, les cookies ni `indexedDB`.
 
 Pour que ce réglage s'applique dès le premier affichage plutôt qu'après le chargement des
 modules, un petit script classique, `js/theme-init.js` (une dizaine de lignes, seule autre
@@ -243,6 +260,12 @@ ni `node_modules/` ni `package.json`) et ne sont jamais chargées par le widget 
 l'affirmation « aucune dépendance d'exécution » ci-dessus reste exacte. L'image Docker de
 Grist ne sert qu'aux tests, jamais au widget publié.
 
+Les vulnérabilités connues de ces dépendances sont contrôlées à chaque envoi : l'intégration
+continue lance `npm audit --audit-level=high` après `npm ci` (une alerte haute ou critique
+fait échouer la construction, donc le déploiement), et `package-lock.json` épingle les versions.
+Au 4 octobre 2026, `npm audit` ne signale aucune vulnérabilité (0 sur les dépendances de développement,
+0 sur celles d'exécution, qui n'existent pas).
+
 ## Logo Grist Factory
 
 `assets/grist-factory-logo.jpg` est une image statique fournie par l'auteur (Grist
@@ -253,12 +276,12 @@ modification de la CSP.
 
 ## Icônes : SVG en ligne, jamais de police d'icônes
 
-Les deux icônes de l'interface (Réglages, fermer) sont des `<svg>` écrits directement
-dans `index.html`, en contour (`stroke="currentColor"`, sans `fill`) : elles héritent
+Les icônes de l'interface (Réglages, fermer, effacer, actualiser la liste, copier et son
+✓) sont des `<svg>` écrits directement dans `index.html` (les chevrons des groupes qui se
+déplient sont dessinés en CSS, par une bordure), en contour (`stroke="currentColor"`, sans `fill`) : elles héritent
 la couleur du texte du bouton qui les contient, s'adaptent donc automatiquement au thème
 clair/sombre sans code ni fichier supplémentaire. Aucune police d'icônes, aucun emoji,
-aucune image externe (`<img>`) : rien de plus que les deux balises `<svg>` déjà présentes
-dans le HTML.
+aucune image externe (`<img>`) : rien de plus que les balises `<svg>` écrites dans le HTML.
 
 ## Content-Security-Policy
 
@@ -267,7 +290,7 @@ des en-têtes HTTP personnalisés) :
 
 ```
 default-src 'none';
-script-src 'self' https://docs.getgrist.com 'unsafe-eval';
+script-src 'self' https://docs.getgrist.com/grist-plugin-api.js 'unsafe-eval';
 style-src 'self';
 img-src 'self';
 font-src 'self';
@@ -281,8 +304,10 @@ Points notables :
 
 - `default-src 'none'` : tout est interdit par défaut, seules les directives listées
   ci-dessous ouvrent explicitement ce qui est nécessaire.
-- `script-src` n'autorise que le code du widget lui-même et le script officiel Grist ;
-  aucun autre domaine, aucune CDN.
+- `script-src` n'autorise que le code du widget lui-même et le script officiel Grist, désigné
+  par son adresse exacte : le reste de `docs.getgrist.com` (autres scripts, contenus
+  servis par ce domaine) ne peut pas s'exécuter dans le widget ; aucun autre domaine,
+  aucune CDN.
 - `font-src 'self'` : nécessaire pour que la police Manrope vendorisée
   (`fonts/manrope/`, voir « Dépendances » ci-dessus) se charge — sans `font-src`
   explicite, cette directive retomberait sur `default-src 'none'` et bloquerait même ce
@@ -323,7 +348,12 @@ Points notables :
 
 ## Portée d'accès demandée à Grist
 
-Le widget appelle `grist.ready({ requiredAccess: "full" })`. Ce niveau est nécessaire
+Le widget appelle `grist.ready({ requiredAccess: "full" })` (le `README.md` détaille, dans
+« Accès demandé à Grist », ce qui est lu et écrit, et quand ; `test/security.test.mjs` vérifie
+dans le code que les seules actions envoyées sont `AddTable`, `AddVisibleColumn`,
+`ModifyColumn`, `SetDisplayFormula` et `UpdateRecord`, que les seules tables lues sont
+`_grist_Tables`, `_grist_Tables_column` et `_grist_Views_section`, et qu'aucune ligne de table n'est
+lue). Ce niveau est nécessaire
 pour créer une table ou des colonnes (`applyUserActions`), lister les tables existantes
 (`listTables`) et lire leur structure (`fetchTable`, voir ci-dessus) ; Grist affiche
 explicitement à l'utilisateur, lors du premier ajout du widget, une demande
@@ -343,5 +373,8 @@ correspondante dans le `README.md`.
 
 ## Signaler une vulnérabilité
 
-Ouvrez une *issue* sur ce dépôt en décrivant le problème et, si possible, les étapes de
-reproduction.
+Ne décrivez pas une faille exploitable dans une *issue* publique : elle serait connue de
+tous avant d'être corrigée. Utilisez le signalement privé de GitHub (onglet **Security** du
+dépôt, puis **Report a vulnerability**) en décrivant le problème et, si possible, les étapes
+de reproduction. Si ce bouton n'est pas proposé, ouvrez une *issue* qui demande seulement un
+contact privé, sans rien dire de la faille.

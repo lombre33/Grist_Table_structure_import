@@ -1,12 +1,22 @@
 /**
- * French and English texts. t(key, params) fills {name} placeholders, tn(key, count, params) picks the
- * singular or plural form of a {one, other} entry; the static markup uses data-i18n*, applied by applyI18n().
+ * French and English texts, and how they are used.
+ *
+ * - translate(key, params) fills {name} placeholders; translatePlural(key, count, params) picks the singular or the plural
+ *   form of a { one, other } entry by the plural rules of the language (in French, zero is singular) and offers {n}.
+ * - A key reads `area.element.part`. Both languages have the same keys, with the same plural forms and placeholders;
+ *   test/i18n.test.mjs checks it, and that every key is used and none is missing.
+ * - The static markup of index.html carries the French and names its key in data-i18n (the text), data-i18n-placeholder,
+ *   data-i18n-aria-label or data-i18n-title. applyI18n() writes the language chosen over it, and a test checks that the
+ *   French of the markup is the French below, so that nothing moves when the script takes over.
+ * - French typography: a no-break space before : ; ? ! and » and after «; ’ for the apostrophe, in both languages (tested).
+ * - What the widget says while it works is built at that moment: onLocaleChange() lets it be built again in the new language.
  */
 
 import { load, save } from "./storage.js";
 
 export const STRINGS = {
   fr: {
+    // The static texts, in the order of index.html: the Réglages dialog, the heading and the tabs, then the Import steps.
     "settings.open": "Réglages",
     "settings.close": "Fermer",
     "settings.title": "Réglages",
@@ -28,21 +38,21 @@ export const STRINGS = {
     "import.step1.eyebrow": "1. Code source",
     "import.step1.label": "Code Python d’une table",
     "import.step1.hint":
-      "À copier depuis le menu « Code View » de la table, dans le document d’origine, ou depuis l’onglet Export de ce " +
-      "widget (qui garde en plus les choix détaillés).",
+      "À copier depuis « Code View » dans le document d’origine, ou depuis l’onglet Export de ce widget. Il est " +
+      "analysé dès qu’il est collé.",
     "import.step1.placeholder": "@grist.UserTable\nclass MaTable:\n  MaColonne = grist.Text()",
     "import.analyze": "Analyser",
     "import.clear": "Effacer",
-    "import.step2.eyebrow": "2. Que faire de ce code ?",
+    "import.mode.label": "Que faire de ce code ?",
     "import.mode.create.title": "Nouvelle table",
     "import.mode.create.desc": "Crée une table dédiée avec toutes les colonnes détectées. Recommandé.",
     "import.mode.existing.title": "Table existante",
     "import.mode.existing.desc": "Ajoute uniquement les colonnes qui manquent à une table de ce document.",
-    "import.step3.eyebrow": "3. Vérification avant application",
+    "import.step2.eyebrow": "2. Vérification avant application",
     "import.tablePicker.label": "Table à importer (plusieurs trouvées)",
     "import.tableMultiPicker.label": "Tables à créer (plusieurs trouvées)",
     "import.tableId.label": { one: "Identifiant de la nouvelle table", other: "Identifiants des nouvelles tables" },
-    "import.step3.none": "Résultat de l’analyse",
+    "import.step2.none": "Résultat de l’analyse",
     "import.targetTable.label": "Table à compléter",
     "import.preview.includeAll": "Inclure toutes les colonnes",
     "import.preview.fromTable": "depuis {tableId}",
@@ -51,22 +61,55 @@ export const STRINGS = {
     "import.preview.status": "Statut",
     "import.preview.formula": "formule",
     "import.preview.trigger": "formule de déclenchement",
-    "import.formulas.option": {
-      one: "Reprendre aussi la formule de {n} colonne",
-      other: "Reprendre aussi les formules de {n} colonnes",
-    },
+    // The elements a column carries besides its type (see elements.js): the name of each and the line that says what it is,
+    // the same for Import and Export. The summary of the choice (elements.summary.*) is written on the folded group.
+    "element.labels": "Libellés",
+    "element.labels.hint": "Le nom affiché de chaque colonne, s’il diffère de son identifiant.",
+    "element.descriptions": "Descriptions des colonnes",
+    "element.descriptions.hint": "Le texte d’aide de chaque colonne.",
+    "element.tableDescriptions": "Descriptions des tables",
+    "element.tableDescriptions.hint": "Le texte d’aide de la table.",
+    "element.choices": "Listes de choix",
+    "element.choices.hint": "Les choix proposés, avec leurs couleurs.",
+    "element.options": "Format des cellules",
+    "element.options.hint": "Alignement, formats de nombre et de date, couleurs…",
+    "element.displayColumns": "Colonne affichée des références",
+    "element.displayColumns.hint": "Quelle colonne de la table liée la cellule d’une référence affiche.",
+    "element.twoWay": "Liens bidirectionnels",
+    "element.twoWay.hint": "Deux références qui se mettent à jour l’une l’autre.",
+    "element.formulas": "Formules",
+    "element.formulas.hint": "Formules des colonnes calculées et formules de déclenchement.",
+    "import.elements.legend": "Éléments à importer",
+    "import.elements.hint":
+      "Seuls les éléments présents dans le texte collé sont proposés ; le type de chaque colonne est toujours importé.",
     "import.formulas.hint":
-      "Les formules s’exécutent dans ce document dès leur création : n’activez cette option que pour du code de " +
-      "confiance. Sans elle, ces colonnes sont créées vides.",
+      "Les formules s’exécutent dans ce document dès leur création : ne cochez « Formules » que pour du code de " +
+      "confiance. Sans cela, ces colonnes sont créées vides.",
     "import.warnings.eyebrow": "Remarques",
     "import.action.create": "Créer la table dans ce document",
+    // The Export steps: the list of tables with its search and the choice of columns of each, the elements, the copy.
     "export.step1.eyebrow": "1. Tables à exporter",
     "export.tables.empty": "Aucune table exportable trouvée dans ce document.",
     "export.selectAll": "Tout cocher",
+    "export.selectAllShown": "Cocher les tables affichées",
+    "export.search.label": "Rechercher une table",
+    "export.search.placeholder": "Rechercher une table…",
+    "export.search.count": { one: "{n} table affichée sur {total}.", other: "{n} tables affichées sur {total}." },
+    "export.search.none": "Aucune table ne correspond à « {query} ».",
+    "export.search.hiddenTicked": { one: "{n} table cochée est masquée.", other: "{n} tables cochées sont masquées." },
+    "export.elements.legend": "Éléments à exporter",
+    "export.elements.hint": "Le type de chaque colonne est toujours exporté.",
+    "elements.summary.all": "Tous",
+    "elements.summary.none": "Aucun",
+    "elements.summary.without": "Sans {names}",
+    "elements.summary.some": "{kept} sur {total}",
     "export.refresh": "Actualiser la liste",
+    "export.columns.toggle": "Choisir les colonnes de {tableId}",
+    "export.columns.group": "Colonnes de {tableId}",
+    "export.columns.some": { one: "{n} colonne sur {total}", other: "{n} colonnes sur {total}" },
     "export.generate": "Générer le code",
     "export.step2.eyebrow": "2. Code généré",
-    "export.copy": "Copier",
+    "export.copy": "Copier le code",
     "export.formulaHint.before":
       "Seule la structure (types de colonnes) est garantie fidèle. Pour une colonne de formule, " +
       "la formule d’origine est recopiée telle que stockée (syntaxe ",
@@ -74,12 +117,14 @@ export const STRINGS = {
       " de Grist) quand elle existe, sinon remplacée par la valeur par défaut du type — comme le fait " +
       "Grist lui-même pour une formule vide.",
 
+    // What the widget says while it works. First what both tabs share: the errors, and the counts that sentences are built from.
     "error.noGristApi":
       "Impossible de trouver l’API Grist. Ouvrez cette page en tant que widget personnalisé " +
       "dans un document Grist (elle ne fonctionne pas seule, hors d’un document).",
     "error.timeout": "Délai dépassé en attendant la réponse du document Grist.",
     "common.tablesCount": { one: "{n} table", other: "{n} tables" },
     "common.columnsCount": { one: "{n} colonne", other: "{n} colonnes" },
+    // The name of each type of column in the preview ({arg} is the table a reference points to, or the time zone); see typeLabel().
     "type.Text": "Texte",
     "type.Numeric": "Numérique",
     "type.Int": "Entier",
@@ -94,6 +139,7 @@ export const STRINGS = {
     "type.Blob": "Binaire (Blob)",
     "type.Any": "Quelconque (Any)",
 
+    // The notes about the text that was read (parser.js) and about what would be created (importer.js), listed under the preview.
     "warn.invalidWidgetOptions": "Colonne « {colId} » : widget_options n’est pas un JSON valide, ignoré.",
     "warn.dateTimeNoTimezone":
       "Colonne « {colId} » : fuseau horaire non précisé pour DateTime, « {timezone} » utilisé par défaut (à vérifier).",
@@ -122,6 +168,7 @@ export const STRINGS = {
     "warn.visibleColMissing":
       "Colonne « {colId} » : colonne d’affichage « {visibleColId} » introuvable dans la table « {target} » de ce " +
       "document, ignorée (visible_col).",
+    // Import: reading the document, checking the ids, the label of the action button, then what is said once it ran.
     "import.status.analyzing": "Lecture des tables du document…",
     "import.error.noTableList": "Impossible de charger la liste des tables de ce document.",
     "import.error.noTablesToComplete": "Ce document ne contient aucune table à compléter.",
@@ -136,6 +183,18 @@ export const STRINGS = {
     "import.action.addColumns": { one: "Ajouter {n} colonne à « {table} »", other: "Ajouter {n} colonnes à « {table} »" },
     "import.action.chooseTables": "Cochez au moins une table",
     "import.action.noColumns": "Aucune colonne à créer",
+    "import.confirm.createTitle": { one: "Créer cette table ?", other: "Créer ces {n} tables ?" },
+    "import.confirm.createIntro": "Sera ajouté à ce document :",
+    "import.confirm.tableLine": "{tableId} — {columnsPhrase}",
+    "import.confirm.addTitle": "Ajouter à « {table} » ?",
+    "import.confirm.addIntro": { one: "Cette colonne sera ajoutée :", other: "Ces {n} colonnes seront ajoutées :" },
+    "import.confirm.formulas": "Les formules s’exécuteront dans ce document dès leur création : ne confirmez que pour du code de confiance.",
+    "import.confirm.request": {
+      one: "{columns} : cette formule appelle REQUEST, qui peut envoyer des données de ce document vers un autre serveur. Ne confirmez que si vous faites confiance à ce code.",
+      other: "{columns} : ces formules appellent REQUEST, qui peut envoyer des données de ce document vers un autre serveur. Ne confirmez que si vous faites confiance à ce code.",
+    },
+    "import.confirm.safe": "Rien n’est supprimé ni modifié dans ce qui existe déjà ; Ctrl+Z annule l’action.",
+    "import.confirm.cancel": "Annuler",
     "import.status.new": "Nouvelle",
     "import.status.existing": "Déjà présente",
     "import.action.createTables": { one: "Créer {n} table dans ce document", other: "Créer {n} tables dans ce document" },
@@ -161,6 +220,7 @@ export const STRINGS = {
     "import.announce.found": "Analyse terminée : {tablesPhrase}, {columnsPhrase} au total.",
     "import.announce.none": "Analyse terminée : aucune table trouvée.",
 
+    // Export: the banner of the tables the ticked ones refer to, then what is said as the list is read and the code generated and copied.
     "export.error.fetchTables": "Impossible de lire les tables de ce document : {error}",
     "export.refs.intro": {
       one:
@@ -182,6 +242,7 @@ export const STRINGS = {
       "Copie automatique indisponible ici : le texte est sélectionné, utilisez Ctrl+C (Cmd+C sur Mac).",
   },
   en: {
+    // The same keys in the same order as in French.
     "settings.open": "Settings",
     "settings.close": "Close",
     "settings.title": "Settings",
@@ -203,21 +264,21 @@ export const STRINGS = {
     "import.step1.eyebrow": "1. Source code",
     "import.step1.label": "A table’s Python code",
     "import.step1.hint":
-      "Copy it from the table’s “Code View” menu in the source document, or from this widget’s Export tab (which also " +
-      "keeps the detailed choices).",
+      "Copy it from “Code View” in the source document, or from this widget’s Export tab. It is analyzed as soon as it " +
+      "is pasted.",
     "import.step1.placeholder": "@grist.UserTable\nclass MyTable:\n  MyColumn = grist.Text()",
     "import.analyze": "Analyze",
     "import.clear": "Clear",
-    "import.step2.eyebrow": "2. What to do with this code?",
+    "import.mode.label": "What to do with this code?",
     "import.mode.create.title": "New table",
     "import.mode.create.desc": "Creates a dedicated table with every detected column. Recommended.",
     "import.mode.existing.title": "Existing table",
     "import.mode.existing.desc": "Only adds the columns missing from a table of this document.",
-    "import.step3.eyebrow": "3. Review before applying",
+    "import.step2.eyebrow": "2. Review before applying",
     "import.tablePicker.label": "Table to import (several found)",
     "import.tableMultiPicker.label": "Tables to create (several found)",
     "import.tableId.label": { one: "New table’s identifier", other: "New tables’ identifiers" },
-    "import.step3.none": "Result of the analysis",
+    "import.step2.none": "Result of the analysis",
     "import.targetTable.label": "Table to complete",
     "import.preview.includeAll": "Include every column",
     "import.preview.fromTable": "from {tableId}",
@@ -226,22 +287,51 @@ export const STRINGS = {
     "import.preview.status": "Status",
     "import.preview.formula": "formula",
     "import.preview.trigger": "trigger formula",
-    "import.formulas.option": {
-      one: "Also import the formula of {n} column",
-      other: "Also import the formulas of {n} columns",
-    },
+    "element.labels": "Labels",
+    "element.labels.hint": "The name shown for each column, if it differs from its identifier.",
+    "element.descriptions": "Column descriptions",
+    "element.descriptions.hint": "The help text of each column.",
+    "element.tableDescriptions": "Table descriptions",
+    "element.tableDescriptions.hint": "The help text of the table.",
+    "element.choices": "Choice lists",
+    "element.choices.hint": "The choices offered, with their colours.",
+    "element.options": "Cell format",
+    "element.options.hint": "Alignment, number and date formats, colours…",
+    "element.displayColumns": "Column shown by references",
+    "element.displayColumns.hint": "Which column of the linked table a reference cell shows.",
+    "element.twoWay": "Two-way links",
+    "element.twoWay.hint": "Two references that update each other.",
+    "element.formulas": "Formulas",
+    "element.formulas.hint": "Formulas of calculated columns, and trigger formulas.",
+    "import.elements.legend": "Elements to import",
+    "import.elements.hint": "Only the elements found in the pasted text are offered; the type of every column is always imported.",
     "import.formulas.hint":
-      "Formulas run in this document as soon as they are created: only enable this for code you trust. " +
+      "Formulas run in this document as soon as they are created: only tick “Formulas” for code you trust. " +
       "Without it, these columns are created empty.",
     "import.warnings.eyebrow": "Notes",
     "import.action.create": "Create the table in this document",
     "export.step1.eyebrow": "1. Tables to export",
     "export.tables.empty": "No exportable table found in this document.",
     "export.selectAll": "Select all",
+    "export.selectAllShown": "Select the tables shown",
+    "export.search.label": "Search tables",
+    "export.search.placeholder": "Search tables…",
+    "export.search.count": { one: "{n} table shown of {total}.", other: "{n} tables shown of {total}." },
+    "export.search.none": "No table matches “{query}”.",
+    "export.search.hiddenTicked": { one: "{n} ticked table is hidden.", other: "{n} ticked tables are hidden." },
+    "export.elements.legend": "Elements to export",
+    "export.elements.hint": "The type of every column is always exported.",
+    "elements.summary.all": "All",
+    "elements.summary.none": "None",
+    "elements.summary.without": "Without {names}",
+    "elements.summary.some": "{kept} of {total}",
     "export.refresh": "Refresh the list",
+    "export.columns.toggle": "Choose the columns of {tableId}",
+    "export.columns.group": "Columns of {tableId}",
+    "export.columns.some": { one: "{n} of {total} columns", other: "{n} of {total} columns" },
     "export.generate": "Generate code",
     "export.step2.eyebrow": "2. Generated code",
-    "export.copy": "Copy",
+    "export.copy": "Copy the code",
     "export.formulaHint.before":
       "Only the structure (column types) is guaranteed faithful. For a formula column, the " +
       "original formula is copied back exactly as stored (Grist’s ",
@@ -307,6 +397,18 @@ export const STRINGS = {
     "import.action.addColumns": { one: "Add {n} column to “{table}”", other: "Add {n} columns to “{table}”" },
     "import.action.chooseTables": "Tick at least one table",
     "import.action.noColumns": "No column to create",
+    "import.confirm.createTitle": { one: "Create this table?", other: "Create these {n} tables?" },
+    "import.confirm.createIntro": "Will be added to this document:",
+    "import.confirm.tableLine": "{tableId} — {columnsPhrase}",
+    "import.confirm.addTitle": "Add to “{table}”?",
+    "import.confirm.addIntro": { one: "This column will be added:", other: "These {n} columns will be added:" },
+    "import.confirm.formulas": "The formulas will run in this document as soon as they are created: only confirm code you trust.",
+    "import.confirm.request": {
+      one: "{columns}: this formula calls REQUEST, which can send data from this document to another server. Only confirm if you trust this code.",
+      other: "{columns}: these formulas call REQUEST, which can send data from this document to another server. Only confirm if you trust this code.",
+    },
+    "import.confirm.safe": "Nothing that already exists is removed or changed; Ctrl+Z undoes the action.",
+    "import.confirm.cancel": "Cancel",
     "import.status.new": "New",
     "import.status.existing": "Already present",
     "import.action.createTables": { one: "Create {n} table in this document", other: "Create {n} tables in this document" },
@@ -362,11 +464,11 @@ function interpolate(text, params) {
   return params ? text.replace(/\{(\w+)\}/g, (match, name) => (name in params ? String(params[name]) : match)) : text;
 }
 
-export function t(key, params) {
+export function translate(key, params) {
   return interpolate(STRINGS[currentLocale][key] ?? key, params);
 }
 
-export function tn(key, count, params) {
+export function translatePlural(key, count, params) {
   const entry = STRINGS[currentLocale][key];
   return interpolate(entry[new Intl.PluralRules(currentLocale).select(count)] ?? entry.other, { n: count, ...params });
 }
@@ -374,21 +476,22 @@ export function tn(key, count, params) {
 /** Readable name of a Grist column type such as "Ref:People" or "DateTime:UTC". */
 export function typeLabel(type) {
   const [name, arg] = type.split(":");
-  return t(`type.${name}`, { arg });
+  return translate(`type.${name}`, { arg });
 }
 
 const BINDINGS = [
   ["data-i18n", (node, text) => (node.textContent = text)],
   ["data-i18n-placeholder", (node, text) => (node.placeholder = text)],
   ["data-i18n-aria-label", (node, text) => node.setAttribute("aria-label", text)],
+  ["data-i18n-title", (node, text) => (node.title = text)],
 ];
 
 function applyI18n() {
   document.documentElement.lang = currentLocale;
   delete document.documentElement.dataset.pendingLocale;
-  document.title = t("app.documentTitle");
+  document.title = translate("app.documentTitle");
   for (const [attribute, apply] of BINDINGS) {
-    for (const node of document.querySelectorAll(`[${attribute}]`)) apply(node, t(node.getAttribute(attribute)));
+    for (const node of document.querySelectorAll(`[${attribute}]`)) apply(node, translate(node.getAttribute(attribute)));
   }
 }
 

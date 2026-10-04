@@ -52,3 +52,20 @@ export function sanitizeWidgetOptions(options) {
   }
   return nonEmpty(kept) ?? null;
 }
+
+const CHOICE_KEYS = new Set(["choices", "choiceOptions"]);
+
+/** What `options` hold of each kind, as Export would write it: a choice list with its styles, other display options. */
+export function optionKinds(options) {
+  const written = sanitizeWidgetOptions(options) ?? {};
+  return {
+    choices: (Array.isArray(options?.choices) && options.choices.length > 0) || "choiceOptions" in written,
+    display: Object.keys(written).some((key) => key !== "choiceOptions"),
+  };
+}
+
+/** `options` with only the kinds that are kept (see optionKinds), or null when nothing is left. */
+export function selectOptions(options, { choices, display }) {
+  if (!isPlainObject(options)) return null;
+  return nonEmpty(Object.fromEntries(Object.entries(options).filter(([key]) => (CHOICE_KEYS.has(key) ? choices : display)))) ?? null;
+}
