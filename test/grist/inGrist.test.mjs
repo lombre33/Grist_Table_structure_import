@@ -38,6 +38,7 @@ async function openWidgetIn(doc) {
   page.on("console", (msg) => msg.type() === "error" && !isKnownCspNoise(msg.text()) && errors.push(msg.text()));
   await page.goto(`${instance.url}/o/docs/${doc.id}/widget/p/${viewRef}`);
   const frame = await page.waitForEvent("framenavigated", { predicate: (f) => f.url().startsWith(widget.url), timeout: 30000 }).catch(() => null) ?? page.frames().find((f) => f.url().startsWith(widget.url));
+  await frame.waitForLoadState("load"); // the markup is there before the module scripts have run, and a click before that is lost
   await frame.waitForSelector("#tab-import");
   return { page, frame, errors };
 }
@@ -47,6 +48,24 @@ test("the theme <style> noise is recognised in both wordings of Chromium's messa
   assert.ok(isKnownCspNoise(`Applying inline style violates the following Content Security Policy directive 'style-src 'self''. Either the 'unsafe-inline' keyword...`));
   assert.ok(!isKnownCspNoise(`Refused to execute inline script because it violates the following Content Security Policy directive: "script-src 'self'".`));
   assert.ok(!isKnownCspNoise(`Refused to load the stylesheet 'https://example.org/a.css' because it violates the following Content Security Policy directive: "style-src 'self'".`));
+});
+
+test("the widget is used once its scripts have run, even when they come late: a click on a page that is not wired yet would be lost", async () => {
+  const doc = await instance.newDoc("in Grist: late scripts");
+  const widgetScripts = (url) => url.origin === new URL(widget.url).origin && url.pathname.endsWith(".js");
+  const late = async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 600)); // what a loaded machine or a slow network does to the 20 modules of the page
+    await route.continue();
+  };
+  await context.route(widgetScripts, late);
+  try {
+    const { frame, page, errors } = await openWidgetIn(doc);
+    await analyse(frame, "@grist.UserTable\nclass Late:\n  A = grist.Text()\n");
+    assert.deepEqual(errors, []);
+    await page.close();
+  } finally {
+    await context.unroute(widgetScripts, late);
+  }
 });
 
 test("Export in one document, Import in another, both through Grist's own interface", async () => {
