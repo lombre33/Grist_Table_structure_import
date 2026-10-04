@@ -80,7 +80,7 @@ test("label, description, visible_col and reverse_of are read, with either quote
   const text = resolve("Text", 'label="Say \\"hi\\"", description=\'A note (important) with a \\\'quote\\\'\'');
   assert.deepEqual([text.label, text.description], ['Say "hi"', "A note (important) with a 'quote'"]);
   const ref = resolve("Reference", "'Other_Table', visible_col='DisplayName', reverse_of='Pets'");
-  assert.deepEqual([ref.visibleColId, ref.reverseOf], ["DisplayName", "Pets"]);
+  assert.deepEqual([ref.visibleColId, ref.reverseColId], ["DisplayName", "Pets"]);
 });
 
 test("a name quoted inside another value, or merely ending in it, is not that argument", () => {

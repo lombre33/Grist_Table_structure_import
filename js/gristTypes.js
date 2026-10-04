@@ -37,7 +37,7 @@ export function splitType(type) {
  * Reads a column's constructor (`dslType`, `argsRaw`: the text between its parentheses). Warnings
  * ({ key, params }) are pushed to `warnings`; a type that cannot be used becomes `Any`.
  * @returns {{type: string, widgetOptions: ?object, refTarget: ?string, label: ?string,
- *   description: ?string, visibleColId: ?string, reverseOf: ?string}}
+ *   description: ?string, visibleColId: ?string, reverseColId: ?string}}
  */
 export function resolveColumnType(dslType, argsRaw, colId, warnings) {
   const { positional, kwargs } = parseArguments(argsRaw);
@@ -72,7 +72,7 @@ export function resolveColumnType(dslType, argsRaw, colId, warnings) {
     label: parseString(kwargs.label),
     description: parseString(kwargs.description),
     visibleColId: parseString(kwargs.visible_col),
-    reverseOf: parseString(kwargs.reverse_of),
+    reverseColId: parseString(kwargs.reverse_of),
   };
 }
 

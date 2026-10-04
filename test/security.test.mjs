@@ -9,9 +9,11 @@ const sources = readdirSync(new URL("../js/", import.meta.url))
   .map((name) => [`js/${name}`, read(`js/${name}`)]);
 
 const FORBIDDEN = [
+  [/\b(?:onRecords?|onNewRecord|fetchSelected(?:Table|Record)|getTable)\b/, "reading the rows of a table"],
+  [/\[\s*["'](?:Remove|Delete|Rename|Bulk|Clear|AddRecord|SetTable)\w*["']\s*,/, "an action that removes, renames or rewrites what exists"],
   [/\beval\s*\(/, "eval()"],
   [/\bnew\s+Function\s*\(|(?<![.\w])Function\s*\(/, "the Function constructor"],
-  [/\.(?:inner|outer)HTML\b/, "innerHTML / outerHTML"],
+  [/\.(?:inner|outer)HTML\b|[{,]\s*["']?(?:inner|outer)HTML["']?\s*:/, "innerHTML / outerHTML, assigned or given as the key of a property"],
   [/\binsertAdjacentHTML\b|\bdocument\.write(?:ln)?\s*\(/, "markup injection"],
   [/\bset(?:Timeout|Interval)\s*\(\s*["'`]/, "a timer given a string"],
   [/\bimport\(/, "dynamic import()"],
@@ -54,4 +56,46 @@ test("every container image of the workflows is pinned by digest, as a tag can b
   );
   assert.ok(images.length > 0, "the images were read");
   for (const [name, image] of images) assert.match(image, /@sha256:[0-9a-f]{64}$|^\$\{\{ matrix\./, `${name}: ${image}`);
+});
+
+const readme = read("README.md");
+const ACTIONS = ["AddTable", "AddVisibleColumn", "ModifyColumn", "SetDisplayFormula", "UpdateRecord"];
+const METADATA_TABLES = ["_grist_Tables", "_grist_Tables_column", "_grist_Views_section"];
+
+test("the only actions the widget sends to Grist are the ones the README lists, and only the importer sends them", () => {
+  const verbs = /\["((?:Add|Modify|Set|Update|Remove|Rename|Delete|Bulk|Clear)[A-Za-z]*)",/g;
+  const sent = new Set(sources.flatMap(([, text]) => [...text.matchAll(verbs)].map((match) => match[1])));
+  assert.deepEqual([...sent].sort(), [...ACTIONS].sort());
+  for (const action of ACTIONS) assert.ok(readme.includes(`\`${action}\``), `README: ${action}`);
+  assert.deepEqual(sources.filter(([, text]) => text.includes("applyUserActions")).map(([path]) => path), ["js/importer.js"]);
+});
+
+test("the only calls to Grist besides those actions read the list of the tables and their structure, which the README says", () => {
+  const calls = new Set(sources.flatMap(([, text]) => [...text.matchAll(/\bdocApi\.(\w+)/g)].map((match) => match[1])));
+  assert.deepEqual([...calls].sort(), ["applyUserActions", "fetchTable", "listTables"]);
+  assert.match(read("js/schema.js"), /\["_grist_Tables", "_grist_Tables_column", "_grist_Views_section"\]\.map\(\(name\) => grist\.docApi\.fetchTable\(name\)\)/);
+  for (const name of [...METADATA_TABLES, "listTables"]) assert.ok(readme.includes(`\`${name}\``), `README: ${name}`);
+  assert.match(readme, /requiredAccess: "full"/);
+  assert.match(read("js/app.js"), /requiredAccess: "full"/);
+});
+
+test("the only things written in the browser are the two display preferences, and only the storage module and the head script touch the storage", () => {
+  const touching = sources.filter(([, text]) => /\b(?:localStorage|sessionStorage|indexedDB|document\.cookie)\b/.test(text)).map(([path]) => path);
+  assert.deepEqual(touching.sort(), ["js/storage.js", "js/theme-init.js"]);
+  const keys = new Set(sources.flatMap(([, text]) => [...text.matchAll(/["'`](gristFactory\.[\w.]+)["'`]/g)].map((match) => match[1])));
+  assert.deepEqual([...keys].sort(), ["gristFactory.locale", "gristFactory.theme"]);
+  for (const key of keys) assert.ok(readme.includes(`\`${key}\``), `README: ${key}`);
+});
+
+test("the README says how to host the widget without the third-party domain: the tag and the policy that name it", () => {
+  const html = read("index.html");
+  const tag = html.match(/<script src="(https:\/\/[^"]+)">/)[1];
+  assert.equal(tag, "https://docs.getgrist.com/grist-plugin-api.js");
+  assert.ok(readme.includes(`<script src="${tag}">`), "the tag to change");
+  assert.ok(readme.includes('<script src="/grist-plugin-api.js">'), "what it becomes");
+  const csp = html.match(/http-equiv="Content-Security-Policy"\s+content="([^"]*)"/)[1];
+  const scriptSources = csp.match(/script-src ([^;]*)/)[1].split(/\s+/);
+  assert.ok(scriptSources.includes(tag), "the policy names that file, which the README tells to remove");
+  assert.ok(!scriptSources.includes("https://docs.getgrist.com"), "and not the whole domain, whose other scripts the widget does not need");
+  assert.match(readme, /directive `script-src`/);
 });

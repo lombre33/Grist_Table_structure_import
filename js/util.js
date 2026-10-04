@@ -1,12 +1,12 @@
-import { t } from "./i18n.js";
+import { translate } from "./i18n.js";
 
-const GRIST_CALL_TIMEOUT_MS = 8000;
+const GRIST_CALL_TIMEOUT_MS = 8000; // long enough for a big document on a slow server, short enough that a Grist that does not answer is reported rather than waited for
 
 /** `promise`, a call to Grist, with a deadline: Grist does not always answer. */
 export function callGrist(promise) {
   let timer;
   const deadline = new Promise((_, reject) => {
-    timer = setTimeout(() => reject(new Error(t("error.timeout"))), GRIST_CALL_TIMEOUT_MS);
+    timer = setTimeout(() => reject(new Error(translate("error.timeout"))), GRIST_CALL_TIMEOUT_MS);
   });
   return Promise.race([promise, deadline]).finally(() => clearTimeout(timer));
 }

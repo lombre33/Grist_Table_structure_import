@@ -3,10 +3,11 @@
  * Grist column definitions and apply them to the document. No DOM here.
  */
 
+import { elementCounts, omitElements } from "./elements.js";
 import { defaultLiteralForType, resolveColumnType, splitType } from "./gristTypes.js";
 import { fetchDocSchema, existingColumnIds } from "./schema.js";
 import { reportError } from "./util.js";
-import { t, tn } from "./i18n.js";
+import { translate, translatePlural } from "./i18n.js";
 
 // Table ids Grist creates as they are. It rewrites anything else (capital first
 // letter, ASCII only, "None" -> "TNone", ...) and renames clashes with an
@@ -65,6 +66,9 @@ const isUntied = (col) => Boolean(col.label) && !isTied(col.label, col.id);
 /** A column with a formula, or a data column with a trigger formula: what an import cannot reproduce without `withFormulas` (a blank formula is none). */
 export const isComputed = (col) => col.formula !== "";
 
+/** A formula that names REQUEST, which Grist's engine can use to send data to another server: worth a warning of its own, wherever the word stands. */
+export const callsRequest = (col) => isComputed(col) && /\bREQUEST\b/.test(col.formula);
+
 /**
  * The formula Grist stores for a function body of Code View: a lone `return X` is X, and what a
  * blank formula returns for the type (`return None`) means no formula at all.
@@ -80,9 +84,11 @@ function formulaOf(code, type) {
  * in the document; `documentTableIds` (null if unknown) lists the tables already
  * there. A reference only stays one if its target is one of those, otherwise the
  * column becomes `Any`. Columns in `excluded` raise no warning; `withFormulas`
- * says that formulas are imported, so that nothing is said about their loss.
+ * says that formulas are imported, so that nothing is said about their loss. The columns come without the
+ * elements in `omit` (see elements.js), as if the text had none; `counts` says how many of the columns that
+ * are not excluded carry each element in the text.
  */
-export function resolveColumns(table, tableIds, documentTableIds, { excluded = new Set(), withFormulas = false } = {}) {
+export function resolveColumns(table, tableIds, documentTableIds, { excluded = new Set(), withFormulas = false, omit = new Set() } = {}) {
   const warnings = [];
   const columns = table.columns.map((col) => {
     const colWarnings = excluded.has(col.id) ? [] : warnings;
@@ -95,7 +101,7 @@ export function resolveColumns(table, tableIds, documentTableIds, { excluded = n
         resolved.type = `${splitType(resolved.type).name}:${target}`;
       } else {
         colWarnings.push({ key: "warn.refTargetMissingInDoc", params: { colId: col.id, target: resolved.refTarget } });
-        Object.assign(resolved, { type: "Any", widgetOptions: null, visibleColId: null });
+        Object.assign(resolved, { type: "Any", widgetOptions: null, visibleColId: null, reverseColId: null });
       }
     }
     return { id: col.id, kind: col.kind, formula, ...resolved };
@@ -103,7 +109,7 @@ export function resolveColumns(table, tableIds, documentTableIds, { excluded = n
 
   const computed = withFormulas ? [] : columns.filter((col) => isComputed(col) && !excluded.has(col.id));
   if (computed.length > 0) warnings.push({ key: "warn.computedColumns", params: { columns: computed.map((col) => col.id).join(", ") } });
-  return { columns, warnings };
+  return { columns: columns.map((col) => omitElements(col, omit)), warnings, counts: elementCounts(columns.filter((col) => !excluded.has(col.id))) };
 }
 
 const keyOf = (tableId, colId) => `${tableId}.${colId}`;
@@ -116,10 +122,10 @@ const keyOf = (tableId, colId) => `${tableId}.${colId}`;
 export function twoWayPairs(tables) {
   const all = tables.flatMap(({ id, columns }) => columns.map((col) => ({ tableId: id, col })));
   const byKey = new Map(all.map((entry) => [keyOf(entry.tableId, entry.col.id), entry]));
-  return all.flatMap((a, i) => {
-    const b = a.col.reverseOf && byKey.get(keyOf(splitType(a.col.type).arg, a.col.reverseOf));
-    const mutual = b && b.col.reverseOf === a.col.id && splitType(b.col.type).arg === a.tableId;
-    return mutual && i < all.indexOf(b) ? [[a, b]] : [];
+  return all.flatMap((entry, i) => {
+    const other = entry.col.reverseColId && byKey.get(keyOf(splitType(entry.col.type).arg, entry.col.reverseColId));
+    const mutual = other && other.col.reverseColId === entry.col.id && splitType(other.col.type).arg === entry.tableId;
+    return mutual && i < all.indexOf(other) ? [[entry, other]] : []; // each pair once, from the entry that comes first
   });
 }
 
@@ -130,7 +136,7 @@ export const linkedColumns = (tables) => new Set(twoWayPairs(tables).flat().map(
 export function twoWayWarnings(tables) {
   const linked = linkedColumns(tables);
   return tables.flatMap(({ id, columns }) => {
-    const plain = columns.filter((col) => col.reverseOf && !linked.has(col));
+    const plain = columns.filter((col) => col.reverseColId && !linked.has(col));
     return plain.length > 0 ? [{ key: "warn.twoWayColumns", params: { columns: plain.map((col) => col.id).join(", ") }, table: id }] : [];
   });
 }
@@ -145,20 +151,21 @@ const columnPayload = (col, withFormulas) => ({
 });
 
 /**
- * Creates `tables` (`[{ id, columns }]`) in one atomic batch, with the formulas of their columns
- * if `withFormulas`.
+ * Creates `tables` (`[{ id, columns, description }]`) in one atomic batch, with the formulas of their columns
+ * if `withFormulas`, then gives them their descriptions.
  * @returns {{tables: {id: string, columns: object[]}[], note: string}} the tables
  *   as Grist named them, and what could not be applied afterwards, if anything.
  */
 export async function createTables(grist, tables, { withFormulas = false } = {}) {
   const taken = new Set((await grist.docApi.listTables()).map((id) => id.toLowerCase()));
   const clashes = tables.filter(({ id }) => taken.has(id.toLowerCase())).map(({ id }) => id);
-  if (clashes.length > 0) throw new Error(tn("import.error.tableCollision", clashes.length, { ids: clashes.join(", ") }));
+  if (clashes.length > 0) throw new Error(translatePlural("import.error.tableCollision", clashes.length, { ids: clashes.join(", ") }));
 
   const actions = tables.map(({ id, columns }) => ["AddTable", id, columns.map((col) => columnPayload(col, withFormulas))]);
   const { retValues } = await grist.docApi.applyUserActions(actions);
-  const created = tables.map(({ columns }, i) => ({
+  const created = tables.map(({ columns, description }, i) => ({
     id: retValues[i].table_id,
+    description,
     columns: columns.map((col, j) => ({ ...col, id: retValues[i].columns[j] })),
   }));
   return { tables: created, note: await afterCreation(grist, tables, created) };
@@ -171,8 +178,8 @@ export async function createTables(grist, tables, { withFormulas = false } = {})
  */
 export async function addColumns(grist, table, columns, { withFormulas = false } = {}) {
   const { allColumns } = await fetchDocSchema(grist);
-  const known = existingColumnIds(allColumns, table.tableRef);
-  const missing = columns.filter((col) => !known.has(col.id.toLowerCase()));
+  const existingIds = existingColumnIds(allColumns, table.tableRef);
+  const missing = columns.filter((col) => !existingIds.has(col.id.toLowerCase()));
   if (missing.length === 0) return { added: 0, note: "" };
 
   const { retValues } = await grist.docApi.applyUserActions(
@@ -195,37 +202,56 @@ async function afterCreation(grist, requested, created) {
 
 /**
  * Applies what the creation actions cannot: AddTable and AddVisibleColumn drop
- * descriptions and the independence of an id from its label, and a display column
+ * descriptions and the independence of an id from its label, a display column
  * needs the row ids of columns that only exist once the tables do (SetDisplayFormula takes
- * no other form on every version of Grist). Returns a note about whatever was not applied.
+ * no other form on every version of Grist), and a table's description lives in its raw data
+ * widget. Returns a note about whatever was not applied.
  */
 async function applyDetails(grist, tables) {
-  const pending = tables.flatMap(({ id, columns }) =>
-    columns.filter((col) => col.description || col.visibleColId || isUntied(col)).map((col) => ({ ...col, tableId: id }))
-  );
-  if (pending.length === 0) return "";
+  const { columns, described } = detailsOf(tables);
+  if (columns.length === 0 && described.length === 0) return "";
 
   try {
-    const schema = pending.some((col) => col.visibleColId) ? await fetchDocSchema(grist) : null;
-    const actions = [];
-    const unfound = [];
-    for (const col of pending) {
-      const displayRef = col.visibleColId ? displayColumnRef(schema, col) : null;
-      if (col.visibleColId && !displayRef) unfound.push(col);
-      const changes = {
-        ...(col.description && { description: col.description }),
-        ...(displayRef && { visibleCol: displayRef }),
-        ...(isUntied(col) && { untieColIdFromLabel: true }),
-      };
-      if (Object.keys(changes).length > 0) actions.push(["ModifyColumn", col.tableId, col.id, changes]);
-      if (displayRef) actions.push(["SetDisplayFormula", col.tableId, null, columnRef(schema, col.tableId, col.id), `$${col.id}.${col.visibleColId}`]);
-    }
+    const schema = described.length > 0 || columns.some((col) => col.visibleColId) ? await fetchDocSchema(grist) : null;
+    const actions = [...descriptionActions(schema, described), ...columns.flatMap((col) => columnActions(schema, col))];
     if (actions.length > 0) await grist.docApi.applyUserActions(actions);
-    return unfound.map((col) => ` ${t("warn.visibleColMissing", { colId: col.id, visibleColId: col.visibleColId, target: splitType(col.type).arg })}`).join("");
+    return columns.filter((col) => col.visibleColId && !displayColumnRef(schema, col)).map(visibleColMissing).join("");
   } catch (err) {
-    return t("import.note.refineFailed", { error: reportError(err) });
+    return translate("import.note.refineFailed", { error: reportError(err) });
   }
 }
+
+/** What the creation could not apply in `tables`: the columns (with their `tableId`) that have a description, a display column or an id that stays as written, and the tables that have a description. */
+function detailsOf(tables) {
+  const columns = tables.flatMap(({ id, columns }) =>
+    columns.filter((col) => col.description || col.visibleColId || isUntied(col)).map((col) => ({ ...col, tableId: id }))
+  );
+  return { columns, described: tables.filter((table) => table.description) };
+}
+
+/** The actions that give the tables of `described` their descriptions, written on the raw data widget. */
+const descriptionActions = (schema, described) =>
+  described.flatMap(({ id, description }) => {
+    const section = schema.tables.find((table) => table.tableId === id)?.rawViewSectionRef;
+    return section ? [["UpdateRecord", "_grist_Views_section", section, { description }]] : [];
+  });
+
+/** The actions that give `col` its description, its display column and the independence of its id, whichever it has. */
+function columnActions(schema, col) {
+  const displayRef = col.visibleColId ? displayColumnRef(schema, col) : null;
+  const changes = {
+    ...(col.description && { description: col.description }),
+    ...(displayRef && { visibleCol: displayRef }),
+    ...(isUntied(col) && { untieColIdFromLabel: true }),
+  };
+  return [
+    ...(Object.keys(changes).length > 0 ? [["ModifyColumn", col.tableId, col.id, changes]] : []),
+    ...(displayRef ? [["SetDisplayFormula", col.tableId, null, columnRef(schema, col.tableId, col.id), `$${col.id}.${col.visibleColId}`]] : []),
+  ];
+}
+
+/** What is said of a display column that its table does not have, with the space that separates it from what precedes it. */
+const visibleColMissing = (col) => ` ${translate("warn.visibleColMissing", { colId: col.id, visibleColId: col.visibleColId, target: splitType(col.type).arg })}`;
 
 /**
  * Links each pair of two-way reference columns (`[{ tableId, id }, { tableId, id }]`): Grist then
@@ -235,10 +261,10 @@ async function linkTwoWay(grist, pairs) {
   if (pairs.length === 0) return "";
   try {
     const schema = await fetchDocSchema(grist);
-    await grist.docApi.applyUserActions(pairs.map(([a, b]) => ["ModifyColumn", a.tableId, a.id, { reverseCol: columnRef(schema, b.tableId, b.id) }]));
+    await grist.docApi.applyUserActions(pairs.map(([column, counterpart]) => ["ModifyColumn", column.tableId, column.id, { reverseCol: columnRef(schema, counterpart.tableId, counterpart.id) }]));
     return "";
   } catch (err) {
-    return t("import.note.linkFailed", { error: reportError(err) });
+    return translate("import.note.linkFailed", { error: reportError(err) });
   }
 }
 

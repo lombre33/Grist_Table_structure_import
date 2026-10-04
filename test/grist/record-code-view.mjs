@@ -12,7 +12,8 @@
  */
 import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
-import { instance, buildSource, column, rows } from "./support.mjs";
+import { instance, buildSource, column } from "./support.mjs";
+import { zipRows } from "../../js/schema.js";
 import { SPEC, STRING_FORMULAS } from "./spec.mjs";
 
 const OUT = new URL("../fixtures/code-view/", import.meta.url);
@@ -23,8 +24,8 @@ async function record(name, doc) {
   const text = execFileSync(process.env.GRIST_PYTHON ?? "python3", [HELPER], { input: JSON.stringify({ tables, columns }), encoding: "utf8" });
   const hidden = (col) => col.colId === "manualSort" || col.colId.startsWith("gristHelper_");
   const expected = { grist: process.env.GRIST_VERSION ?? "unknown", tables: {} };
-  for (const table of rows(tables).filter((row) => !row.summarySourceTable)) {
-    expected.tables[table.tableId] = rows(columns)
+  for (const table of zipRows(tables).filter((row) => !row.summarySourceTable)) {
+    expected.tables[table.tableId] = zipRows(columns)
       .filter((col) => col.parentId === table.id && !hidden(col))
       .sort((a, b) => Number(a.isFormula) - Number(b.isFormula) || a.parentPos - b.parentPos)
       .map((col) => [col.colId, col.type, Boolean(col.isFormula || col.formula)]);
@@ -61,7 +62,7 @@ await features.apply([
   ["AddColumn", "People", "Anything", { type: "Any", isFormula: true, formula: "$Name" }],
   ["AddReverseColumn", "Pets", "Owner"],
 ]);
-const [people] = rows(await features.fetchTable("_grist_Tables")).filter((row) => row.tableId === "People");
+const [people] = zipRows(await features.fetchTable("_grist_Tables")).filter((row) => row.tableId === "People");
 const age = (await features.columns("People")).find((col) => col.colId === "Age");
 await features.apply([["CreateViewSection", people.id, 0, "record", [age.id], null]]);
 await record("features", features);

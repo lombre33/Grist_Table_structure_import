@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { checkTableId, createTables, defaultTableId, idFromLabel, isComputed, isTied, resolveColumns, twoWayPairs, twoWayWarnings } from "../js/importer.js";
+import { addColumns, callsRequest, checkTableId, createTables, defaultTableId, idFromLabel, isComputed, isTied, resolveColumns, twoWayPairs, twoWayWarnings } from "../js/importer.js";
 
 const table = (...columns) => ({ tableId: "Source", columns: columns.map(([id, dslType, argsRaw = "", kind = "data", code = ""]) => ({ id, dslType, argsRaw, kind, code })) });
 const ids = (...pairs) => new Map(pairs);
@@ -62,11 +62,11 @@ test("a table created together wins over one of the same name already in the doc
 
 test("a reference to an unknown table becomes Any, with a warning, and loses what only made sense as a reference", () => {
   const { columns, warnings } = resolveColumns(
-    table(["Owner", "Reference", "'Ghost', visible_col='Name', widget_options='{\"alignment\":\"left\"}'"]),
+    table(["Owner", "Reference", "'Ghost', visible_col='Name', reverse_of='Pets', widget_options='{\"alignment\":\"left\"}'"]),
     ids(),
     ["People"]
   );
-  assert.deepEqual([columns[0].type, columns[0].widgetOptions, columns[0].visibleColId], ["Any", null, null]);
+  assert.deepEqual([columns[0].type, columns[0].widgetOptions, columns[0].visibleColId, columns[0].reverseColId], ["Any", null, null, null]);
   assert.equal(warnings.length, 1);
 });
 
@@ -132,7 +132,7 @@ test("resolved columns carry the id, the type and the extended metadata", () => 
     label: "Humeur",
     description: "d",
     visibleColId: null,
-    reverseOf: null,
+    reverseColId: null,
   });
   assert.equal(columns[1].label, null);
 });
@@ -150,6 +150,7 @@ const names = (pairs) => pairs.map((pair) => pair.map(({ tableId, col }) => `${t
 
 const OWNER = ["Owner", "Reference", "'People', reverse_of='Pets'"];
 const PETS = ["Pets", "ReferenceList", "'Pets', reverse_of='Owner'"];
+const [OWNER_COLUMN, PETS_COLUMN] = [OWNER, PETS].map(([id, dslType, argsRaw]) => [id, dslType, argsRaw]);
 
 test("two columns that name each other and refer to each other's table are one two-way pair", () => {
   const batch = [made("Pets", OWNER), made("People", PETS)];
@@ -176,8 +177,8 @@ test("a counterpart that does not refer back to the table is no counterpart", ()
 });
 
 test("a column that is not a reference after all is never paired", () => {
-  const ghost = made("Pets", ["Owner", "Reference", "'Ghost', reverse_of='Pets'"]);
-  ghost.columns[0].type = "Any";
+  const ghost = made("Pets", ["Owner", "Reference", "'Ghost'"]);
+  Object.assign(ghost.columns[0], { type: "Any", reverseColId: "Pets" });
   assert.deepEqual(twoWayPairs([ghost, made("People", PETS)]), []);
 });
 
@@ -198,7 +199,8 @@ function recordingGrist({ after, before = [] }) {
   const tableIds = Object.keys(after);
   const columns = tableIds.flatMap((tableId, i) => after[tableId].map((colId) => ({ parentId: i + 1, colId })));
   const metadata = {
-    _grist_Tables: { id: tableIds.map((_, i) => i + 1), tableId: tableIds, summarySourceTable: tableIds.map(() => 0) },
+    _grist_Tables: { id: tableIds.map((_, i) => i + 1), tableId: tableIds, summarySourceTable: tableIds.map(() => 0), rawViewSectionRef: tableIds.map((_, i) => 100 + i) },
+    _grist_Views_section: { id: tableIds.map((_, i) => 100 + i), description: tableIds.map(() => "") },
     _grist_Tables_column: { id: columns.map((_, i) => i + 1), parentId: columns.map((col) => col.parentId), colId: columns.map((col) => col.colId) },
   };
   return {
@@ -208,7 +210,8 @@ function recordingGrist({ after, before = [] }) {
       fetchTable: async (name) => metadata[name],
       applyUserActions: async (actions) => {
         calls.push(actions);
-        return { retValues: actions.map(([name, tableId, second]) => (name === "AddTable" ? { table_id: tableId, columns: second.map((col) => col.id) } : null)) };
+        const result = ([name, tableId, second]) => (name === "AddTable" ? { table_id: tableId, columns: second.map((col) => col.id) } : name === "AddVisibleColumn" ? { colId: second } : null);
+        return { retValues: actions.map(result) };
       },
     },
   };
@@ -233,9 +236,131 @@ test("a blank formula is no formula: the empty column of Grist is not offered as
   assert.deepEqual(warnings.map((warning) => [warning.key, warning.params.columns]), [["warn.computedColumns", "Real"]]);
 });
 
+test("a formula that names REQUEST is told apart, whatever its form, and a column without a formula never is", () => {
+  const { columns } = resolveColumns(
+    table(
+      ["Direct", "Text", "", "formula", "return REQUEST('https://example.org').content"],
+      ["Aliased", "Text", "", "formula", "get = REQUEST\nreturn get('https://example.org').content"],
+      ["Trigger", "Text", "", "data", "return REQUEST('https://example.org').content"],
+      ["Other", "Text", "", "formula", "return REQUESTED + MY_REQUEST + request"],
+      ["Plain", "Text"]
+    ),
+    ids(),
+    []
+  );
+  assert.deepEqual(columns.map(callsRequest), [true, true, true, false, false]);
+});
+
 test("a column whose id Grist numbered stays tied to its label, only one with an id of its own is untied", async () => {
   const grist = recordingGrist({ after: { T: ["ID2", "Nom", "A", "Col1_2", "Extra"] } });
   const labelled = made("T", ["ID2", "Text", "label='ID'"], ["Nom", "Text", "label='Nom complet'"], ["A", "Text", "label='日本'"], ["Col1_2", "Text", "label='Col1'"], ["Extra", "Text", "label='Autre'"]);
   await createTables(grist, [labelled]);
   assert.deepEqual(grist.calls[1], [["ModifyColumn", "T", "Nom", { untieColIdFromLabel: true }], ["ModifyColumn", "T", "Extra", { untieColIdFromLabel: true }]]);
+});
+
+/** A text that carries every element, one column for each (two for the two-way links), and a column that carries none. */
+const WITH_ELEMENTS = () =>
+  table(
+    ["Title", "Text", "label='Titre'"],
+    ["Note", "Text", "description='Une note'"],
+    ["Status", "Choice", "choices=['Todo', 'Done'], widget_options='{\"choiceOptions\":{\"Done\":{\"fillColor\":\"#2A9D53\"}},\"alignment\":\"center\"}'"],
+    ["Owner", "Reference", "'People', visible_col='Name', reverse_of='Tasks'"],
+    ["Late", "Bool", "", "formula", "return $Due < TODAY()"],
+    ["Plain", "Int"]
+  );
+const ELEMENT_COUNTS = { labels: 1, descriptions: 1, tableDescriptions: 0, choices: 1, options: 1, displayColumns: 1, twoWay: 1, formulas: 1 };
+
+test("resolveColumns counts the elements the text has, over the columns that are not left out, whatever is chosen", () => {
+  const options = (extra) => ({ withFormulas: false, ...extra });
+  assert.deepEqual(resolveColumns(WITH_ELEMENTS(), ids(), ["People"], options()).counts, ELEMENT_COUNTS);
+  assert.deepEqual(resolveColumns(WITH_ELEMENTS(), ids(), ["People"], options({ withFormulas: true, omit: new Set(["labels", "twoWay"]) })).counts, ELEMENT_COUNTS, "what is chosen does not change what the text has");
+
+  const none = Object.fromEntries(Object.keys(ELEMENT_COUNTS).map((element) => [element, 0]));
+  assert.deepEqual(resolveColumns(table(["Plain", "Int"]), ids(), []).counts, none);
+  assert.deepEqual(resolveColumns(WITH_ELEMENTS(), ids(), ["People"], options({ excluded: new Set(["Title", "Note", "Status", "Owner", "Late"]) })).counts, none, "columns left out count for nothing");
+  assert.deepEqual(resolveColumns(WITH_ELEMENTS(), ids(), ["People"], options({ excluded: new Set(["Late", "Title"]) })).counts, { ...ELEMENT_COUNTS, formulas: 0, labels: 0 });
+});
+
+test("resolveColumns does not count what the import cannot apply: a display column or a link of a reference that fell back to Any", () => {
+  const { counts } = resolveColumns(WITH_ELEMENTS(), ids(), []);
+  assert.deepEqual([counts.displayColumns, counts.twoWay], [0, 0]);
+});
+
+test("the elements in omit are not in the columns resolved, and the others are", () => {
+  const resolved = (...omitted) => resolveColumns(WITH_ELEMENTS(), ids(), ["People"], { omit: new Set(omitted) }).columns;
+  const everything = resolved();
+  const [title, note, status, owner, late] = everything;
+  assert.deepEqual([title.label, note.description, status.widgetOptions, owner.visibleColId, owner.reverseColId, late.formula], ["Titre", "Une note", { choices: ["Todo", "Done"], choiceOptions: { Done: { fillColor: "#2A9D53" } }, alignment: "center" }, "Name", "Tasks", "$Due < TODAY()"]);
+
+  assert.deepEqual(resolved("labels")[0].label, null);
+  assert.deepEqual(resolved("descriptions")[1].description, null);
+  assert.deepEqual(resolved("choices")[2].widgetOptions, { alignment: "center" });
+  assert.deepEqual(resolved("options")[2].widgetOptions, { choices: ["Todo", "Done"], choiceOptions: { Done: { fillColor: "#2A9D53" } } });
+  assert.equal(resolved("displayColumns")[3].visibleColId, null);
+  assert.equal(resolved("twoWay")[3].reverseColId, null);
+  assert.equal(resolved("formulas")[4].formula, "$Due < TODAY()", "the formulas are left to withFormulas, which the payload obeys");
+  assert.deepEqual(resolved("labels", "descriptions", "choices", "options", "displayColumns", "twoWay", "formulas").map(({ label, description, widgetOptions, visibleColId, reverseColId }) => [label, description, widgetOptions, visibleColId, reverseColId]), everything.map(() => [null, null, null, null, null]));
+});
+
+test("a column omitted of two-way links is no longer part of a pair, nor said to be a plain reference", () => {
+  const pets = (omit) => ({ id: "Pets", columns: resolveColumns(table(OWNER_COLUMN), ids(["People", "People"]), [], { omit }).columns });
+  const people = (omit) => ({ id: "People", columns: resolveColumns(table(PETS_COLUMN), ids(["Pets", "Pets"]), [], { omit }).columns });
+  assert.equal(twoWayPairs([pets(new Set()), people(new Set())]).length, 1);
+  const unlinked = [pets(new Set(["twoWay"])), people(new Set(["twoWay"]))];
+  assert.deepEqual([twoWayPairs(unlinked), twoWayWarnings(unlinked)], [[], []]);
+});
+
+test("with every element omitted, only the id and the type of a column reach the document", async () => {
+  const everything = ["labels", "descriptions", "choices", "options", "displayColumns", "twoWay"];
+  const create = async (omit) => {
+    const grist = recordingGrist({ before: ["People"], after: { People: ["Name"], Tasks: ["Title", "Note", "Status", "Owner", "Late", "Plain"] } });
+    const { columns } = resolveColumns(WITH_ELEMENTS(), ids(), ["People"], { withFormulas: true, omit: new Set(omit) });
+    await createTables(grist, [{ id: "Tasks", columns }], { withFormulas: true });
+    return grist.calls;
+  };
+
+  const [plain, ...details] = await create(everything);
+  assert.deepEqual(details, [], "no description to add, no display column to set, no id to untie");
+  assert.deepEqual(plain[0].slice(0, 2), ["AddTable", "Tasks"]);
+  assert.deepEqual(plain[0][2].map(({ id, type, label, widgetOptions }) => [id, type, label, widgetOptions]), [
+    ["Title", "Text", "Title", undefined],
+    ["Note", "Text", "Note", undefined],
+    ["Status", "Choice", "Status", undefined],
+    ["Owner", "Ref:People", "Owner", undefined],
+    ["Late", "Bool", "Late", undefined],
+    ["Plain", "Int", "Plain", undefined],
+  ]);
+
+  const [full, ...followUps] = await create([]);
+  assert.equal(JSON.parse(full[0][2][2].widgetOptions).alignment, "center");
+  assert.ok(followUps.length > 0, "with the elements kept, the engine is asked for the details");
+});
+
+test("a table's description is written to its raw data widget, once the table is there, and only for the tables that have one", async () => {
+  const grist = recordingGrist({ after: { Plain: ["A"], Described: ["A"], Other: ["A"] } });
+  await createTables(grist, [made("Plain", ["A", "Text", ""]), { ...made("Described", ["A", "Text", ""]), description: "Table des\nclients" }, { ...made("Other", ["A", "Text", ""]), description: null }]);
+  assert.equal(grist.calls.length, 2);
+  assert.deepEqual(grist.calls[1], [["UpdateRecord", "_grist_Views_section", 101, { description: "Table des\nclients" }]]);
+});
+
+test("the description of a table goes with the details of its columns", async () => {
+  const grist = recordingGrist({ after: { T: ["A"] } });
+  await createTables(grist, [{ ...made("T", ["A", "Text", "description='Une colonne'"]), description: "Une table" }]);
+  assert.equal(grist.calls.length, 2, "one second call for all of them");
+  assert.deepEqual(grist.calls[1].map(([name, table, id]) => [name, table, id]), [["UpdateRecord", "_grist_Views_section", 100], ["ModifyColumn", "T", "A"]]);
+});
+
+test("a table description that cannot be written is said, and leaves the table created", async () => {
+  const grist = recordingGrist({ after: { T: ["A"] } });
+  const failing = { ...grist.docApi, applyUserActions: async (actions) => (actions[0][0] === "AddTable" ? grist.docApi.applyUserActions(actions) : Promise.reject(new Error("no right"))) };
+  const { tables, note } = await createTables({ docApi: failing }, [{ ...made("T", ["A", "Text", ""]), description: "Une table" }]);
+  assert.equal(tables[0].id, "T");
+  assert.match(note, /no right/);
+});
+
+test("the columns added to a table that exists leave its description alone", async () => {
+  const grist = recordingGrist({ after: { Contacts: ["Name"] } });
+  const fresh = made("X", ["Fresh", "Text", "description='Une colonne'"]).columns;
+  assert.equal((await addColumns(grist, { tableId: "Contacts", tableRef: 1 }, fresh)).added, 1);
+  assert.deepEqual(grist.calls.flat().map(([name]) => name), ["AddVisibleColumn", "ModifyColumn"], "the description of the column, not of the table");
 });
