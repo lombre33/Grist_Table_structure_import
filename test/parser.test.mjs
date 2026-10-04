@@ -412,3 +412,17 @@ test("a description that is not a one-line string literal is ignored with a warn
   assert.deepEqual(warnings.map((warning) => warning.key), ["warn.unrecognizedContent"]);
   assert.deepEqual(tables[0].columns.map((col) => col.id), ["A"]);
 });
+
+test("a class line followed by a very long run of spaces is read in linear time, the text being pasted from anywhere", () => {
+  const started = performance.now();
+  const { tables, warnings } = parseGristSchema(`@grist.UserTable\nclass A${" ".repeat(100_000)}x\n  B = grist.Text()\n`);
+  assert.ok(performance.now() - started < 1000, "a line of that kind took as long as backtracking over every split of the spaces");
+  assert.deepEqual(tables, []);
+  assert.deepEqual(warnings.map((warning) => warning.key), ["warn.decoratorNoClass", "warn.noTableFound"]);
+});
+
+test("the line of a class is read whatever the spaces around its bases and its colon", () => {
+  for (const line of ["class A:", "class A :", "class A(Base):", "class  A  (Base)  :  ", "class A(grist.Table)\t:"]) {
+    assert.deepEqual(parseGristSchema(`@grist.UserTable\n${line}\n  B = grist.Text()\n`).tables.map((table) => table.tableId), ["A"], line);
+  }
+});

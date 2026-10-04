@@ -143,6 +143,7 @@ body {
   margin-bottom: 20px;
 }
 
+/* Lets the title shrink and wrap beside the controls, rather than push them out of a narrow pane. */
 .masthead-text {
   min-width: 0;
 }
@@ -421,6 +422,7 @@ table#columns-preview {
   margin-top: 4px;
 }
 
+/* 1% makes the table give this column no more than its box needs. */
 #columns-preview th.col-checkbox,
 #columns-preview td.col-checkbox {
   width: 1%;
@@ -581,6 +583,7 @@ label + .hint {
 
 /* Export checklist (also reused by the Import tab's multi-table picker, and by the choice of the elements to keep) */
 
+/* A long list scrolls in its block, not the whole pane, so that the action stays near. */
 .checklist {
   list-style: none;
   margin: 0;
@@ -626,6 +629,7 @@ label + .hint {
   align-items: center;
 }
 
+/* The name takes what the button leaves, and wraps. */
 .table-row > label {
   flex: 1;
   min-width: 0;
@@ -657,6 +661,7 @@ label + .hint {
   outline-offset: 1px;
 }
 
+/* The chevron is two borders turned, not an icon: it points right when folded, down when unfolded. */
 .columns-toggle::after {
   content: "";
   width: 6px;
@@ -677,6 +682,7 @@ label + .hint {
   max-height: none;
 }
 
+/* The columns of a table: a list of their own, which scrolls when the table has many. */
 .columns-list {
   display: flex;
   flex-direction: column;
@@ -870,6 +876,11 @@ label + .hint {
   color: var(--info);
 }
 
+.status-warning {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
 .status-success {
   background: var(--success-soft);
   color: var(--success);
@@ -880,9 +891,9 @@ label + .hint {
   color: var(--danger);
 }
 
-/* Réglages (settings) dialog */
+/* The dialogs: Réglages, and the confirmation Import asks for before it writes in the document */
 
-dialog#settings-dialog {
+dialog.dialog {
   border: none;
   border-radius: var(--radius);
   padding: 0;
@@ -892,8 +903,50 @@ dialog#settings-dialog {
   box-shadow: var(--shadow-float);
 }
 
-dialog#settings-dialog::backdrop {
+dialog.dialog::backdrop {
   background: rgba(20, 24, 36, 0.45);
+}
+
+/* The confirmation: what will be added, any warning, what is never touched, and the two buttons. */
+
+.dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px 18px 6px;
+}
+
+.dialog-body p {
+  margin: 0;
+}
+
+.dialog-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+/* Many tables or columns scroll in the dialog; its buttons stay in view. */
+.confirm-list {
+  max-height: 12rem;
+  margin: 0;
+  padding-left: 1.2rem;
+  overflow-y: auto;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.confirm-list li {
+  overflow-wrap: anywhere;
+}
+
+.dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 18px 18px;
 }
 
 .settings-header {
@@ -944,6 +997,7 @@ dialog#settings-dialog::backdrop {
   text-align: center;
 }
 
+/* The radio stays in the page for the keyboard and for screen readers; the label around it is what is seen. */
 .segmented-option input {
   position: absolute;
   opacity: 0;
@@ -1003,6 +1057,7 @@ dialog#settings-dialog::backdrop {
 #columns-preview th,
 .table-id-entry label,
 .checklist span,
+/* A long identifier has no space to wrap at: it is broken rather than left to overflow the pane. */
 #export-search-status,
 #warnings-list li,
 .field-error,
@@ -1065,7 +1120,7 @@ html[data-pending-locale] body {
     outline-offset: -2px;
   }
 
-  dialog#settings-dialog,
+  dialog.dialog,
   .status,
   #warnings-block {
     border: 1px solid CanvasText;

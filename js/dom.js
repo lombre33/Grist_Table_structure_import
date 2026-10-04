@@ -5,9 +5,13 @@ export const $ = (id) => document.getElementById(id);
 /** The elements of the page whose ids are listed: `byIds({ list: "export-table-list" })` is `{ list: <that element> }`. */
 export const byIds = (ids) => Object.fromEntries(Object.entries(ids).map(([name, id]) => [name, $(id)]));
 
+/** What `buildElement` does not take as a key: it would write markup or code, which is not what its text and properties are for. */
+const MARKUP_OR_CODE_KEY = /^(?:innerHTML|outerHTML|srcdoc|on[a-z]+)$/i;
+
 export function buildElement(tag, attrs = {}, children = []) {
   const node = document.createElement(tag);
   for (const [key, value] of Object.entries(attrs)) {
+    if (MARKUP_OR_CODE_KEY.test(key)) throw new Error(`buildElement does not take "${key}": it would write markup or code`);
     if (key === "class") node.className = value;
     else if (key === "text") node.textContent = value;
     else if (key in node) node[key] = value;

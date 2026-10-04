@@ -6,6 +6,7 @@
 import { statusWriter } from "./dom.js";
 import { elementsPicker } from "./elementsPicker.js";
 import { translate, onLocaleChange } from "./i18n.js";
+import { createConfirmation } from "./importConfirm.js";
 import { importUi, markChosenMode } from "./importUi.js";
 import { freshExisting, freshState, toggleElement } from "./importState.js";
 import { onChecklistChange, onModeChange, onSelectAll, render, renderExisting, updateModeUI } from "./importView.js";
@@ -20,7 +21,7 @@ export function initImportTab(grist) {
     return;
   }
 
-  const ctx = { grist, ui, setStatus, state: freshState() };
+  const ctx = { grist, ui, setStatus, state: freshState(), confirm: createConfirmation() };
   ctx.render = () => render(ctx);
   ctx.showElements = elementsPicker(
     ui.elementsList,

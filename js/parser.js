@@ -7,7 +7,7 @@
 import { findMatchingClose, indentOf, parseString, stringLines } from "./pyText.js";
 import { RESERVED_COLUMN_IDS } from "./gristTypes.js";
 
-const CLASS_RE = /^class\s+([A-Za-z_]\w*)\s*(?:\([^)]*\))?\s*:\s*$/;
+const CLASS_RE = /^class\s+([A-Za-z_]\w*)\s*(?:\([^)]*\)\s*)?:\s*$/; // the spaces after the bases are in the group: two `\s*` side by side would try each split of a long run
 const ASSIGN_RE = /^([A-Za-z_]\w*)\s*=\s*grist\.([A-Za-z_]\w*)\s*\(/;
 const FORMULA_TYPE_RE = /^@grist\.formulaType\(\s*grist\.([A-Za-z_]\w*)\s*\(/;
 const FORMULA_DEF_RE = /^def\s+([A-Za-z_]\w*)\s*\(\s*rec\s*,\s*table\s*\)\s*:\s*$/;

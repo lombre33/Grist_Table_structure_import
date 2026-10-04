@@ -13,7 +13,7 @@ const FORBIDDEN = [
   [/\[\s*["'](?:Remove|Delete|Rename|Bulk|Clear|AddRecord|SetTable)\w*["']\s*,/, "an action that removes, renames or rewrites what exists"],
   [/\beval\s*\(/, "eval()"],
   [/\bnew\s+Function\s*\(|(?<![.\w])Function\s*\(/, "the Function constructor"],
-  [/\.(?:inner|outer)HTML\b/, "innerHTML / outerHTML"],
+  [/\.(?:inner|outer)HTML\b|[{,]\s*["']?(?:inner|outer)HTML["']?\s*:/, "innerHTML / outerHTML, assigned or given as the key of a property"],
   [/\binsertAdjacentHTML\b|\bdocument\.write(?:ln)?\s*\(/, "markup injection"],
   [/\bset(?:Timeout|Interval)\s*\(\s*["'`]/, "a timer given a string"],
   [/\bimport\(/, "dynamic import()"],
@@ -94,6 +94,8 @@ test("the README says how to host the widget without the third-party domain: the
   assert.ok(readme.includes(`<script src="${tag}">`), "the tag to change");
   assert.ok(readme.includes('<script src="/grist-plugin-api.js">'), "what it becomes");
   const csp = html.match(/http-equiv="Content-Security-Policy"\s+content="([^"]*)"/)[1];
-  assert.match(csp.match(/script-src ([^;]*)/)[1], /https:\/\/docs\.getgrist\.com/, "the origin the README tells to remove");
+  const scriptSources = csp.match(/script-src ([^;]*)/)[1].split(/\s+/);
+  assert.ok(scriptSources.includes(tag), "the policy names that file, which the README tells to remove");
+  assert.ok(!scriptSources.includes("https://docs.getgrist.com"), "and not the whole domain, whose other scripts the widget does not need");
   assert.match(readme, /directive `script-src`/);
 });

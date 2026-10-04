@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { addColumns, checkTableId, createTables, defaultTableId, idFromLabel, isComputed, isTied, resolveColumns, twoWayPairs, twoWayWarnings } from "../js/importer.js";
+import { addColumns, callsRequest, checkTableId, createTables, defaultTableId, idFromLabel, isComputed, isTied, resolveColumns, twoWayPairs, twoWayWarnings } from "../js/importer.js";
 
 const table = (...columns) => ({ tableId: "Source", columns: columns.map(([id, dslType, argsRaw = "", kind = "data", code = ""]) => ({ id, dslType, argsRaw, kind, code })) });
 const ids = (...pairs) => new Map(pairs);
@@ -234,6 +234,21 @@ test("a blank formula is no formula: the empty column of Grist is not offered as
   const { columns, warnings } = resolveColumns(table(["Empty", "Any", "", "formula", "return None"], ["Real", "Int", "", "formula", "return 1"], ["Plain", "Text"]), ids(), []);
   assert.deepEqual(columns.map(isComputed), [false, true, false]);
   assert.deepEqual(warnings.map((warning) => [warning.key, warning.params.columns]), [["warn.computedColumns", "Real"]]);
+});
+
+test("a formula that names REQUEST is told apart, whatever its form, and a column without a formula never is", () => {
+  const { columns } = resolveColumns(
+    table(
+      ["Direct", "Text", "", "formula", "return REQUEST('https://example.org').content"],
+      ["Aliased", "Text", "", "formula", "get = REQUEST\nreturn get('https://example.org').content"],
+      ["Trigger", "Text", "", "data", "return REQUEST('https://example.org').content"],
+      ["Other", "Text", "", "formula", "return REQUESTED + MY_REQUEST + request"],
+      ["Plain", "Text"]
+    ),
+    ids(),
+    []
+  );
+  assert.deepEqual(columns.map(callsRequest), [true, true, true, false, false]);
 });
 
 test("a column whose id Grist numbered stays tied to its label, only one with an id of its own is untied", async () => {

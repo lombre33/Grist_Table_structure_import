@@ -42,6 +42,19 @@ test("two linked tables are created together with their references", () =>
     assert.equal(await page.isHidden("#preview-section"), true, "done: no form left that contradicts the success message");
   }));
 
+test("a cancelled confirmation leaves the document as it was, and the preview ready for the confirmation that follows", () =>
+  inWidget(async (page, doc) => {
+    await analyse(page, "@grist.UserTable\nclass Maybe:\n  Name = grist.Text()\n");
+    const before = await snapshot(doc);
+    await page.click("#action-btn");
+    await page.click("#confirm-cancel-btn");
+    assert.deepEqual(await snapshot(doc), before, "nothing was written");
+    assert.equal(await page.isHidden("#preview-section"), false, "the preview is still there");
+
+    assert.equal(await apply(page), "Table « Maybe » créée avec 1 colonne.");
+    assert.deepEqual(await ids(doc), ["Maybe"]);
+  }));
+
 test("a real Code View with formulas: left out by default, created and computed when the option is ticked", () =>
   inWidget(async (page, doc) => {
     const text = "@grist.UserTable\nclass Calc:\n  A = grist.Int()\n\n  def _default_Start(rec, table, value, user):\n    return rec.A + 100\n  Start = grist.Int()\n\n  @grist.formulaType(grist.Int())\n  def Double(rec, table):\n    return rec.A * 2\n";

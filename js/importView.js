@@ -198,8 +198,8 @@ export function renderExisting(ctx) {
   const table = state.parsed[state.existing.index];
   if (!table) return;
   const target = targetTable(ctx);
-  const known = target ? existingColumnIds(state.docSchema.allColumns, target.tableRef) : null;
-  const present = (col) => Boolean(known?.has(col.id.toLowerCase()));
+  const existingIds = target ? existingColumnIds(state.docSchema.allColumns, target.tableRef) : null;
+  const present = (col) => Boolean(existingIds?.has(col.id.toLowerCase()));
   const excluded = new Set([...state.existing.excluded, ...table.columns.filter(present).map((col) => col.id)]); // those already there are not imported: no note about them
   const resolved = resolveColumns(table, new Map(target ? [[table.tableId, target.tableId]] : []), documentTableIds(state), { excluded, withFormulas: withFormulas(state), omit: state.omitted });
   state.existing.columns = resolved.columns.map((col) => ({ ...col, isNew: !present(col) }));
@@ -211,22 +211,22 @@ export function renderExisting(ctx) {
   renderSelectAll(ctx);
   renderElements(ctx, resolved.counts);
   renderWarnings(ctx, [...resolved.warnings, ...twoWayWarnings(batch)]);
-  ui.actionBtn.disabled = state.busy || !known || included.length === 0;
-  ui.actionBtn.textContent = addLabel(target, known, included);
+  ui.actionBtn.disabled = state.busy || !target || included.length === 0;
+  ui.actionBtn.textContent = addLabel(target, included);
 }
 
 function existingRows(ctx, linked) {
   const { existing } = ctx.state;
   return existing.columns.map((col) => {
-    const pill = col.isNew ? ["new", translate("import.status.new")] : ["skip", translate("import.status.existing")];
-    const status = buildElement("td", {}, [buildElement("span", { class: `status-pill status-pill-${pill[0]}`, text: pill[1] })]);
+    const { kind, label } = col.isNew ? { kind: "new", label: translate("import.status.new") } : { kind: "skip", label: translate("import.status.existing") };
+    const status = buildElement("td", {}, [buildElement("span", { class: `status-pill status-pill-${kind}`, text: label })]);
     return columnRow(ctx, col, { excluded: existing.excluded, rerender: () => renderExisting(ctx), status, locked: !col.isNew, linked: linked.has(col) });
   });
 }
 
 /** What the button says: what it adds, or what is missing for it to. */
-function addLabel(target, known, included) {
-  if (!known) return translate("import.action.chooseTarget");
+function addLabel(target, included) {
+  if (!target) return translate("import.action.chooseTarget");
   if (included.length === 0) return translate("import.action.noNewColumns");
   return translatePlural("import.action.addColumns", included.length, { table: target.tableId });
 }

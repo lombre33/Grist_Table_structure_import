@@ -1,6 +1,6 @@
 import { translate } from "./i18n.js";
 
-const GRIST_CALL_TIMEOUT_MS = 8000;
+const GRIST_CALL_TIMEOUT_MS = 8000; // long enough for a big document on a slow server, short enough that a Grist that does not answer is reported rather than waited for
 
 /** `promise`, a call to Grist, with a deadline: Grist does not always answer. */
 export function callGrist(promise) {

@@ -6,7 +6,8 @@ simplement (revue de code manuelle ou outillée), en vue d'un audit.
 ## Ce que fait réellement le widget
 
 Les actions possibles, toutes via l'API officielle du widget (`grist.docApi`), jamais
-davantage :
+davantage. Aucune des écritures ci-dessous n'est envoyée avant que l'utilisateur ait confirmé,
+dans une boîte de dialogue qui résume ce qui sera ajouté (Annuler ou Échap n'écrit rien) :
 
 - **Import, mode « Nouvelle table »** : crée les tables cochées (action `AddTable`, toutes
   dans un seul appel, donc tout ou rien) dans le document où le widget est ouvert, à
@@ -108,9 +109,12 @@ aucun pouvoir à ce code, et ne l'interprète pas (`js/parser.js` n'en lit que l
 les chaînes, pour savoir où la fonction s'arrête).
 L'option est décochée par défaut, et à chaque analyse, accompagnée d'une mise en garde
 (« ne cochez “Formules” que pour du code de confiance »), précisément parce que l'origine
-d'un texte collé est inconnue. Les autres éléments du groupe (libellés, descriptions des
-colonnes et des tables, listes de choix, format des cellules, colonne affichée des
-références, liens bidirectionnels) ne font
+d'un texte collé est inconnue. La boîte de confirmation, affichée avant toute écriture, la
+répète et nomme les colonnes dont la formule contient le mot `REQUEST` : sur une instance
+où cette fonction de Grist est activée, une formule peut s'en servir pour envoyer des
+données du document vers un autre serveur (le widget lui-même ne fait aucune requête).
+Les autres éléments du groupe (libellés, descriptions des colonnes et des tables, listes de
+choix, format des cellules, colonne affichée des références, liens bidirectionnels) ne font
 que retirer, au choix de l'utilisateur, une partie de ce que l'import aurait appliqué :
 ils n'ajoutent aucun appel ni aucun pouvoir.
 
@@ -286,7 +290,7 @@ des en-têtes HTTP personnalisés) :
 
 ```
 default-src 'none';
-script-src 'self' https://docs.getgrist.com 'unsafe-eval';
+script-src 'self' https://docs.getgrist.com/grist-plugin-api.js 'unsafe-eval';
 style-src 'self';
 img-src 'self';
 font-src 'self';
@@ -300,8 +304,10 @@ Points notables :
 
 - `default-src 'none'` : tout est interdit par défaut, seules les directives listées
   ci-dessous ouvrent explicitement ce qui est nécessaire.
-- `script-src` n'autorise que le code du widget lui-même et le script officiel Grist ;
-  aucun autre domaine, aucune CDN.
+- `script-src` n'autorise que le code du widget lui-même et le script officiel Grist, désigné
+  par son adresse exacte : le reste de `docs.getgrist.com` (autres scripts, contenus
+  servis par ce domaine) ne peut pas s'exécuter dans le widget ; aucun autre domaine,
+  aucune CDN.
 - `font-src 'self'` : nécessaire pour que la police Manrope vendorisée
   (`fonts/manrope/`, voir « Dépendances » ci-dessus) se charge — sans `font-src`
   explicite, cette directive retomberait sur `default-src 'none'` et bloquerait même ce
@@ -367,5 +373,8 @@ correspondante dans le `README.md`.
 
 ## Signaler une vulnérabilité
 
-Ouvrez une *issue* sur ce dépôt en décrivant le problème et, si possible, les étapes de
-reproduction.
+Ne décrivez pas une faille exploitable dans une *issue* publique : elle serait connue de
+tous avant d'être corrigée. Utilisez le signalement privé de GitHub (onglet **Security** du
+dépôt, puis **Report a vulnerability**) en décrivant le problème et, si possible, les étapes
+de reproduction. Si ce bouton n'est pas proposé, ouvrez une *issue* qui demande seulement un
+contact privé, sans rien dire de la faille.

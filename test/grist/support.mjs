@@ -1,5 +1,5 @@
 import { after } from "node:test";
-import { connect, rows } from "./client.mjs";
+import { connect } from "./client.mjs";
 
 export const instance = await connect().catch((err) => {
   throw new Error(`No usable Grist instance (set GRIST_URL, see README "Tests against a real Grist"): ${err.message}`);
@@ -21,9 +21,8 @@ export async function columnRef(doc, tableId, colId) {
   return (await doc.columns(tableId)).find((col) => col.colId === colId).id;
 }
 
-export { rows };
-
 import { parseGristSchema } from "../../js/parser.js";
+import { zipRows } from "../../js/schema.js";
 import { createTables, resolveColumns, defaultTableId } from "../../js/importer.js";
 import { omitTable } from "../../js/elements.js";
 
@@ -50,11 +49,11 @@ export async function importText(doc, text, { ids = {}, exclude = {}, withFormul
  */
 export async function snapshot(doc) {
   const [tables, columns] = await Promise.all([doc.fetchTable("_grist_Tables"), doc.fetchTable("_grist_Tables_column")]);
-  const all = rows(columns);
+  const all = zipRows(columns);
   const byRef = new Map(all.map((col) => [col.id, col]));
   const visible = (col) => col.colId !== "manualSort" && !col.colId.startsWith("gristHelper_");
   return Object.fromEntries(
-    rows(tables)
+    zipRows(tables)
       .filter((table) => !table.summarySourceTable)
       .map((table) => [
         table.tableId,
@@ -80,8 +79,8 @@ export async function snapshot(doc) {
 /** The description of each table of `doc`, which Grist keeps with the table's raw data widget ("" for none). */
 export async function tableDescriptions(doc) {
   const [tables, sections] = await Promise.all([doc.fetchTable("_grist_Tables"), doc.fetchTable("_grist_Views_section")]);
-  const byRef = new Map(rows(sections).map((section) => [section.id, section.description]));
-  return Object.fromEntries(rows(tables).filter((table) => !table.summarySourceTable).map((table) => [table.tableId, byRef.get(table.rawViewSectionRef) ?? ""]));
+  const byRef = new Map(zipRows(sections).map((section) => [section.id, section.description]));
+  return Object.fromEntries(zipRows(tables).filter((table) => !table.summarySourceTable).map((table) => [table.tableId, byRef.get(table.rawViewSectionRef) ?? ""]));
 }
 
 import { fetchDocSchema, buildExportSchema, omitFromExport, withoutExcluded } from "../../js/schema.js";
@@ -100,7 +99,7 @@ export async function buildSource(doc, spec, { descriptions = {} } = {}) {
   await doc.apply(Object.entries(spec).map(([tableId, columns]) => ["AddTable", tableId, columns.map(payload)]));
 
   const followUps = [];
-  const sectionOf = new Map(rows(await doc.fetchTable("_grist_Tables")).map((table) => [table.tableId, table.rawViewSectionRef]));
+  const sectionOf = new Map(zipRows(await doc.fetchTable("_grist_Tables")).map((table) => [table.tableId, table.rawViewSectionRef]));
   for (const [tableId, description] of Object.entries(descriptions)) followUps.push(["UpdateRecord", "_grist_Views_section", sectionOf.get(tableId), { description }]);
   for (const [tableId, columns] of Object.entries(spec)) {
     for (const { id, type, label, tied, description, visibleCol, reverse } of columns) {

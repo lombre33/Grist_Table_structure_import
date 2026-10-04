@@ -150,23 +150,28 @@ test("every text value survives the round trip, whatever characters it holds", (
   });
 });
 
-test("a formula's multi-line string is not indented, as in Grist, and reads back as written", () => {
-  const code = 'note = """first\n# not a comment\n  indented\n\nlast"""\nreturn note.strip()';
-  const text = gen(formula("F", "Text", code), formula("G", "Int", "1"));
-  assert.match(text, /def F\(rec, table\):\n {4}note = """first\n# not a comment\n {2}indented\n\nlast"""\n {4}return note.strip\(\)\n/);
-  const { tables, warnings } = parseGristSchema(text);
-  assert.deepEqual(warnings, []);
-  assert.deepEqual(tables[0].columns.map((col) => [col.id, col.code]), [["F", code], ["G", "return 1"]]);
-});
+const MULTI_LINE_STRINGS = [
+  [
+    "a formula's multi-line string is not indented, as in Grist, and reads back as written",
+    'note = """first\n# not a comment\n  indented\n\nlast"""\nreturn note.strip()',
+    /def F\(rec, table\):\n {4}note = """first\n# not a comment\n {2}indented\n\nlast"""\n {4}return note.strip\(\)\n/,
+  ],
+  [
+    "a multi-line string as indented as the code is indented with it, so that it reads back as written",
+    'x = """a\n      deep\n    four"""\nreturn x',
+    /def F\(rec, table\):\n {4}x = """a\n {10}deep\n {8}four"""\n {4}return x\n/,
+  ],
+];
 
-test("a multi-line string as indented as the code is indented with it, so that it reads back as written", () => {
-  const code = 'x = """a\n      deep\n    four"""\nreturn x';
-  const text = gen(formula("F", "Text", code), formula("G", "Int", "1"));
-  assert.match(text, /def F\(rec, table\):\n {4}x = """a\n {10}deep\n {8}four"""\n {4}return x\n/);
-  const { tables, warnings } = parseGristSchema(text);
-  assert.deepEqual(warnings, []);
-  assert.deepEqual(tables[0].columns.map((col) => [col.id, col.code]), [["F", code], ["G", "return 1"]]);
-});
+for (const [name, code, written] of MULTI_LINE_STRINGS) {
+  test(name, () => {
+    const text = gen(formula("F", "Text", code), formula("G", "Int", "1"));
+    assert.match(text, written);
+    const { tables, warnings } = parseGristSchema(text);
+    assert.deepEqual(warnings, []);
+    assert.deepEqual(tables[0].columns.map((col) => [col.id, col.code]), [["F", code], ["G", "return 1"]]);
+  });
+}
 
 test("the code of a formula is indented from its own margin, whatever a line of a string leaves", () => {
   const text = gen(formula("F", "Text", '  note = """first\nsecond"""\n  return note'));

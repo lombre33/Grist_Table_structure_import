@@ -11,9 +11,10 @@ export async function analyse(page, source) {
   await page.waitForFunction(() => !document.getElementById("analyze-btn").disabled && !document.getElementById("preview-section").hidden);
 }
 
-/** Clicks the main button and returns the status text once the operation is over. */
+/** Clicks the main button, confirms what the dialog says it will do, and returns the status text once the operation is over. */
 export async function apply(page) {
   await page.click("#action-btn");
+  await page.click("#confirm-ok-btn");
   await page.waitForSelector("#import-status-region .status-success, #import-status-region .status-error");
   return textOf(page, "#import-status-region");
 }

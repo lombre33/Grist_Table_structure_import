@@ -4,16 +4,20 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' https://docs.getgrist.com 'unsafe-eval'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none';">
+<!-- What may load or be reached: the widget's own files and Grist's API, nothing else (SECURITY.md) -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' https://docs.getgrist.com/grist-plugin-api.js 'unsafe-eval'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none';">
+<!-- A classic script, run before the page is drawn: it puts the saved theme and language on the page so that nothing flashes -->
 <script src="js/theme-init.js"></script>
 <title>Structure de table Grist</title>
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="stylesheet" href="style.css">
+<!-- The official Grist API, the only script from another domain (README, "Hébergement en réseau fermé") -->
 <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
 </head>
 <body>
 <main class="shell">
 
+  <!-- Title, Réglages button and logo -->
   <header class="masthead">
     <div class="masthead-text">
       <p class="eyebrow" data-i18n="app.eyebrow">Widget Grist</p>
@@ -35,7 +39,8 @@
     </div>
   </header>
 
-  <dialog id="settings-dialog" aria-labelledby="settings-title">
+  <!-- Réglages: theme, language and credits; the languages are named in their own language -->
+  <dialog id="settings-dialog" class="dialog" aria-labelledby="settings-title">
     <div class="settings-header">
       <h2 id="settings-title" data-i18n="settings.title">Réglages</h2>
       <button id="settings-close-btn" type="button" class="icon-btn" data-i18n-aria-label="settings.close" aria-label="Fermer">
@@ -98,11 +103,28 @@
     </div>
   </dialog>
 
+  <!-- What the Import asks before it writes in the document; js/importConfirm.js fills it for each use -->
+  <dialog id="confirm-dialog" class="dialog" aria-labelledby="confirm-title" aria-describedby="confirm-intro">
+    <div class="dialog-body">
+      <h2 id="confirm-title" class="dialog-title"></h2>
+      <p id="confirm-intro"></p>
+      <ul id="confirm-list" class="confirm-list"></ul>
+      <div id="confirm-notes"></div>
+      <p class="hint" data-i18n="import.confirm.safe">Rien n’est supprimé ni modifié dans ce qui existe déjà&nbsp;; Ctrl+Z annule l’action.</p>
+    </div>
+    <div class="dialog-actions">
+      <button id="confirm-cancel-btn" type="button" class="btn btn-ghost" data-i18n="import.confirm.cancel">Annuler</button>
+      <button id="confirm-ok-btn" type="button" class="btn btn-primary"></button>
+    </div>
+  </dialog>
+
+  <!-- The two tabs, one panel shown at a time (js/app.js) -->
   <div class="tabs" role="tablist" aria-label="Mode">
     <button id="tab-import" class="tab" role="tab" type="button" aria-selected="true" aria-controls="panel-import" data-i18n="tabs.import">Import</button>
     <button id="tab-export" class="tab" role="tab" type="button" aria-selected="false" aria-controls="panel-export" tabindex="-1" data-i18n="tabs.export">Export</button>
   </div>
 
+  <!-- Import: 1. the code to read, 2. what it would do, to check and apply -->
   <section id="panel-import" class="panel" role="tabpanel" aria-labelledby="tab-import">
 
     <div class="block">
@@ -126,6 +148,7 @@
       </div>
     </div>
 
+    <!-- Step 2 appears once the text is read; its action stays in view while the columns are scrolled -->
     <section id="preview-section" class="block" hidden aria-labelledby="preview-heading">
       <h2 class="eyebrow" id="preview-heading">2. Vérification avant application</h2>
 
@@ -143,6 +166,7 @@
         <p id="mode-hint" class="hint"></p>
       </div>
 
+      <!-- Which tables are created, or which one is completed: only what the chosen mode needs is shown -->
       <div id="table-picker-row" class="field" hidden>
         <label for="table-select" data-i18n="import.tablePicker.label">Table à importer (plusieurs trouvées)</label>
         <select id="table-select"></select>
@@ -164,6 +188,7 @@
         <p id="target-table-error" class="field-error" hidden></p>
       </div>
 
+      <!-- One row per column; the status column is for the "existing table" mode only -->
       <table id="columns-preview" aria-labelledby="preview-heading">
         <thead>
           <tr>
@@ -176,6 +201,7 @@
         <tbody id="columns-preview-body"></tbody>
       </table>
 
+      <!-- The elements of the text that can be left out; folded, since the simple case keeps them all -->
       <details id="import-elements" class="elements" hidden>
         <summary>
           <span class="eyebrow" id="import-elements-title" data-i18n="import.elements.legend">Éléments à importer</span>
@@ -198,10 +224,12 @@
       </div>
     </section>
 
+    <!-- What happened, and what a screen reader is told; written by js/importFlow.js -->
     <section id="import-status-region" aria-live="polite"></section>
     <p id="import-announcement" class="sr-only" aria-live="polite"></p>
   </section>
 
+  <!-- Export: 1. the tables and what to keep of them, 2. the code written -->
   <section id="panel-export" class="panel" role="tabpanel" aria-labelledby="tab-export" hidden>
 
     <div class="block">
@@ -228,6 +256,7 @@
       <ul id="export-table-list" class="checklist" aria-labelledby="export-tables-label"></ul>
       <p id="export-tables-empty" class="hint" hidden data-i18n="export.tables.empty">Aucune table exportable trouvée dans ce document.</p>
 
+      <!-- Offers the tables that the ticked ones refer to: without them, the references would point nowhere -->
       <div id="export-refs-banner" class="status status-info refs-banner" hidden>
         <p id="export-refs-banner-intro"></p>
         <ul id="export-refs-list" class="refs-list"></ul>
@@ -257,6 +286,7 @@
       <h2 class="eyebrow" id="export-output-label" data-i18n="export.step2.eyebrow">2. Code généré</h2>
       <textarea id="export-output" rows="14" readonly spellcheck="false" aria-labelledby="export-output-label"></textarea>
       <div class="actions">
+        <!-- Under the code, where the eye is once it is written; the icon shows a tick for a moment once copied -->
         <button id="copy-btn" type="button" class="btn btn-primary btn-with-icon">
           <svg class="icon-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <rect x="8" y="8" width="12" height="12" rx="2"></rect>
@@ -280,6 +310,7 @@
 
 </main>
 
+<!-- The widget itself: an ES module -->
 <script type="module" src="js/app.js"></script>
 </body>
 </html>

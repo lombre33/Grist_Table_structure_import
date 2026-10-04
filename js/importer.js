@@ -66,6 +66,9 @@ const isUntied = (col) => Boolean(col.label) && !isTied(col.label, col.id);
 /** A column with a formula, or a data column with a trigger formula: what an import cannot reproduce without `withFormulas` (a blank formula is none). */
 export const isComputed = (col) => col.formula !== "";
 
+/** A formula that names REQUEST, which Grist's engine can use to send data to another server: worth a warning of its own, wherever the word stands. */
+export const callsRequest = (col) => isComputed(col) && /\bREQUEST\b/.test(col.formula);
+
 /**
  * The formula Grist stores for a function body of Code View: a lone `return X` is X, and what a
  * blank formula returns for the type (`return None`) means no formula at all.
@@ -175,8 +178,8 @@ export async function createTables(grist, tables, { withFormulas = false } = {})
  */
 export async function addColumns(grist, table, columns, { withFormulas = false } = {}) {
   const { allColumns } = await fetchDocSchema(grist);
-  const known = existingColumnIds(allColumns, table.tableRef);
-  const missing = columns.filter((col) => !known.has(col.id.toLowerCase()));
+  const existingIds = existingColumnIds(allColumns, table.tableRef);
+  const missing = columns.filter((col) => !existingIds.has(col.id.toLowerCase()));
   if (missing.length === 0) return { added: 0, note: "" };
 
   const { retValues } = await grist.docApi.applyUserActions(

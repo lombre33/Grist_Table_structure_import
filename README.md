@@ -13,8 +13,10 @@ Deux onglets :
   (y compris dans ce même widget, dans un autre document).
 
 Aucune donnée n'est envoyée où que ce soit : tout est lu et analysé entièrement dans le
-navigateur, et la seule action effectuée sur demande est la création d'une table ou
-l'ajout de colonnes dans le document Grist courant, via l'API officielle du widget.
+navigateur, et la seule action effectuée sur demande, après confirmation, est la création
+d'une table ou l'ajout de colonnes dans le document Grist courant (avec, pour ce qui vient
+d'être créé, ses descriptions, ses colonnes affichées et ses formules), via l'API officielle
+du widget.
 
 ## Import
 
@@ -49,7 +51,8 @@ l'ajout de colonnes dans le document Grist courant, via l'API officielle du widg
    importer**, replié, liste ce que le texte contient au-delà du type des colonnes (voir plus
    bas) : tout y est coché par défaut, sauf les formules, et son résumé dit ce qui sera
    importé (« Tous », « Sans formules », « 4 sur 7 »…). Cliquez ensuite sur le bouton
-   d'action, qui reste affiché en bas de l'aperçu pendant qu'on le parcourt. L'icône
+   d'action, qui reste affiché en bas de l'aperçu pendant qu'on le parcourt, puis confirmez
+   dans la boîte qui résume ce qui va être ajouté. L'icône
    **Effacer** (✕), en haut à droite de l'étape 1, réinitialise entièrement l'onglet pour
    recommencer avec un autre texte.
 
@@ -60,14 +63,15 @@ les colonnes absentes sont ajoutées. Un identifiant de table doit être un iden
 que Grist crée tel quel : majuscule initiale, puis lettres, chiffres ou `_` (ni accent, ni
 espace, ni `None`/`True`/`False`) ; sinon Grist le réécrirait en silence.
 
-Aucune confirmation n'est demandée avant de cliquer sur le bouton d'action : c'est un
-choix délibéré, pas un oubli. Les actions de ce widget sont strictement additives (jamais
-de suppression ni de modification d'une colonne ou table existante, voir ci-dessus), et le
-bouton lui-même annonce déjà précisément la portée de l'action (« Créer 2 tables dans ce
-document », « Ajouter 3 colonnes à cette table »...) au moment de cliquer — une boîte de
-dialogue de confirmation ajouterait une étape sans réduire aucun risque réel ici. Le
-filet de sécurité reste, comme pour toute action dans Grist, l'annulation native du
-document (Ctrl+Z / Cmd+Z).
+**Rien n'est écrit dans le document avant une confirmation.** Le bouton d'action (« Créer 2
+tables dans ce document », « Ajouter 3 colonnes à cette table »…) ouvre une boîte de dialogue
+qui résume ce qui va être ajouté : les tables avec le nombre de leurs colonnes (sous
+l'identifiant saisi), ou les colonnes ajoutées à la table choisie. Elle prévient quand des
+formules, cochées, vont s'exécuter dans le document, et rappelle que rien d'existant n'est
+supprimé ni modifié. **Annuler** (ou la touche Échap) n'écrit rien et laisse l'aperçu tel quel ;
+le bouton de confirmation a le focus, donc Entrée confirme, et une touche maintenue enfoncée
+depuis le bouton d'action ne vaut pas confirmation. Cette étape s'ajoute à l'aperçu et à
+l'annulation native du document (Ctrl+Z / Cmd+Z), qui défait l'action une fois faite.
 
 ### Exemple de code accepté
 
@@ -90,7 +94,8 @@ class INFOS_BENEVOLES:
 ```
 
 Un même collé peut contenir plusieurs blocs `@grist.UserTable` / `class ... :` : le
-widget vous laisse alors choisir la table à importer.
+widget les repère tous. En mode **Nouvelle table**, on décoche ceux dont on ne veut pas ;
+en mode **Table existante**, on choisit la table source dont on reprend les colonnes.
 
 ### Correspondance des types
 
@@ -193,8 +198,11 @@ lignes (26 formules sur 400 dans le tirage, qui en indente beaucoup). L'onglet *
 Grist exécute dans ce document dès sa création, et un texte collé peut venir de
 n'importe où. Le widget n'exécute lui-même jamais rien (voir SECURITY.md) ; en le cochant,
 vous confiez ces formules à Grist, comme si vous les aviez saisies dans les
-cellules. Une formule qui renvoie une erreur (colonne absente de la nouvelle table, par
-exemple) ne fait pas échouer l'import : ses cellules affichent l'erreur dans Grist.
+cellules. La boîte de confirmation le rappelle, et nomme les colonnes dont la formule
+contient le mot `REQUEST` (la fonction de Grist qui peut envoyer des données vers un autre
+serveur, là où l'instance l'active). Une formule qui renvoie une erreur (colonne absente
+de la nouvelle table, par exemple) ne fait pas échouer l'import : ses cellules affichent
+l'erreur dans Grist.
 
 ### Métadonnées de colonne restaurées à l'import
 
@@ -399,16 +407,18 @@ ou au champ de texte quand il n'y a plus rien à actionner (table créée, colon
   l'onglet sélectionné reste repérable en mode contraste élevé (`forced-colors`), la page
   a un repère `main` et un titre par étape, et les onglets répondent aux flèches, à
   Début et à Fin. Vérifié dans Chromium à chaque lancement de `npm run test:browser` par
-  axe-core (WCAG 2.2 A et AA, bonnes pratiques : aucune violation sur les cinq écrans
-  principaux, thèmes clair et sombre, français et anglais) et par des contrôles de
+  axe-core (WCAG 2.2 A et AA, bonnes pratiques : aucune violation sur les écrans
+  principaux — aperçus de l'Import, Export et son code, recherche, boîte de confirmation,
+  Réglages —, thèmes clair et sombre, français et anglais) et par des contrôles de
   clavier, de taille et de nom accessible ; pas encore passé au lecteur d'écran.
 - **Typographie** : **Manrope** (police variable) pour toute l'interface, vendorisée
   dans `fonts/manrope/` (police variable réduite à l'alphabet latin, 28 Ko, licence SIL
   Open Font License jointe) plutôt que chargée depuis une CDN — voir SECURITY.md. Le code Python (collé ou généré) reste
   en police à chasse fixe, monospace, inchangé.
 - **Thème système / clair / sombre** : réglable dans le panneau Réglages (icône en haut
-  à droite), mémorisé sur cet appareil. « Système » (par défaut) suit le thème du
-  système d'exploitation.
+  à droite), mémorisé sur cet appareil, dans le `localStorage` du navigateur (le thème et la
+  langue sont les seules données que le widget conserve ; voir « Accès demandé à Grist »).
+  « Système » (par défaut) suit le thème du système d'exploitation.
 - **Icônes** : deux SVG en contour, en ligne dans `index.html`, aucune police d'icônes
   ni emoji (voir SECURITY.md).
 - **Bilingue français / anglais** : réglable dans le même panneau. Toute chaîne visible
@@ -445,7 +455,9 @@ fichier à sa propre racine (`<votre-grist>/grist-plugin-api.js`) : deux lignes 
    `<script src="/grist-plugin-api.js">` si le widget est servi par le même domaine que Grist,
    sinon `<script src="https://<votre-grist>/grist-plugin-api.js">`.
 2. Dans la balise `<meta http-equiv="Content-Security-Policy">`, la directive `script-src`
-   perd `https://docs.getgrist.com` (et gagne `https://<votre-grist>` dans le second cas).
+   perd `https://docs.getgrist.com/grist-plugin-api.js` (le fichier exact, pas tout le domaine) ;
+   elle gagne `https://<votre-grist>/grist-plugin-api.js` dans le second cas, et rien dans le
+   premier, `'self'` couvrant déjà ce fichier.
 
 Un test (`test/security.test.mjs`) vérifie que le dépôt ne charge rien d'autre que cette API et
 ses propres scripts, et que ce paragraphe nomme bien cette balise.
@@ -470,10 +482,11 @@ fait, et rien d'autre :
 - **Strictement additif** : aucune suppression, aucun renommage, aucune modification d'une table
   ou d'une colonne qui existait avant. Un identifiant déjà pris est refusé, et les colonnes déjà
   présentes d'une table existante sont laissées telles quelles.
-- **Une écriture n'a lieu qu'au clic sur le bouton d'action**, une fois l'aperçu vérifié
-  (« Créer 2 tables dans ce document », « Ajouter 3 colonnes à « Contacts » »…) : l'aperçu est la
-  confirmation, et l'annulation native de Grist (Ctrl+Z) défait l'action. L'export, lui, ne
-  fait que lire.
+- **Une écriture n'a lieu qu'après confirmation** : le bouton d'action (« Créer 2 tables dans
+  ce document », « Ajouter 3 colonnes à « Contacts » »…) ouvre une boîte qui résume ce qui sera
+  ajouté, et rien n'est envoyé à Grist avant que l'utilisateur confirme ; Annuler n'écrit rien, et
+  l'annulation native de Grist (Ctrl+Z) défait l'action une fois faite. L'export, lui, ne fait
+  que lire.
 - **Rien ne sort du navigateur** (`connect-src 'none'`) et rien n'est conservé hors de Grist,
   hormis deux préférences d'affichage dans le `localStorage` de l'origine du widget : le thème
   (`gristFactory.theme`) et la langue (`gristFactory.locale`), jamais un contenu du document.
@@ -505,7 +518,9 @@ npm run test:grist     # le widget contre une vraie instance Grist (voir ci-dess
 
 `npm test` suffit pour la logique : il n'a besoin ni de navigateur ni de Grist. Le test de
 sécurité (`test/security.test.mjs`) y interdit dans `js/` `eval`, le constructeur `Function`,
-`innerHTML`/`outerHTML`, `document.write`, `import()`, `fetch`, `WebSocket`..., et vérifie
+`innerHTML`/`outerHTML` (y compris comme clé d'objet : la fonction qui construit les éléments,
+`buildElement`, refuse de toute façon à l'exécution `innerHTML`, `outerHTML`, `srcdoc` et les
+gestionnaires `on…`), `document.write`, `import()`, `fetch`, `WebSocket`..., et vérifie
 que `index.html` ne charge que l'API officielle de Grist et sa CSP.
 
 Playwright (et axe-core, qui y vérifie l'accessibilité), seules dépendances du dépôt
@@ -562,11 +577,12 @@ assets/                logo Grist Factory (voir SECURITY.md)
 js/theme-init.js       applique le thème et la langue mémorisés avant le premier affichage
                        (et masque la page française d'un lecteur de l'anglais jusqu'à sa traduction)
 js/app.js              point d'entrée : onglets, initialisation
-js/importTab.js        onglet Import : assemble les quatre modules ci-dessous
+js/importTab.js        onglet Import : assemble les cinq modules ci-dessous
 js/importUi.js         ... les éléments de la page que l'onglet utilise
 js/importState.js      ... ce que l'onglet retient (analyse, choix, éléments laissés de côté)
 js/importView.js       ... ce qu'il affiche (aperçu, avertissements, boutons)
 js/importFlow.js       ... ce qu'il fait (analyser, effacer, créer, ajouter aux colonnes d'une table)
+js/importConfirm.js    ... la confirmation demandée avant d'écrire dans le document
 js/importer.js         logique de l'import sans DOM : résolution des colonnes, identifiants,
                        formules, création en un lot, puis détails et références bidirectionnelles
 js/exportTab.js        onglet Export : lit le document et assemble les trois modules ci-dessous

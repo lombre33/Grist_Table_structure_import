@@ -3,7 +3,8 @@ import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { launchWidget } from "../browser/widgetPage.mjs";
 import { analyse, apply, keepElement } from "../browser/driver.mjs";
-import { instance, rows, column, addTable, buildSource, snapshot, tableDescriptions } from "./support.mjs";
+import { instance, column, addTable, buildSource, snapshot, tableDescriptions } from "./support.mjs";
+import { zipRows } from "../../js/schema.js";
 
 const widget = await launchWidget();
 const context = await widget.browser.newContext();
@@ -25,7 +26,7 @@ const isKnownCspNoise = (text) => text.includes("inline style") && text.includes
 
 /** Opens `doc` on a page showing the widget; returns the page, the widget's frame and what it logged as errors. */
 async function openWidgetIn(doc) {
-  const [table] = rows(await doc.fetchTable("_grist_Tables"));
+  const [table] = zipRows(await doc.fetchTable("_grist_Tables"));
   const { retValues } = await doc.apply([["CreateViewSection", table.id, 0, "custom", null, null]]);
   const { sectionRef, viewRef } = retValues[0];
   const customView = JSON.stringify({ mode: "url", url: widget.url, access: "full", pluginId: "", sectionId: "", renderAfterReady: false });
@@ -98,9 +99,9 @@ test("columns added to an existing table show up in its page", async () => {
 
   assert.deepEqual((await snapshot(doc)).Contacts.map((col) => [col.id, col.description]), [["Name", ""], ["Email", "Pro"]]);
 
-  const [contacts] = rows(await doc.fetchTable("_grist_Tables")).filter((table) => table.tableId === "Contacts");
-  const pageSections = rows(await doc.fetchTable("_grist_Views_section")).filter((section) => section.tableRef === contacts.id && section.parentId !== 0);
-  const shown = rows(await doc.fetchTable("_grist_Views_section_field")).filter((field) => pageSections.some((section) => section.id === field.parentId));
+  const [contacts] = zipRows(await doc.fetchTable("_grist_Tables")).filter((table) => table.tableId === "Contacts");
+  const pageSections = zipRows(await doc.fetchTable("_grist_Views_section")).filter((section) => section.tableRef === contacts.id && section.parentId !== 0);
+  const shown = zipRows(await doc.fetchTable("_grist_Views_section_field")).filter((field) => pageSections.some((section) => section.id === field.parentId));
   const email = (await doc.columns("Contacts")).find((col) => col.colId === "Email");
   assert.ok(shown.some((field) => field.colRef === email.id), "the new column is in the table's grid");
 });

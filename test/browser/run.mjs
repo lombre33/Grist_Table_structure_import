@@ -10,6 +10,7 @@ import { launchWidget } from "./widgetPage.mjs";
 import { fakeGrist } from "./fakeGrist.mjs";
 import { analyse, apply, choice, description, isElementKept, keepElement, leaveOutElement, offered, previewRows, textOf, unfold, warnings } from "./driver.mjs";
 import { violations } from "./a11y.mjs";
+import { plain } from "../helpers.mjs";
 
 const MULTI = `import grist
 
@@ -26,6 +27,8 @@ class TableB:
 const TYPES = "@grist.UserTable\nclass X:\n  A = grist.Reference('Other_Table')\n  B = grist.Int()\n";
 
 const WITH_FORMULA = "@grist.UserTable\nclass X:\n  A = grist.Int()\n\n  @grist.formulaType(grist.Int())\n  def Double(rec, table):\n    return rec.A * 2\n";
+
+const WITH_REQUEST = "@grist.UserTable\nclass Fetch:\n  A = grist.Text()\n\n  @grist.formulaType(grist.Text())\n  def Remote(rec, table):\n    return REQUEST('https://example.org/?q=' + rec.A).content\n\n  @grist.formulaType(grist.Int())\n  def Double(rec, table):\n    return 2\n";
 
 const RICH_SOURCE = (() => {
   const twoWay = "@grist.UserTable\nclass Pets:\n  Owner = grist.Reference('People', reverse_of='Pets')\n\n@grist.UserTable\nclass People:\n  Pets = grist.ReferenceList('Pets', reverse_of='Owner')\n";
@@ -91,6 +94,23 @@ const tick = async (page, tableId) => {
   await page.waitForSelector("#export-table-list input");
   await page.locator("#export-table-list li", { hasText: tableId }).locator("input").check();
 };
+
+/** Makes every reading of the document take 300 ms, to look at what the page does meanwhile. */
+const slowFetch = (grist) => {
+  const fetchTable = grist.docApi.fetchTable;
+  grist.docApi.fetchTable = async (...args) => {
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    return fetchTable(...args);
+  };
+};
+
+/** Starts counting what is written in the element `id`; `writes(page)` says how many writes there have been since. */
+const countWrites = (page, id) =>
+  page.evaluate((target) => {
+    window.writes = 0;
+    new MutationObserver((records) => (window.writes += records.length)).observe(document.getElementById(target), { childList: true, characterData: true, subtree: true });
+  }, id);
+const writes = (page) => page.evaluate(() => window.writes);
 
 const TESTS = [
   ["loads without console error nor CSP violation, with its font", async (page) => {
@@ -170,9 +190,164 @@ const TESTS = [
     assert.equal(await page.isDisabled("#action-btn"), true);
   }],
 
-  ["Import: a double click creates once", async (page, grist) => {
+  ["Import: the action asks for a confirmation that says what will be written, and writes nothing before it", async (page, grist) => {
+    await analyse(page, TYPES);
+    await page.click("#action-btn");
+    const dialog = page.getByRole("dialog", { name: "Créer cette table ?" });
+    assert.equal(await dialog.count(), 1);
+    assert.equal(await page.evaluate(() => document.querySelector("dialog:modal")?.id), "confirm-dialog", "modal: the page behind cannot be used");
+    assert.equal(await textOf(page, "#confirm-intro"), "Sera ajouté à ce document :");
+    assert.deepEqual((await page.$$eval("#confirm-list li", (items) => items.map((item) => item.textContent))).map(plain), ["X — 2 colonnes"]);
+    assert.equal(await count(page, "#confirm-notes p"), 0, "no formula, no warning");
+    assert.match(await textOf(page, "#confirm-dialog .hint"), /^Rien n’est supprimé ni modifié dans ce qui existe déjà ; Ctrl\+Z annule l’action\.$/);
+    assert.equal(await textOf(page, "#confirm-ok-btn"), "Créer la table dans ce document", "the button says what the one that opened the dialog said");
+    assert.equal(await textOf(page, "#confirm-cancel-btn"), "Annuler");
+    assert.equal(await page.evaluate(() => document.activeElement.id), "confirm-ok-btn", "Enter confirms");
+    assert.equal(grist.calls.length, 0, "nothing is written while the user is asked");
+
+    await page.click("#confirm-ok-btn");
+    await page.waitForSelector("#import-status-region .status-success");
+    assert.equal(grist.calls.length, 1);
+    assert.equal(await page.evaluate(() => document.getElementById("confirm-dialog").open), false);
+  }],
+
+  ["Import: Annuler and Escape write nothing, give the focus back and keep the preview, and a cancel after a confirmation is still a cancel", async (page, grist) => {
+    await analyse(page, TYPES);
+    const kept = async () => [grist.calls.length, await page.evaluate(() => [document.getElementById("confirm-dialog").open, document.getElementById("preview-section").hidden, document.activeElement.id]), await previewRows(page)];
+    await page.click("#action-btn");
+    await page.click("#confirm-cancel-btn");
+    assert.deepEqual(await kept(), [0, [false, false, "action-btn"], ["ARéférence vers « Other_Table »", "BEntier"]], "Annuler: nothing written, the preview and the button as they were");
+    await page.click("#action-btn");
+    await page.keyboard.press("Escape");
+    assert.deepEqual((await kept()).slice(0, 2), [0, [false, false, "action-btn"]], "Escape does the same");
+
+    await apply(page);
+    assert.equal(grist.calls.length, 1, "confirmed once");
+    await analyse(page, "@grist.UserTable\nclass Second:\n  A = grist.Text()\n");
+    await page.click("#action-btn");
+    await page.keyboard.press("Escape");
+    assert.equal(grist.calls.length, 1, "what the last use of the dialog decided does not decide this one");
+  }],
+
+  ["Import: the confirmation answers no to Escape, so that whatever asked it can go on", async (page) => {
+    await page.evaluate(async () => {
+      const { createConfirmation } = await import("/js/importConfirm.js");
+      window.answers = [];
+      createConfirmation()({ title: "Titre", intro: "Intro", lines: ["a"], notes: [], action: "OK" }).then((answer) => window.answers.push(answer));
+    });
+    await page.keyboard.press("Escape");
+    await page.waitForFunction(() => window.answers.length === 1);
+    assert.deepEqual(await page.evaluate(() => window.answers), [false]);
+  }],
+
+  ["Import: several tables are listed with the ids typed and the columns still ticked, and Enter confirms", async (page, grist) => {
+    await analyse(page, MULTI);
+    await page.getByRole("textbox", { name: "TableB" }).fill("Renamed");
+    await page.locator("#columns-preview-body tr", { hasText: "Extra" }).locator("input").uncheck();
+    await page.click("#action-btn");
+    assert.equal(await textOf(page, "#confirm-title"), "Créer ces 2 tables ?");
+    assert.deepEqual((await page.$$eval("#confirm-list li", (items) => items.map((item) => item.textContent))).map(plain), ["TableA — 1 colonne", "Renamed — 1 colonne"]);
+    assert.equal(await textOf(page, "#confirm-ok-btn"), "Créer 2 tables dans ce document");
+    await page.keyboard.press("Enter");
+    await page.waitForSelector("#import-status-region .status-success");
+    assert.deepEqual(grist.calls[0].map(([, tableId]) => tableId), ["TableA", "Renamed"]);
+  }],
+
+  ["Import: the confirmation for an existing table names it, and lists the columns that will be added and none of those already there", async (page, grist) => {
+    await analyse(page, "@grist.UserTable\nclass X:\n  Name = grist.Text()\n  Fresh = grist.Int()\n  Other = grist.Text()\n");
+    await page.click('label.segmented-option:has(input[value="existing"])');
+    await page.selectOption("#target-table-select", { label: "Existing_Table" });
+    await page.click("#action-btn");
+    assert.equal(await textOf(page, "#confirm-title"), "Ajouter à « Existing_Table » ?");
+    assert.equal(await textOf(page, "#confirm-intro"), "Ces 2 colonnes seront ajoutées :");
+    assert.deepEqual(await page.$$eval("#confirm-list li", (items) => items.map((item) => item.textContent)), ["Fresh", "Other"], "Name is there already");
+    await page.click("#confirm-cancel-btn");
+    await page.locator("#columns-preview-body tr", { hasText: "Other" }).locator("input").uncheck();
+    await page.click("#action-btn");
+    assert.equal(await textOf(page, "#confirm-intro"), "Cette colonne sera ajoutée :");
+    assert.deepEqual(await page.$$eval("#confirm-list li", (items) => items.map((item) => item.textContent)), ["Fresh"]);
+    assert.equal(await textOf(page, "#confirm-ok-btn"), "Ajouter 1 colonne à « Existing_Table »");
+    assert.equal(grist.calls.length, 0);
+    await page.click("#confirm-ok-btn");
+    await page.waitForSelector("#import-status-region .status-success");
+    assert.equal(grist.calls.flat().length, 1, "one column added");
+  }],
+
+  ["Import: the confirmation warns that formulas will run, when they are ticked and there are some", async (page) => {
+    await analyse(page, WITH_FORMULA);
+    const notes = () => page.$$eval("#confirm-notes p", (items) => items.map((item) => item.textContent));
+    await page.click("#action-btn");
+    assert.deepEqual(await notes(), [], "left out, they are created empty: nothing will run");
+    await page.click("#confirm-cancel-btn");
+    await keepElement(page, "import", "Formules");
+    await page.click("#action-btn");
+    assert.deepEqual((await notes()).map(plain), ["Les formules s’exécuteront dans ce document dès leur création : ne confirmez que pour du code de confiance."]);
+    assert.equal(await page.$eval("#confirm-notes p", (note) => note.className), "status status-warning", "a caution, not an information");
+    await page.click("#confirm-cancel-btn");
+    await analyse(page, TYPES);
+    await page.click("#action-btn");
+    assert.deepEqual(await notes(), [], "no formula in the text, nothing to warn about");
+  }],
+
+  ["Import: the confirmation names the formulas that call REQUEST, which can send data out, and not the others", async (page) => {
+    await analyse(page, WITH_REQUEST);
+    await keepElement(page, "import", "Formules");
+    await page.click("#action-btn");
+    assert.deepEqual((await page.$$eval("#confirm-notes p", (items) => items.map((item) => item.textContent))).map(plain), [
+      "Les formules s’exécuteront dans ce document dès leur création : ne confirmez que pour du code de confiance.",
+      "Fetch.Remote : cette formule appelle REQUEST, qui peut envoyer des données de ce document vers un autre serveur. Ne confirmez que si vous faites confiance à ce code.",
+    ]);
+    await page.click("#confirm-cancel-btn");
+    await leaveOutElement(page, "import", "Formules");
+    await page.click("#action-btn");
+    assert.equal(await count(page, "#confirm-notes p"), 0, "left out, the formulas are not created: nothing will call REQUEST");
+  }],
+
+  ["Import: the warning about REQUEST speaks English to an English reader", async (page) => {
+    await analyse(page, WITH_REQUEST);
+    await keepElement(page, "import", "Formulas");
+    await page.click("#action-btn");
+    assert.equal(await page.locator("#confirm-notes p").last().textContent(), "Fetch.Remote: this formula calls REQUEST, which can send data from this document to another server. Only confirm if you trust this code.");
+  }, { locale: "en" }],
+
+  ["Import: the confirmation speaks the language of the page", async (page) => {
+    await analyse(page, TYPES);
+    await page.click("#action-btn");
+    assert.equal(await page.getByRole("dialog", { name: "Create this table?" }).count(), 1);
+    assert.equal(await textOf(page, "#confirm-intro"), "Will be added to this document:");
+    assert.deepEqual(await page.$$eval("#confirm-list li", (items) => items.map((item) => item.textContent)), ["X — 2 columns"]);
+    assert.equal(await textOf(page, "#confirm-dialog .hint"), "Nothing that already exists is removed or changed; Ctrl+Z undoes the action.");
+    assert.equal(await textOf(page, "#confirm-cancel-btn"), "Cancel");
+    assert.equal(await textOf(page, "#confirm-ok-btn"), "Create the table in this document");
+  }, { locale: "en" }],
+
+  ["Import: a key held down since the action button is not a decision, and a long id does not make the dialog overflow a pane of 320 px", async (page, grist) => {
+    await page.setViewportSize({ width: 320, height: 600 });
+    await analyse(page, `@grist.UserTable\nclass ${"Long_identifier_".repeat(6)}:\n  A = grist.Text()\n`);
+    await page.click("#action-btn");
+    const prevented = (repeat) =>
+      page.evaluate((repeating) => {
+        const event = new KeyboardEvent("keydown", { key: "Enter", repeat: repeating, bubbles: true, cancelable: true });
+        document.getElementById("confirm-ok-btn").dispatchEvent(event);
+        return event.defaultPrevented;
+      }, repeat);
+    assert.equal(await prevented(true), true, "the repeats of a held key are ignored");
+    assert.equal(await prevented(false), false, "the key pressed on purpose is not");
+    assert.equal(grist.calls.length, 0);
+    const box = await page.$eval("#confirm-dialog", (dialog) => {
+      const { left, right } = dialog.getBoundingClientRect();
+      return [Math.round(left), Math.round(right), dialog.scrollWidth <= dialog.clientWidth, document.documentElement.scrollWidth <= document.documentElement.clientWidth];
+    });
+    assert.ok(box[0] >= 0 && box[1] <= 320, `the dialog is from ${box[0]} to ${box[1]} px in a pane of 320 px`);
+    assert.deepEqual(box.slice(2), [true, true], "nothing scrolls sideways");
+  }],
+
+  ["Import: a double click asks once and creates once", async (page, grist) => {
     await analyse(page, MULTI);
     await page.dblclick("#action-btn");
+    assert.equal(await page.locator("dialog[open]").count(), 1, "one confirmation");
+    assert.equal(grist.calls.length, 0, "nothing is written before it");
+    await page.dblclick("#confirm-ok-btn");
     await page.waitForSelector("#import-status-region .status-success");
     assert.equal(grist.calls.length, 1);
   }, { delay: 300 }],
@@ -224,11 +399,7 @@ const TESTS = [
   }],
 
   ["Import: editing the text while the document is being read announces and shows nothing", async (page, grist) => {
-    const fetchTable = grist.docApi.fetchTable;
-    grist.docApi.fetchTable = async (...args) => {
-      await new Promise((resolve) => setTimeout(resolve, 300));
-      return fetchTable(...args);
-    };
+    slowFetch(grist);
     await page.fill("#source-input", MULTI);
     await page.click("#analyze-btn");
     await page.fill("#source-input", `${MULTI}\n`);
@@ -511,10 +682,8 @@ const TESTS = [
     await page.selectOption("#target-table-select", { label: "Existing_Table" });
     assert.equal(await overflows(), false, "existing table");
     await page.click("#tab-export");
-    await page.waitForSelector("#export-table-list input");
-    await page.locator("#export-table-list li", { hasText: "Existing_Table" }).locator("input").check();
-    await page.click("#generate-btn");
-    await page.waitForSelector("#export-output-block:not([hidden])");
+    await tick(page, "Existing_Table");
+    await generate(page);
     assert.equal(await overflows(), false, "export");
     await page.fill("#export-search", "Very_long_".repeat(12));
     assert.equal(await overflows(), false, "a long search, said back");
@@ -559,8 +728,7 @@ const TESTS = [
 
   ["Export: the list keeps its ticks when refreshed, and one box ticks them all", async (page) => {
     await page.click("#tab-export");
-    await page.waitForSelector("#export-table-list input");
-    await page.locator("#export-table-list li", { hasText: "Standalone_Table" }).locator("input").check();
+    await tick(page, "Standalone_Table");
     assert.equal(await page.evaluate(() => document.getElementById("export-select-all").indeterminate), true, "some are ticked");
 
     await page.click("#refresh-tables-btn");
@@ -704,9 +872,7 @@ const TESTS = [
     assert.deepEqual(await tickedTables(page), ["Existing_Table"], "nor is Existing_Table unticked, which is hidden");
 
     await page.check("#export-select-all");
-    await page.click("#generate-btn");
-    await page.waitForSelector("#export-output-block:not([hidden])");
-    const code = await page.inputValue("#export-output");
+    const code = await generate(page);
     assert.deepEqual(["class Existing_Table", "class Standalone_Table", "class Other_Table"].map((text) => code.includes(text)), [true, true, false]);
 
     await page.fill("#export-search", "");
@@ -766,13 +932,10 @@ const TESTS = [
     await page.waitForSelector("#export-table-list input");
     assert.equal(await page.getByRole("searchbox", { name: "Rechercher une table" }).count(), 1);
     assert.equal(await page.getAttribute("#export-search-status", "aria-live"), "polite");
-    await page.evaluate(() => {
-      window.writes = 0;
-      new MutationObserver((records) => (window.writes += records.length)).observe(document.getElementById("export-search-status"), { childList: true, characterData: true, subtree: true });
-    });
+    await countWrites(page, "export-search-status");
     await page.fill("#export-search", "stand");
     await page.fill("#export-search", "standa");
-    assert.equal(await page.evaluate(() => window.writes), 1, "typing more of the same finding does not have it said again");
+    assert.equal(await writes(page), 1, "typing more of the same finding does not have it said again");
   }, { extraTables: 5 }],
 
   ["Export: the description of a table is an element of its own, counted in tables, and written as the first line of its class", async (page) => {
@@ -837,10 +1000,8 @@ const TESTS = [
 
   ["Export: a failed copy says what to do instead, in a message of its own", async (page) => {
     await page.click("#tab-export");
-    await page.waitForSelector("#export-table-list input");
-    await page.locator("#export-table-list li", { hasText: "Standalone_Table" }).locator("input").check();
-    await page.click("#generate-btn");
-    await page.waitForSelector("#export-output-block:not([hidden])");
+    await tick(page, "Standalone_Table");
+    await generate(page);
     await page.evaluate(() => Object.defineProperty(navigator, "clipboard", { value: { writeText: () => Promise.reject(new Error("denied")) } }));
     await page.click("#copy-btn");
     await page.waitForSelector("#copy-status.status-info");
@@ -849,13 +1010,8 @@ const TESTS = [
 
   ["Export: while the code is generated, ticking a table does not allow a second generation", async (page, grist) => {
     await page.click("#tab-export");
-    await page.waitForSelector("#export-table-list input");
-    await page.locator("#export-table-list li", { hasText: "Standalone_Table" }).locator("input").check();
-    const fetchTable = grist.docApi.fetchTable;
-    grist.docApi.fetchTable = async (...args) => {
-      await new Promise((resolve) => setTimeout(resolve, 300));
-      return fetchTable(...args);
-    };
+    await tick(page, "Standalone_Table");
+    slowFetch(grist);
     await page.click("#generate-btn");
     await page.locator("#export-table-list li", { hasText: "Other_Table" }).locator("input").check();
     assert.equal(await page.isDisabled("#generate-btn"), true, "while it runs");
@@ -867,18 +1023,15 @@ const TESTS = [
   ["Export: the code is brought into view, and stays there once the button has its focus back", async (page) => {
     await page.setViewportSize({ width: 600, height: 500 });
     await page.click("#tab-export");
-    await page.waitForSelector("#export-table-list input");
-    await page.locator("#export-table-list li", { hasText: "Standalone_Table" }).locator("input").check();
-    await page.click("#generate-btn");
-    await page.waitForSelector("#export-output-block:not([hidden])");
+    await tick(page, "Standalone_Table");
+    await generate(page);
     assert.equal(await page.evaluate(() => document.activeElement.id), "generate-btn");
     assert.ok((await page.evaluate(() => document.getElementById("export-output-block").getBoundingClientRect().top)) < 100);
   }],
 
   ["Export: when the banner's buttons go, the keyboard goes on to Générer", async (page) => {
     await page.click("#tab-export");
-    await page.waitForSelector("#export-table-list input");
-    await page.locator("#export-table-list li", { hasText: "Existing_Table" }).locator("input").check();
+    await tick(page, "Existing_Table");
     await page.click("#refs-include-btn");
     assert.equal(await page.evaluate(() => document.activeElement.id), "generate-btn");
     await page.locator("#export-table-list li", { hasText: "Other_Table" }).locator("input").uncheck();
@@ -895,8 +1048,7 @@ const TESTS = [
       return Object.fromEntries(Object.entries(data).map(([key, values]) => [key, [...values, link[key]]]));
     };
     await page.click("#tab-export");
-    await page.waitForSelector("#export-table-list input");
-    await page.locator("#export-table-list li", { hasText: "Existing_Table" }).locator("input").check();
+    await tick(page, "Existing_Table");
     await page.click("#refs-include-btn");
     assert.equal(await hidden(page, "export-refs-banner"), false, "Other_Table refers to Standalone_Table in turn");
     assert.equal(await page.evaluate(() => document.activeElement.id), "refs-include-btn");
@@ -906,15 +1058,11 @@ const TESTS = [
 
   ["Export: a tick that changes nothing in the banner does not have a screen reader say it again", async (page) => {
     await page.click("#tab-export");
-    await page.waitForSelector("#export-table-list input");
-    await page.locator("#export-table-list li", { hasText: "Existing_Table" }).locator("input").check();
-    await page.evaluate(() => {
-      window.writes = 0;
-      new MutationObserver((records) => (window.writes += records.length)).observe(document.getElementById("export-announcement"), { childList: true, characterData: true, subtree: true });
-    });
+    await tick(page, "Existing_Table");
+    await countWrites(page, "export-announcement");
     await page.locator("#export-table-list li", { hasText: "Standalone_Table" }).locator("input").check();
     await page.waitForTimeout(50);
-    assert.equal(await page.evaluate(() => window.writes), 0);
+    assert.equal(await writes(page), 0);
   }],
 
   ["Import: Analyser has the keyboard back once the document has been read", async (page) => {
@@ -924,11 +1072,7 @@ const TESTS = [
 
   ["Import: while the document is read again, the button of the previous analysis cannot be pressed", async (page, grist) => {
     await analyse(page, MULTI);
-    const fetchTable = grist.docApi.fetchTable;
-    grist.docApi.fetchTable = async (...args) => {
-      await new Promise((resolve) => setTimeout(resolve, 300));
-      return fetchTable(...args);
-    };
+    slowFetch(grist);
     await page.click("#analyze-btn");
     assert.equal(await page.isDisabled("#action-btn"), true);
     await page.waitForFunction(() => !document.getElementById("analyze-btn").disabled);
@@ -1414,6 +1558,7 @@ const TESTS = [
   ["Import: a code pasted while the tables are being created is left for later: the creation is not disturbed", async (page) => {
     await analyse(page, TYPES);
     await page.click("#action-btn");
+    await page.click("#confirm-ok-btn");
     await page.evaluate(() => {
       const box = document.getElementById("source-input");
       box.value = "@grist.UserTable\nclass Later:\n  A = grist.Text()\n";
@@ -1504,18 +1649,15 @@ const SCREENS = [
     "the Export tab with its code",
     async (page) => {
       await page.click("#tab-export");
-      await page.waitForSelector("#export-table-list input");
-      await page.locator("#export-table-list li", { hasText: "Existing_Table" }).locator("input").check();
-      await page.click("#generate-btn");
-      await page.waitForSelector("#export-output-block:not([hidden])");
+      await tick(page, "Existing_Table");
+      await generate(page);
     },
   ],
   [
     "the Export tab searched for a table, with a ticked table that the search hides",
     async (page) => {
       await page.click("#tab-export");
-      await page.waitForSelector("#export-table-list input");
-      await page.locator("#export-table-list li", { hasText: "Existing_Table" }).locator("input").check();
+      await tick(page, "Existing_Table");
       await page.fill("#export-search", "stand");
     },
   ],
@@ -1525,6 +1667,23 @@ const SCREENS = [
       await page.click("#tab-export");
       await page.waitForSelector("#export-table-list input");
       await page.fill("#export-search", "zzz");
+    },
+  ],
+  [
+    "the confirmation of the Import, with a warning about formulas",
+    async (page, locale) => {
+      await analyse(page, RICH_SOURCE);
+      await keepElement(page, "import", locale === "en" ? "Formulas" : "Formules");
+      await page.click("#action-btn");
+    },
+  ],
+  [
+    "the confirmation of the Import of columns into an existing table",
+    async (page) => {
+      await analyse(page, "@grist.UserTable\nclass X:\n  Name = grist.Text()\n  Fresh = grist.Int()\n"); // Fresh is not in Existing_Table: something to add
+      await page.click('label.segmented-option:has(input[value="existing"])');
+      await page.selectOption("#target-table-select", { label: "Existing_Table" });
+      await page.click("#action-btn");
     },
   ],
   [
@@ -1538,8 +1697,7 @@ const SCREENS = [
     "the Export tab with the columns of a table unfolded, one of them left out",
     async (page) => {
       await page.click("#tab-export");
-      await page.waitForSelector("#export-table-list input");
-      await page.locator("#export-table-list li", { hasText: "Existing_Table" }).locator("input").check();
+      await tick(page, "Existing_Table");
       await page.locator("#export-table-list li", { hasText: "Existing_Table" }).locator(".columns-toggle").click();
       await page.locator("#export-table-list .columns-list label", { hasText: "Age" }).locator("input").uncheck();
     },
@@ -1548,8 +1706,7 @@ const SCREENS = [
     "the Export tab with its elements unfolded",
     async (page) => {
       await page.click("#tab-export");
-      await page.waitForSelector("#export-table-list input");
-      await page.locator("#export-table-list li", { hasText: "Existing_Table" }).locator("input").check();
+      await tick(page, "Existing_Table");
       await unfold(page, "export");
     },
   ],
@@ -1563,7 +1720,7 @@ for (const theme of ["light", "dark"]) {
         const page = await widget.open(fakeGrist({ extraTables: 5 }), { locale, bypassCSP: true });
         try {
           await page.evaluate((value) => (document.documentElement.dataset.theme = value), theme);
-          await setup(page);
+          await setup(page, locale);
           assert.deepEqual(await violations(page), [], name);
         } finally {
           await page.close();

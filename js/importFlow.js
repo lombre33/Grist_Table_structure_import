@@ -1,6 +1,6 @@
 /**
  * What the Import tab does with the document, step by step: read the text and the document, apply the choice,
- * go back to the start. `ctx` is { grist, ui, state, setStatus, render, showElements }.
+ * go back to the start. `ctx` is { grist, ui, state, setStatus, confirm, render, showElements }.
  */
 
 import { parseGristSchema } from "./parser.js";
@@ -10,6 +10,7 @@ import { addColumns, createTables } from "./importer.js";
 import { sumCounts } from "./elements.js";
 import { callGrist, reportError } from "./util.js";
 import { translate, translatePlural } from "./i18n.js";
+import { confirmationOf } from "./importConfirm.js";
 import { markChosenMode, modeOf } from "./importUi.js";
 import { batchOf, newEntry, resetState, withFormulas } from "./importState.js";
 import { fillTargetSelect, render, renderElements, renderTableIds, renderWarnings, targetTable, updateModeUI } from "./importView.js";
@@ -96,9 +97,10 @@ export function clearAll(ctx) {
   ui.sourceInput.focus();
 }
 
-/** The button of the action: creates the tables, or adds the columns, as the mode says. */
+/** The button of the action: once the user has confirmed, creates the tables, or adds the columns, as the mode says. */
 export async function apply(ctx) {
   const { ui, state } = ctx;
+  if (!(await ctx.confirm(confirmationOf(ctx)))) return; // the preview stays as it is: nothing was written
   state.busy = ui.analyzeBtn.disabled = ui.actionBtn.disabled = true;
   try {
     await (modeOf(ui) === "create" ? create(ctx) : addToExisting(ctx));

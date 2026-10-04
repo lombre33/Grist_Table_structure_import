@@ -79,7 +79,7 @@ function scanString(text, i, quote, scan) {
   const end = stringEnd(text, quote);
   if (end === -1) {
     endJoined(scan); // opened and never closed: not a string, the quotes mean nothing
-    return quote + 3;
+    return quote + 3; // past the opening quotes, three at most: what follows is code again
   }
   scan.joined = [scan.joined?.[0] ?? i, end];
   return end;
