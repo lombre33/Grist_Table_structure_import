@@ -24,6 +24,14 @@ const styled = {
   headerFontUnderline: true, headerFontStrikethrough: true,
 };
 
+/** The descriptions of some of the tables of SPEC: one line, several, and the awkward texts. */
+export const TABLE_DESCRIPTIONS = {
+  Texts: "Des textes",
+  Links: "Des liens\nsur deux lignes",
+  Numbers: NASTY.join(" | "),
+  Projects: "L'équipe — « projets » (2026) 😀",
+};
+
 export const SPEC = {
   Texts: [
     col("Plain", "Text"),

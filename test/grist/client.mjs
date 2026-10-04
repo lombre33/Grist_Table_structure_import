@@ -5,6 +5,8 @@
  * login (GRIST_DEFAULT_EMAIL) or with GRIST_API_KEY.
  */
 
+import { zipRows } from "../../js/schema.js";
+
 const BASE = (process.env.GRIST_URL ?? "http://localhost:8484").replace(/\/$/, "");
 
 async function call(headers, method, path, body) {
@@ -32,12 +34,6 @@ async function authHeaders() {
   return { Cookie: session.join("; "), "X-Requested-With": "XMLHttpRequest" };
 }
 
-/** Rows of a column-oriented table (`{id: [...], colId: [...]}`). */
-export function rows(columnar) {
-  const keys = Object.keys(columnar);
-  return columnar.id.map((_, i) => Object.fromEntries(keys.map((key) => [key, columnar[key][i]])));
-}
-
 function openDoc(request, id) {
   const base = `/api/docs/${id}`;
   const fetchTable = (tableId) => request("GET", `${base}/tables/${encodeURIComponent(tableId)}/data`);
@@ -50,8 +46,8 @@ function openDoc(request, id) {
     /** `_grist_Tables_column` rows of one table in position order, hidden columns included. */
     async columns(tableId) {
       const [tables, columns] = await Promise.all([fetchTable("_grist_Tables"), fetchTable("_grist_Tables_column")]);
-      const table = rows(tables).find((row) => row.tableId === tableId);
-      return table ? rows(columns).filter((col) => col.parentId === table.id).sort((a, b) => a.parentPos - b.parentPos) : null;
+      const table = zipRows(tables).find((row) => row.tableId === tableId);
+      return table ? zipRows(columns).filter((col) => col.parentId === table.id).sort((a, b) => a.parentPos - b.parentPos) : null;
     },
     async tableIds() {
       return (await fetchTable("_grist_Tables")).tableId;

@@ -372,3 +372,57 @@ test("a text of hundreds of thousands of unrecognized lines gives as many warnin
   const { warnings } = parseGristSchema(`@grist.UserTable\nclass T:\n${"  foo bar\n".repeat(200000)}`);
   assert.equal(warnings.length, 200000);
 });
+
+const described = (opening) => `@grist.UserTable\nclass T:\n${opening}  A = grist.Text()\n`;
+
+test("a string that opens the class is the description of the table, written like a column's, and is no unrecognized content", () => {
+  for (const [opening, expected] of [
+    ["  'Table des clients'\n", "Table des clients"],
+    ['  "Table des clients"\n', "Table des clients"],
+    ["  'ligne 1\\nligne 2 \\'citée\\' \\\\ fin'\n", "ligne 1\nligne 2 'citée' \\ fin"],
+    ["  ''\n", null],
+    ["", null],
+  ]) {
+    const { tables, warnings } = parseGristSchema(described(opening));
+    assert.equal(tables[0].description, expected, JSON.stringify(opening));
+    assert.deepEqual(warnings, [], JSON.stringify(opening));
+    assert.deepEqual(tables[0].columns.map((col) => col.id), ["A"]);
+  }
+});
+
+test("comments and blank lines before the string do not stop it from opening the class", () => {
+  const { tables, warnings } = parseGristSchema("@grist.UserTable\nclass T:\n  # un commentaire\n\n  'La table'\n  A = grist.Text()\n");
+  assert.deepEqual([tables[0].description, warnings], ["La table", []]);
+});
+
+test("a string that is not the first thing in the class is not a description: it is said to be ignored", () => {
+  const { tables, warnings } = parseGristSchema("@grist.UserTable\nclass T:\n  A = grist.Text()\n  'Trop tard'\n");
+  assert.equal(tables[0].description, null);
+  assert.deepEqual(warnings.map((warning) => [warning.key, warning.params.snippet]), [["warn.unrecognizedContent", "'Trop tard'"]]);
+});
+
+test("each table has its own description, and a table without one has none", () => {
+  const { tables } = parseGristSchema("@grist.UserTable\nclass One:\n  'Première'\n  A = grist.Text()\n\n@grist.UserTable\nclass Two:\n  B = grist.Text()\n\n@grist.UserTable\nclass Three:\n  \"Troisième\"\n  pass\n");
+  assert.deepEqual(tables.map((table) => [table.tableId, table.description]), [["One", "Première"], ["Two", null], ["Three", "Troisième"]]);
+});
+
+test("a description that is not a one-line string literal is ignored with a warning, never read as code", () => {
+  const { tables, warnings } = parseGristSchema('@grist.UserTable\nclass T:\n  """Trois guillemets"""\n  A = grist.Text()\n');
+  assert.equal(tables[0].description, null);
+  assert.deepEqual(warnings.map((warning) => warning.key), ["warn.unrecognizedContent"]);
+  assert.deepEqual(tables[0].columns.map((col) => col.id), ["A"]);
+});
+
+test("a class line followed by a very long run of spaces is read in linear time, the text being pasted from anywhere", () => {
+  const started = performance.now();
+  const { tables, warnings } = parseGristSchema(`@grist.UserTable\nclass A${" ".repeat(100_000)}x\n  B = grist.Text()\n`);
+  assert.ok(performance.now() - started < 1000, "a line of that kind took as long as backtracking over every split of the spaces");
+  assert.deepEqual(tables, []);
+  assert.deepEqual(warnings.map((warning) => warning.key), ["warn.decoratorNoClass", "warn.noTableFound"]);
+});
+
+test("the line of a class is read whatever the spaces around its bases and its colon", () => {
+  for (const line of ["class A:", "class A :", "class A(Base):", "class  A  (Base)  :  ", "class A(grist.Table)\t:"]) {
+    assert.deepEqual(parseGristSchema(`@grist.UserTable\n${line}\n  B = grist.Text()\n`).tables.map((table) => table.tableId), ["A"], line);
+  }
+});

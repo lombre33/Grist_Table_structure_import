@@ -1,5 +1,5 @@
 import { after } from "node:test";
-import { connect, rows } from "./client.mjs";
+import { connect } from "./client.mjs";
 
 export const instance = await connect().catch((err) => {
   throw new Error(`No usable Grist instance (set GRIST_URL, see README "Tests against a real Grist"): ${err.message}`);
@@ -21,24 +21,24 @@ export async function columnRef(doc, tableId, colId) {
   return (await doc.columns(tableId)).find((col) => col.colId === colId).id;
 }
 
-export { rows };
-
 import { parseGristSchema } from "../../js/parser.js";
+import { zipRows } from "../../js/schema.js";
 import { createTables, resolveColumns, defaultTableId } from "../../js/importer.js";
+import { omitTable } from "../../js/elements.js";
 
 /**
  * Parses Code View text and creates its tables in `doc` as the Import tab does
  * with its defaults. `ids` renames tables, `exclude` lists unchecked columns, `withFormulas`
- * ticks the option that imports formulas.
+ * ticks the option that imports formulas, `omit` lists the elements (see js/elements.js) left out.
  */
-export async function importText(doc, text, { ids = {}, exclude = {}, withFormulas = false } = {}) {
+export async function importText(doc, text, { ids = {}, exclude = {}, withFormulas = false, omit = [] } = {}) {
   const { tables } = parseGristSchema(text);
   const known = await doc.tableIds();
   const destination = new Map(tables.map((table) => [table.tableId, ids[table.tableId] ?? defaultTableId(table.tableId)]));
   const entries = tables.map((table) => {
     const left = new Set(exclude[table.tableId]);
-    const { columns } = resolveColumns(table, destination, known, { excluded: left, withFormulas });
-    return { id: destination.get(table.tableId), columns: columns.filter((col) => !left.has(col.id)) };
+    const { columns } = resolveColumns(table, destination, known, { excluded: left, withFormulas, omit: new Set(omit) });
+    return { id: destination.get(table.tableId), description: omitTable(table, new Set(omit)).description, columns: columns.filter((col) => !left.has(col.id)) };
   });
   return createTables(doc.grist, entries, { withFormulas });
 }
@@ -49,11 +49,11 @@ export async function importText(doc, text, { ids = {}, exclude = {}, withFormul
  */
 export async function snapshot(doc) {
   const [tables, columns] = await Promise.all([doc.fetchTable("_grist_Tables"), doc.fetchTable("_grist_Tables_column")]);
-  const all = rows(columns);
+  const all = zipRows(columns);
   const byRef = new Map(all.map((col) => [col.id, col]));
   const visible = (col) => col.colId !== "manualSort" && !col.colId.startsWith("gristHelper_");
   return Object.fromEntries(
-    rows(tables)
+    zipRows(tables)
       .filter((table) => !table.summarySourceTable)
       .map((table) => [
         table.tableId,
@@ -76,7 +76,14 @@ export async function snapshot(doc) {
   );
 }
 
-import { fetchDocSchema, buildExportSchema } from "../../js/schema.js";
+/** The description of each table of `doc`, which Grist keeps with the table's raw data widget ("" for none). */
+export async function tableDescriptions(doc) {
+  const [tables, sections] = await Promise.all([doc.fetchTable("_grist_Tables"), doc.fetchTable("_grist_Views_section")]);
+  const byRef = new Map(zipRows(sections).map((section) => [section.id, section.description]));
+  return Object.fromEntries(zipRows(tables).filter((table) => !table.summarySourceTable).map((table) => [table.tableId, byRef.get(table.rawViewSectionRef) ?? ""]));
+}
+
+import { fetchDocSchema, buildExportSchema, omitFromExport, withoutExcluded } from "../../js/schema.js";
 import { generateCode } from "../../js/codeGenerator.js";
 
 /**
@@ -84,14 +91,16 @@ import { generateCode } from "../../js/codeGenerator.js";
  * label?, tied?, description?, widgetOptions?, visibleCol?, reverse? }] }`) the way Grist's own
  * interface does: columns first, then descriptions, display columns and two-way links
  * (`reverse`: the column of the target table this one is the counterpart of). A column with a
- * label has its id apart from it, unless `tied`.
+ * label has its id apart from it, unless `tied`. `descriptions` gives some tables theirs.
  */
-export async function buildSource(doc, spec) {
+export async function buildSource(doc, spec, { descriptions = {} } = {}) {
   const payload = ({ id, type, formula, trigger, label, widgetOptions }) =>
     column(id, type, { isFormula: formula !== undefined, formula: formula ?? trigger ?? "", label, widgetOptions: widgetOptions && JSON.stringify(widgetOptions) });
   await doc.apply(Object.entries(spec).map(([tableId, columns]) => ["AddTable", tableId, columns.map(payload)]));
 
   const followUps = [];
+  const sectionOf = new Map(zipRows(await doc.fetchTable("_grist_Tables")).map((table) => [table.tableId, table.rawViewSectionRef]));
+  for (const [tableId, description] of Object.entries(descriptions)) followUps.push(["UpdateRecord", "_grist_Views_section", sectionOf.get(tableId), { description }]);
   for (const [tableId, columns] of Object.entries(spec)) {
     for (const { id, type, label, tied, description, visibleCol, reverse } of columns) {
       if (label && !tied) followUps.push(["ModifyColumn", tableId, id, { untieColIdFromLabel: true }]);
@@ -106,41 +115,67 @@ export async function buildSource(doc, spec) {
   if (followUps.length > 0) await doc.apply(followUps);
 }
 
-/** The Export tab's text for the given tables of `doc`. */
-export async function exportText(doc, tableIds) {
-  const { tables, allColumns } = await fetchDocSchema(doc.grist);
-  return generateCode(buildExportSchema(tables, allColumns, tableIds));
+/** The Export tab's text for the given tables of `doc`, without the elements (see js/elements.js) in `omitted` and the columns in `excluded` (table id → Set of column ids). */
+export async function exportText(doc, tableIds, omitted = [], excluded = new Map()) {
+  const schema = await fetchDocSchema(doc.grist);
+  const columns = withoutExcluded(schema, excluded);
+  return generateCode(omitFromExport(buildExportSchema(schema.tables, columns, tableIds), new Set(omitted)));
 }
 
-/** Builds `spec` in a first document, exports it, imports the text in a second one (with the formulas if `withFormulas`). */
-export async function roundTrip(spec, options) {
+/** Builds `spec` (with the `descriptions` of some tables) in a first document, exports it, imports the text in a second one (with the formulas if `withFormulas`). */
+export async function roundTrip(spec, { descriptions, ...options } = {}) {
   const source = await instance.newDoc("round trip: source");
-  await buildSource(source, spec);
+  await buildSource(source, spec, { descriptions });
   const text = await exportText(source, Object.keys(spec));
   const target = await instance.newDoc("round trip: target");
   const { note } = await importText(target, text, options);
-  const result = { text, note, before: await snapshot(source), after: await snapshot(target) };
+  const result = {
+    text,
+    note,
+    before: await snapshot(source),
+    after: await snapshot(target),
+    descriptions: { before: await tableDescriptions(source), after: await tableDescriptions(target) },
+  };
   await instance.cleanup([source.id, target.id]);
   return result;
 }
 
+const CHOICE_KEYS = new Set(["choices", "choiceOptions"]);
+const onlyKeys = (options, keep) => {
+  const kept = Object.fromEntries(Object.entries(options ?? {}).filter(([key]) => keep(key)));
+  return Object.keys(kept).length > 0 ? kept : null;
+};
+
+/** What the engine holds of a column once an element has been left out: the column as it would be had it never had it. */
+const WITHOUT = {
+  labels: (col) => ({ ...col, label: col.id, untied: false }),
+  descriptions: (col) => ({ ...col, description: "" }),
+  choices: (col) => ({ ...col, widgetOptions: onlyKeys(col.widgetOptions, (key) => !CHOICE_KEYS.has(key)) }),
+  options: (col) => ({ ...col, widgetOptions: onlyKeys(col.widgetOptions, (key) => CHOICE_KEYS.has(key)) }),
+  displayColumns: (col) => ({ ...col, visibleCol: null }),
+  twoWay: (col) => ({ ...col, reverseCol: null }),
+};
+
 /**
  * What an imported table must look like given the source's columns: data
  * columns first (as in Code View), formulas turned into empty data columns
- * unless `withFormulas`, and the widgetOptions the widget agrees to carry (no
- * rulesOptions, the dropdown condition reduced to its text).
+ * unless `withFormulas`, the widgetOptions the widget agrees to carry (no
+ * rulesOptions, the dropdown condition reduced to its text), and none of the
+ * elements in `omit` (the formulas are `withFormulas`'s).
  */
-export function expectedAfterImport(columns, { withFormulas = false } = {}) {
+export function expectedAfterImport(columns, { withFormulas = false, omit = [] } = {}) {
   const carried = (options) => {
     if (!options) return null;
     const { rulesOptions, dropdownCondition, ...rest } = options;
     const kept = { ...rest, ...(dropdownCondition && { dropdownCondition: { text: dropdownCondition.text } }) };
     return Object.keys(kept).length > 0 ? kept : null;
   };
-  return [...columns.filter((col) => !col.isFormula), ...columns.filter((col) => col.isFormula)].map((col) => ({
-    ...col,
-    isFormula: withFormulas && col.isFormula,
-    formula: withFormulas ? col.formula : "",
-    widgetOptions: carried(col.widgetOptions),
-  }));
+  return [...columns.filter((col) => !col.isFormula), ...columns.filter((col) => col.isFormula)].map((col) =>
+    omit.reduce((left, element) => WITHOUT[element]?.(left) ?? left, {
+      ...col,
+      isFormula: withFormulas && col.isFormula,
+      formula: withFormulas ? col.formula : "",
+      widgetOptions: carried(col.widgetOptions),
+    })
+  );
 }

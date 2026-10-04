@@ -5,7 +5,12 @@
 Characters it lacks fall back to the system font.
 
 `source/Manrope-Variable.ttf` is the upstream file it comes from
-(<https://github.com/googlefonts/manrope>), not published. To rebuild:
+(<https://github.com/googlefonts/manrope>), not published: Manrope **version 4.505** (Mikhail
+Sharanda; the number is in the name table of the file), SHA-256
+`3ae11c49db0455a3cc33e37d380f20fdb8c7f8b41dc07625c177e3d87a9d6ae6`. The copyright line of
+the file says 2019 and `OFL.txt` says 2018: both are the texts upstream distributes, for the
+same holder, The Manrope Project Authors. The upstream commit it was taken from was not
+recorded; the hash is what identifies the file. To rebuild:
 
 ```sh
 pip install fonttools brotli

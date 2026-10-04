@@ -16,14 +16,15 @@ const HEADER =
 const INDENT = "  ";
 const STATEMENT_START_RE = /^(return|if|for|while|with|try|raise|assert|import|def|class|pass)\b/;
 
-/** @param {{tableId: string, columns: object[]}[]} tables as built by buildExportSchema */
+/** @param {{tableId: string, description: ?string, columns: object[]}[]} tables as built by buildExportSchema */
 export function generateCode(tables) {
   return HEADER + tables.map((table) => `\n\n${tableText(table)}`).join("");
 }
 
-function tableText({ tableId, columns }) {
+function tableText({ tableId, description, columns }) {
+  const docstring = description ? `${INDENT}${quotePython(description)}\n` : ""; // the table's description, on one line like a column's
   const body = columns.length > 0 ? columns.map(fieldText).join("") : `${INDENT}pass\n`;
-  return `@grist.UserTable\nclass ${tableId}:\n${body}`;
+  return `@grist.UserTable\nclass ${tableId}:\n${docstring}${body}`;
 }
 
 function fieldText(col) {

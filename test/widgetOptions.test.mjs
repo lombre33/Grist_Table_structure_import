@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { sanitizeWidgetOptions } from "../js/widgetOptions.js";
+import { optionKinds, sanitizeWidgetOptions, selectOptions } from "../js/widgetOptions.js";
 
 test("sanitizeWidgetOptions drops rulesOptions entirely", () => {
   const out = sanitizeWidgetOptions({ alignment: "left", rulesOptions: [{ fillColor: "#FF0000" }] });
@@ -63,4 +63,27 @@ test("sanitizeWidgetOptions keeps __proto__ out of its result", () => {
 test("sanitizeWidgetOptions does not mistake the names of the properties of every object for styles", () => {
   const options = JSON.parse('{"__defineGetter__": 3, "valueOf": 4, "wrap": "no", "choiceOptions": {"A": {"constructor": 1, "__defineGetter__": 2, "fillColor": "#112233"}}}');
   assert.deepEqual(sanitizeWidgetOptions(options), { __defineGetter__: 3, valueOf: 4, choiceOptions: { A: { fillColor: "#112233" } } });
+});
+
+test("optionKinds tells a choice list from the other options, as the Export would write them", () => {
+  assert.deepEqual(optionKinds({ choices: ["a"] }), { choices: true, display: false });
+  assert.deepEqual(optionKinds({ choiceOptions: { a: { fontBold: true } } }), { choices: true, display: false }, "the styles of choices go with the choices");
+  assert.deepEqual(optionKinds({ alignment: "center", dropdownCondition: { text: "$A", parsed: "x" } }), { choices: false, display: true });
+  assert.deepEqual(optionKinds({ choices: ["a"], wrap: true }), { choices: true, display: true });
+});
+
+test("optionKinds finds nothing in what the Export would not write", () => {
+  const none = { choices: false, display: false };
+  assert.deepEqual(optionKinds({ choices: [], rulesOptions: [{ fillColor: "#112233" }], textColor: "red", choiceOptions: { a: { fillColor: "red" } } }), none);
+  for (const options of [null, undefined, {}, [], "text"]) assert.deepEqual(optionKinds(options), none, String(options));
+});
+
+test("selectOptions keeps the kinds asked, and nothing when none is left", () => {
+  const options = { choices: ["a"], choiceOptions: { a: { fontBold: true } }, alignment: "center", rulesOptions: [] };
+  assert.deepEqual(selectOptions(options, { choices: true, display: false }), { choices: ["a"], choiceOptions: { a: { fontBold: true } } });
+  assert.deepEqual(selectOptions(options, { choices: false, display: true }), { alignment: "center", rulesOptions: [] });
+  assert.deepEqual(selectOptions(options, { choices: true, display: true }), options);
+  assert.equal(selectOptions(options, { choices: false, display: false }), null);
+  assert.equal(selectOptions({ alignment: "center" }, { choices: true, display: false }), null);
+  for (const empty of [null, undefined, {}, []]) assert.equal(selectOptions(empty, { choices: true, display: true }), null, String(empty));
 });

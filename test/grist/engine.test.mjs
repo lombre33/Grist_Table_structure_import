@@ -5,7 +5,8 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { instance, column, addTable, columnRef, rows } from "./support.mjs";
+import { instance, column, addTable, columnRef } from "./support.mjs";
+import { zipRows } from "../../js/schema.js";
 
 test("AddTable normalises the table id and reports the real one in retValues", async () => {
   const doc = await instance.newDoc();
@@ -93,8 +94,8 @@ test("ModifyColumn visibleCol + SetDisplayFormula make a reference display anoth
 test("AddVisibleColumn shows the new column in the table's views, AddColumn does not", async () => {
   const doc = await instance.newDoc();
   await doc.apply([["AddVisibleColumn", "Table1", "Shown", column("Shown")], ["AddColumn", "Table1", "Hidden", column("Hidden")]]);
-  const pageSections = rows(await doc.fetchTable("_grist_Views_section")).filter((section) => section.parentId !== 0); // not the raw-data and record-card ones
-  const shownInViews = rows(await doc.fetchTable("_grist_Views_section_field"))
+  const pageSections = zipRows(await doc.fetchTable("_grist_Views_section")).filter((section) => section.parentId !== 0); // not the raw-data and record-card ones
+  const shownInViews = zipRows(await doc.fetchTable("_grist_Views_section_field"))
     .filter((field) => pageSections.some((section) => section.id === field.parentId))
     .map((field) => field.colRef);
 
@@ -104,7 +105,7 @@ test("AddVisibleColumn shows the new column in the table's views, AddColumn does
 
 test("the plugin-visible metadata has the shape the widget reads, summary tables included", async () => {
   const doc = await instance.newDoc();
-  const [table] = rows(await doc.fetchTable("_grist_Tables"));
+  const [table] = zipRows(await doc.fetchTable("_grist_Tables"));
   const columns = await doc.columns("Table1");
   await doc.apply([["CreateViewSection", table.id, 0, "record", [columns[1].id], null]]);
 

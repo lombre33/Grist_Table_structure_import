@@ -44,6 +44,7 @@ export async function launchWidget() {
   /** `bypassCSP` is for tests that inject a script of their own (axe-core): the CSP is checked by the others. */
   async function open(grist, { locale, bypassCSP } = {}) {
     const page = await browser.newPage({ bypassCSP });
+    if (process.env.WIDGET_TEST_TIMEOUT) page.setDefaultTimeout(Number(process.env.WIDGET_TEST_TIMEOUT)); // a shorter wait while the tests are being written: what is not there is not coming
     page.problems = [];
     page.on("pageerror", (err) => page.problems.push(`pageerror: ${err.message}`));
     page.on("console", (msg) => msg.type() === "error" && page.problems.push(`console: ${msg.text()}`));

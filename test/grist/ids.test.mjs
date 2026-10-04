@@ -2,7 +2,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { checkTableId, defaultTableId, idFromLabel, isTied } from "../../js/importer.js";
-import { instance, column, rows } from "./support.mjs";
+import { instance, column } from "./support.mjs";
+import { zipRows } from "../../js/schema.js";
 import { seeded } from "../random.mjs";
 
 const random = seeded(2024);
@@ -44,11 +45,11 @@ const LABELS = [
 test("the id derived from a label is the one Grist gives a column whose label is edited", async () => {
   const doc = await instance.newDoc();
   await doc.apply(LABELS.map((_, i) => ["AddTable", `L${i}`, [column("Zz_seed")]]));
-  const refs = new Map(rows(await doc.fetchTable("_grist_Tables_column")).filter((col) => col.colId === "Zz_seed").map((col) => [col.parentId, col.id]));
-  const tables = new Map(rows(await doc.fetchTable("_grist_Tables")).map((table) => [table.tableId, table.id]));
+  const refs = new Map(zipRows(await doc.fetchTable("_grist_Tables_column")).filter((col) => col.colId === "Zz_seed").map((col) => [col.parentId, col.id]));
+  const tables = new Map(zipRows(await doc.fetchTable("_grist_Tables")).map((table) => [table.tableId, table.id]));
   await doc.apply(LABELS.map((label, i) => ["UpdateRecord", "_grist_Tables_column", refs.get(tables.get(`L${i}`)), { label }]));
 
-  const ids = new Map(rows(await doc.fetchTable("_grist_Tables_column")).filter((col) => refs.has(col.parentId) && !["manualSort", "id"].includes(col.colId)).map((col) => [col.parentId, col.colId]));
+  const ids = new Map(zipRows(await doc.fetchTable("_grist_Tables_column")).filter((col) => refs.has(col.parentId) && !["manualSort", "id"].includes(col.colId)).map((col) => [col.parentId, col.colId]));
   LABELS.forEach((label, i) => {
     const derived = idFromLabel(label);
     const engine = ids.get(tables.get(`L${i}`));
@@ -61,11 +62,11 @@ test("whatever id Grist gives a column whose label is edited, the widget takes i
   const doc = await instance.newDoc();
   const seeds = Array.from({ length: 9 }, (_, i) => `Zz${i}`);
   await doc.apply([["AddTable", "N", [column("Nom"), column("Col1"), column("Ab2"), ...seeds.map((id) => column(id))]]]);
-  const refs = new Map(rows(await doc.fetchTable("_grist_Tables_column")).filter((col) => seeds.includes(col.colId)).map((col) => [col.colId, col.id]));
+  const refs = new Map(zipRows(await doc.fetchTable("_grist_Tables_column")).filter((col) => seeds.includes(col.colId)).map((col) => [col.colId, col.id]));
   const labels = ["Nom", "Col1", "ID", "id", "manualSort", "日本", "日本", "Nom", "Ab2"];
   await doc.apply(labels.map((label, i) => ["UpdateRecord", "_grist_Tables_column", refs.get(seeds[i]), { label }]));
 
-  const after = rows(await doc.fetchTable("_grist_Tables_column"));
+  const after = zipRows(await doc.fetchTable("_grist_Tables_column"));
   const ids = seeds.map((seed) => after.find((col) => col.id === refs.get(seed)).colId);
   assert.deepEqual(ids, ["Nom2", "Col1_2", "ID2", "id3", "manualSort2", "A", "B", "Nom3", "Ab2_2"], "the engine numbers an id that is taken or reserved");
   labels.forEach((label, i) => assert.ok(isTied(label, ids[i]), `${label} -> ${ids[i]}`));

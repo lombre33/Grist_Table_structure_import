@@ -5,6 +5,7 @@
  */
 
 import { RESERVED_COLUMN_IDS, splitType } from "./gristTypes.js";
+import { omitElements, omitTable } from "./elements.js";
 import { isPlainObject } from "./widgetOptions.js";
 
 const isHidden = (colId) => RESERVED_COLUMN_IDS.has(colId) || colId.startsWith("gristHelper_") || colId.startsWith("#");
@@ -19,7 +20,21 @@ export function zipRows(columns) {
 export function userColumns(allColumns, tableRef) {
   return allColumns
     .filter((col) => col.parentId === tableRef && !isHidden(col.colId))
-    .sort((a, b) => Number(a.isFormula) - Number(b.isFormula) || a.parentPos - b.parentPos);
+    .sort((first, second) => Number(first.isFormula) - Number(second.isFormula) || first.parentPos - second.parentPos);
+}
+
+/** The tables of the document with the ids of the columns the user sees in each: what the Export tab lists, and lets the user take columns out of. */
+export const tablesWithColumns = ({ tables, allColumns }) =>
+  tables.map((table) => ({ tableId: table.tableId, columns: userColumns(allColumns, table.tableRef).map((col) => col.colId) }));
+
+/**
+ * The columns of the document without those the user left out of the export (`excluded`: table id → Set of column ids).
+ * Export reads this rather than every column, so that nothing it counts or writes mentions a column left out: a
+ * column it displayed or was the two-way counterpart of is no longer found by its row id, and those links go with it.
+ */
+export function withoutExcluded({ tables, allColumns }, excluded) {
+  const tableIdOf = new Map(tables.map((table) => [table.tableRef, table.tableId]));
+  return allColumns.filter((col) => !excluded.get(tableIdOf.get(col.parentId))?.has(col.colId));
 }
 
 /**
@@ -32,15 +47,19 @@ export function existingColumnIds(allColumns, tableRef) {
 
 /**
  * The user tables (no `_grist_*` and no summary tables, which cannot be recreated), every column
- * row, and the ids of all the tables, summary ones included.
+ * row, and the ids of all the tables, summary ones included. A table's description is the one of its
+ * raw data widget (`rawViewSectionRef`), which is also where it is written.
  */
 export async function fetchDocSchema(grist) {
-  const [tablesRaw, columnsRaw] = await Promise.all([grist.docApi.fetchTable("_grist_Tables"), grist.docApi.fetchTable("_grist_Tables_column")]);
+  const [tablesRaw, columnsRaw, sectionsRaw] = await Promise.all(
+    ["_grist_Tables", "_grist_Tables_column", "_grist_Views_section"].map((name) => grist.docApi.fetchTable(name))
+  );
+  const descriptions = new Map(sectionsRaw.id.map((id, i) => [id, sectionsRaw.description?.[i]]));
   const allTables = zipRows(tablesRaw);
   const tables = allTables
     .filter((table) => !table.tableId.startsWith("_grist_") && !table.summarySourceTable)
-    .map((table) => ({ tableRef: table.id, tableId: table.tableId }))
-    .sort((a, b) => a.tableId.localeCompare(b.tableId));
+    .map((table) => ({ tableRef: table.id, tableId: table.tableId, rawViewSectionRef: table.rawViewSectionRef, description: descriptions.get(table.rawViewSectionRef) || null }))
+    .sort((first, second) => first.tableId.localeCompare(second.tableId));
   return { tables, allColumns: zipRows(columnsRaw), tableIds: allTables.map((table) => table.tableId) };
 }
 
@@ -54,7 +73,7 @@ function parseWidgetOptions(json) {
 }
 
 /**
- * What the Export tab writes for the given tables, in that order. `visibleColId` and `reverseColId` are
+ * What the Export tab writes for the given tables, in that order, each with its description. `visibleColId` and `reverseColId` are
  * the ids of the column a reference displays and of its two-way counterpart: the row ids Grist stores
  * (`visibleCol`, `reverseCol`) mean nothing in another document.
  */
@@ -65,6 +84,7 @@ export function buildExportSchema(tables, allColumns, tableIds) {
     .filter(Boolean)
     .map((table) => ({
       tableId: table.tableId,
+      description: table.description ?? null,
       columns: userColumns(allColumns, table.tableRef).map((col) => ({
         colId: col.colId,
         type: col.type,
@@ -77,6 +97,17 @@ export function buildExportSchema(tables, allColumns, tableIds) {
         reverseColId: byRef.get(col.reverseCol)?.colId ?? null,
       })),
     }));
+}
+
+/** The export schema without the `omitted` elements (a Set): with the formulas left out, a formula column (blank or not) is written as plain data, and a trigger formula is dropped. */
+export function omitFromExport(schema, omitted) {
+  return schema.map((table) => ({
+    ...omitTable(table, omitted),
+    columns: table.columns.map((col) => {
+      const kept = omitElements(col, omitted);
+      return omitted.has("formulas") && (col.isFormula || col.formula?.trim()) ? { ...kept, isFormula: false, formula: "" } : kept;
+    }),
+  }));
 }
 
 /**
@@ -95,5 +126,5 @@ export function findReferencedTables(tables, allColumns, tableIds) {
       }
     }
   }
-  return new Map([...referencedBy].sort(([a], [b]) => a.localeCompare(b)));
+  return new Map([...referencedBy].sort(([first], [second]) => first.localeCompare(second)));
 }
