@@ -9,8 +9,8 @@ import { zipRows } from "../../js/schema.js";
 const widget = await launchWidget();
 const context = await widget.browser.newContext();
 await context.addCookies(instance.cookies);
-// The widget asks for Grist's plugin API at its public address: answer with the copy of this very instance.
-await context.route("https://docs.getgrist.com/**", async (route) => {
+// The page asks its own origin for Grist's plugin API, as it does of an instance that serves it at its root: answer with the copy of this very instance.
+await context.route(`${new URL(widget.url).origin}/grist-plugin-api.js`, async (route) => {
   const script = await fetch(`${instance.url}/grist-plugin-api.js`);
   await route.fulfill({ status: 200, contentType: "text/javascript", body: await script.text() });
 });
@@ -55,7 +55,7 @@ test("the widget is used once its scripts have run, even when they come late: a 
   const widgetScripts = (url) => url.origin === new URL(widget.url).origin && url.pathname.endsWith(".js");
   const late = async (route) => {
     await new Promise((resolve) => setTimeout(resolve, 600)); // what a loaded machine or a slow network does to the 20 modules of the page
-    await route.continue();
+    await route.fallback(); // to the route above for the API, to the network for the rest
   };
   await context.route(widgetScripts, late);
   try {

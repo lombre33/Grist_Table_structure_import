@@ -36,7 +36,20 @@ jobs:
           cp index.html style.css favicon.svg _site/
           cp js/*.js _site/js/
           cp fonts/manrope/Manrope-Variable.woff2 fonts/manrope/OFL.txt _site/fonts/manrope/
-          cp assets/grist-factory-logo.jpg _site/assets/
+          cp assets/grist-factory-logo.jpg assets/grist-plugin-api.NOTICE.txt _site/assets/
+
+      # The page asks its own origin for Grist's API (/grist-plugin-api.js, which an instance serves at its root). Pages is no
+      # instance: the official file is fetched here and published beside index.html, and the tag of the published page points at it.
+      - name: Serve Grist's API with the widget
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --retry 3 --max-time 60 \
+            --output _site/grist-plugin-api.js https://docs.getgrist.com/grist-plugin-api.js
+          test "$(wc -c < _site/grist-plugin-api.js)" -gt 200000   # an error page is far smaller than the API
+          grep -q CustomSectionAPI _site/grist-plugin-api.js       # and does not hold its names
+          sed -i 's|<script src="/grist-plugin-api.js">|<script src="grist-plugin-api.js">|' _site/index.html
+          test "$(grep -c '<script src="grist-plugin-api.js">' _site/index.html)" = 1
+          echo "grist-plugin-api.js: $(wc -c < _site/grist-plugin-api.js) bytes, sha256 $(sha256sum _site/grist-plugin-api.js | cut -d' ' -f1)" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload static site
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0

@@ -444,23 +444,30 @@ ou au champ de texte quand il n'y a plus rien à actionner (table créée, colon
 
 ### Hébergement en réseau fermé / auto-hébergé
 
-Le widget charge l'API officielle de Grist depuis `https://docs.getgrist.com/grist-plugin-api.js`
-(voir [SECURITY.md](./SECURITY.md) pour la justification) : c'est la seule requête qu'il fait
-vers un autre domaine que celui qui le sert. Pour s'en passer (instance souveraine, réseau
-fermé, politique qui interdit un domaine tiers), votre instance Grist sert déjà ce même
-fichier à sa propre racine (`<votre-grist>/grist-plugin-api.js`) : deux lignes à changer dans
-`index.html` avant de publier ce dépôt sur votre propre hébergement statique.
+La page charge l'API officielle de Grist depuis sa propre origine : `<script src="/grist-plugin-api.js">`,
+la forme qu'attend une instance, qui sert ce fichier à sa racine. Servi tel quel par la même
+origine que Grist, le widget ne contacte donc aucun autre domaine, et sa politique de sécurité
+(`script-src 'self'`) ne nomme aucune adresse.
 
-1. La balise `<script src="https://docs.getgrist.com/grist-plugin-api.js">` devient
-   `<script src="/grist-plugin-api.js">` si le widget est servi par le même domaine que Grist,
-   sinon `<script src="https://<votre-grist>/grist-plugin-api.js">`.
-2. Dans la balise `<meta http-equiv="Content-Security-Policy">`, la directive `script-src`
-   perd `https://docs.getgrist.com/grist-plugin-api.js` (le fichier exact, pas tout le domaine) ;
-   elle gagne `https://<votre-grist>/grist-plugin-api.js` dans le second cas, et rien dans le
-   premier, `'self'` couvrant déjà ce fichier.
+La publication GitHub Pages ne peut pas compter sur une instance : `.github/workflows/pages.yml`
+télécharge l'API officielle (`https://docs.getgrist.com/grist-plugin-api.js`) au moment de publier,
+la place à côté de `index.html` et fait pointer la balise dessus (`<script src="grist-plugin-api.js">`).
+La page publiée ne contacte, elle non plus, aucun autre domaine. La copie de l'API est celle de la
+dernière publication : relancer le workflow (onglet Actions, *Run workflow*) l'actualise. Le fichier
+n'est pas dans le dépôt ; il appartient à Grist Labs (Apache-2.0, voir
+`assets/grist-plugin-api.NOTICE.txt`, publié avec lui).
 
-Un test (`test/security.test.mjs`) vérifie que le dépôt ne charge rien d'autre que cette API et
-ses propres scripts, et que ce paragraphe nomme bien cette balise.
+Pour un autre hébergement statique (réseau fermé, politique qui interdit un domaine tiers),
+servez les fichiers que copie `pages.yml` et mettez à côté de `index.html` le fichier de votre
+instance (`<votre-grist>/grist-plugin-api.js`), avec la balise `<script src="grist-plugin-api.js">` ;
+si le widget est servi par le même domaine que Grist, laissez `/grist-plugin-api.js`. Dans les deux
+cas, rien à changer à la politique de sécurité. Sans ce fichier, les deux onglets le disent
+(« Impossible de trouver l'API Grist… »). Pour essayer la page en local, un serveur statique à la
+racine du dépôt suffit, avec une copie du fichier à côté de `index.html` (`.gitignore` l'ignore).
+
+Des tests (`test/security.test.mjs`, `test/site.test.mjs`) vérifient que la page ne charge que cette
+API et ses propres scripts, que la politique de sécurité ne nomme aucun domaine, que la publication
+réécrit exactement cette balise et publie le fichier que la page demande.
 
 ## Accès demandé à Grist
 
@@ -487,9 +494,11 @@ fait, et rien d'autre :
   ajouté, et rien n'est envoyé à Grist avant que l'utilisateur confirme ; Annuler n'écrit rien, et
   l'annulation native de Grist (Ctrl+Z) défait l'action une fois faite. L'export, lui, ne fait
   que lire.
-- **Rien ne sort du navigateur** (`connect-src 'none'`) et rien n'est conservé hors de Grist,
-  hormis deux préférences d'affichage dans le `localStorage` de l'origine du widget : le thème
-  (`gristFactory.theme`) et la langue (`gristFactory.locale`), jamais un contenu du document.
+- **Rien ne sort du navigateur** (`connect-src 'none'`), la page ne charge rien d'un autre domaine
+  (l'API de Grist vient de sa propre origine, voir « Hébergement en réseau fermé ») et rien n'est
+  conservé hors de Grist, hormis deux préférences d'affichage dans le `localStorage` de l'origine
+  du widget : le thème (`gristFactory.theme`) et la langue (`gristFactory.locale`), jamais un
+  contenu du document.
 - **Deux messages dans la console du navigateur** (« Applying inline style violates… »,
   « Refused to apply inline style… ») sont normaux : le script officiel de l'API Grist crée une
   balise `<style>` pour le thème de Grist, que la politique de sécurité du widget (`style-src 'self'`)

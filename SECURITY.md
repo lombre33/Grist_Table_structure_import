@@ -235,12 +235,15 @@ chaque mois celle des deux dépendances de développement, Playwright et axe-cor
 
 ## Dépendances
 
-Aucune dépendance d'exécution (code) : ni framework, ni bibliothèque tierce embarquée,
-pas de `node_modules` livré au navigateur. Le seul script chargé en plus du code du
-widget est `https://docs.getgrist.com/grist-plugin-api.js`, la bibliothèque officielle
-publiée par Grist Labs, nécessaire pour dialoguer avec le document hôte (créer la table,
-lister les tables existantes). Voir « Pourquoi charger un script externe » ci-dessous
-pour la justification de ce choix plutôt qu'un renvoi local.
+Aucune dépendance d'exécution (code) dans le dépôt : ni framework, ni bibliothèque tierce
+embarquée, pas de `node_modules` livré au navigateur. Le seul script chargé en plus du code
+du widget est `grist-plugin-api.js`, la bibliothèque officielle publiée par Grist Labs
+(Apache-2.0), nécessaire pour dialoguer avec le document hôte (créer la table, lister les
+tables existantes). La page le demande à sa propre origine (`/grist-plugin-api.js`, que
+l'instance sert à sa racine) ; la publication GitHub Pages, qui n'est pas une instance, le
+télécharge depuis `https://docs.getgrist.com/grist-plugin-api.js` au moment de publier et le
+place à côté de `index.html`, avec `assets/grist-plugin-api.NOTICE.txt`. Il n'est pas dans le
+dépôt. Voir « Pourquoi servir l'API de Grist avec le widget » ci-dessous.
 
 Une seule ressource statique (pas de code) est vendorisée : la police **Manrope**
 (`fonts/manrope/Manrope-Variable.woff2`, licence SIL Open Font License jointe dans le même
@@ -290,7 +293,7 @@ des en-têtes HTTP personnalisés) :
 
 ```
 default-src 'none';
-script-src 'self' https://docs.getgrist.com/grist-plugin-api.js 'unsafe-eval';
+script-src 'self' 'unsafe-eval';
 style-src 'self';
 img-src 'self';
 font-src 'self';
@@ -304,10 +307,9 @@ Points notables :
 
 - `default-src 'none'` : tout est interdit par défaut, seules les directives listées
   ci-dessous ouvrent explicitement ce qui est nécessaire.
-- `script-src` n'autorise que le code du widget lui-même et le script officiel Grist, désigné
-  par son adresse exacte : le reste de `docs.getgrist.com` (autres scripts, contenus
-  servis par ce domaine) ne peut pas s'exécuter dans le widget ; aucun autre domaine,
-  aucune CDN.
+- `script-src` n'autorise que ce qui vient de l'origine de la page : le code du widget et le
+  script officiel de Grist, qu'elle sert elle-même (voir « Dépendances ») ; aucun domaine,
+  aucune CDN, et `test/security.test.mjs` vérifie que la politique n'en nomme aucun.
 - `font-src 'self'` : nécessaire pour que la police Manrope vendorisée
   (`fonts/manrope/`, voir « Dépendances » ci-dessus) se charge — sans `font-src`
   explicite, cette directive retomberait sur `default-src 'none'` et bloquerait même ce
@@ -344,7 +346,8 @@ Points notables :
   pour restreindre l'intégration à sa seule instance, en défense en profondeur.
 - `Referrer-Policy: no-referrer` (balise `<meta name="referrer">`) : évite que l'URL du
   widget (pouvant inclure des paramètres propres au document Grist) ne soit transmise en
-  en-tête `Referer` lors du chargement du script Grist.
+  en-tête `Referer` à une autre origine. La page n'en contacte plus aucune ; la balise reste
+  en défense en profondeur.
 
 ## Portée d'accès demandée à Grist
 
@@ -360,16 +363,32 @@ explicitement à l'utilisateur, lors du premier ajout du widget, une demande
 d'autorisation pour ce niveau d'accès — ce consentement est géré par Grist lui-même, pas
 par ce widget.
 
-## Pourquoi charger un script externe plutôt que le regrouper localement
+## Pourquoi servir l'API de Grist avec le widget
 
-`grist-plugin-api.js` implémente le protocole `postMessage` propriétaire par lequel
-Grist communique avec un widget embarqué. Le réécrire soi-même serait plus risqué (bug
-de validation d'origine, de cadrage des messages...) que de réutiliser la bibliothèque
-officielle, testée par Grist Labs et automatiquement tenue à jour à chaque chargement
-(contrairement à une copie locale figée, qui ne recevrait pas les correctifs de sécurité
-ultérieurs de Grist). C'est également le mode d'intégration documenté et utilisé par les
-widgets officiels de Grist Labs. Pour un déploiement en réseau fermé, voir la section
-correspondante dans le `README.md`.
+`grist-plugin-api.js` implémente le protocole `postMessage` propriétaire par lequel Grist
+communique avec un widget embarqué. Le réécrire soi-même serait plus risqué (bug de
+validation d'origine, de cadrage des messages...) que de réutiliser la bibliothèque officielle,
+testée par Grist Labs. La question est donc d'où la page la charge.
+
+Depuis `https://docs.getgrist.com/grist-plugin-api.js` à chaque ouverture, comme le font les
+widgets de la galerie de Grist Labs, la page dépendrait d'un domaine tiers : sa disponibilité
+(rien ne fonctionne en réseau fermé), l'adresse IP de chaque utilisateur qui lui parvient, et
+un code exécuté avec l'accès complet au document qui peut changer à tout moment sans que
+personne ici le sache. Pour une instance, la forme attendue est celle qu'utilise le dépôt :
+`/grist-plugin-api.js`, que l'instance sert elle-même, à la version de son propre Grist. Pour
+GitHub Pages, qui n'est pas une instance, la publication télécharge le fichier une fois, au
+moment de publier (adresse officielle, HTTPS, taille et contenu contrôlés, empreinte SHA-256
+inscrite dans le résumé de l'exécution) et le publie avec le widget : la page, elle, ne
+contacte plus aucun autre domaine.
+
+Ce que cela coûte, dit sans détour : la copie publiée est celle de la dernière publication, elle
+ne suit pas seule les correctifs de Grist. On l'actualise en relançant le workflow (onglet
+Actions, *Run workflow*) quand Grist publie une nouvelle version de son API. Le widget n'utilise
+que des appels de base, `ready`, `docApi.listTables`, `docApi.fetchTable` et
+`docApi.applyUserActions`, et la CI le teste contre trois versions de Grist (1.2.1, 1.7.20 et
+une version de développement), chacune avec l'API qu'elle sert. Le fichier n'est pas rangé dans
+le dépôt : ce serait y porter près d'un mégaoctet de code empaqueté en `eval` que personne n'y
+relit. Pour un déploiement en réseau fermé, voir la section correspondante dans le `README.md`.
 
 ## Signaler une vulnérabilité
 

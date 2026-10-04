@@ -28,9 +28,9 @@ for (const [pattern, what] of FORBIDDEN) {
   });
 }
 
-test("index.html loads no script but the official Grist plugin API and the widget's own", () => {
+test("index.html loads no script but the Grist plugin API, from the origin of the page, and the widget's own", () => {
   const scripts = [...read("index.html").matchAll(/<script[^>]*\ssrc="([^"]*)"/g)].map((match) => match[1]);
-  assert.deepEqual(scripts.sort(), ["https://docs.getgrist.com/grist-plugin-api.js", "js/app.js", "js/theme-init.js"]);
+  assert.deepEqual(scripts.sort(), ["/grist-plugin-api.js", "js/app.js", "js/theme-init.js"]);
 });
 
 test("index.html declares a CSP that blocks every other origin and any network call", () => {
@@ -38,6 +38,8 @@ test("index.html declares a CSP that blocks every other origin and any network c
   assert.match(csp, /default-src 'none'/);
   assert.match(csp, /connect-src 'none'/);
   assert.doesNotMatch(csp, /unsafe-inline/);
+  assert.equal(csp.match(/script-src ([^;]*)/)[1], "'self' 'unsafe-eval'", "the scripts of the page and the evaluation that Grist's API needs, from no other origin");
+  assert.doesNotMatch(csp, /https?:|\/\//, "the policy names no origin but its own");
 });
 
 test("every action of the workflows is pinned by the commit of a version, which a tag could not guarantee", () => {
@@ -87,15 +89,14 @@ test("the only things written in the browser are the two display preferences, an
   for (const key of keys) assert.ok(readme.includes(`\`${key}\``), `README: ${key}`);
 });
 
-test("the README says how to host the widget without the third-party domain: the tag and the policy that name it", () => {
-  const html = read("index.html");
-  const tag = html.match(/<script src="(https:\/\/[^"]+)">/)[1];
-  assert.equal(tag, "https://docs.getgrist.com/grist-plugin-api.js");
-  assert.ok(readme.includes(`<script src="${tag}">`), "the tag to change");
-  assert.ok(readme.includes('<script src="/grist-plugin-api.js">'), "what it becomes");
-  const csp = html.match(/http-equiv="Content-Security-Policy"\s+content="([^"]*)"/)[1];
-  const scriptSources = csp.match(/script-src ([^;]*)/)[1].split(/\s+/);
-  assert.ok(scriptSources.includes(tag), "the policy names that file, which the README tells to remove");
-  assert.ok(!scriptSources.includes("https://docs.getgrist.com"), "and not the whole domain, whose other scripts the widget does not need");
-  assert.match(readme, /directive `script-src`/);
+test("the README says where Grist's API comes from, in the repository and once published, and the publication does what it says", () => {
+  const tag = read("index.html").match(/<script src="\/grist-plugin-api\.js">/)[0];
+  assert.ok(readme.includes(tag), "the form an instance serves");
+  const workflow = read(".github/workflows/pages.yml");
+  const [, from, to] = workflow.match(/sed -i 's\|(.+?)\|(.+?)\|' _site\/index\.html/);
+  assert.equal(from, tag, "the publication rewrites the tag of the page");
+  assert.ok(readme.includes(to), "to the one the README says the published page has");
+  const origin = "https://docs.getgrist.com/grist-plugin-api.js";
+  assert.ok(workflow.includes(`_site/grist-plugin-api.js ${origin}`) && readme.includes(origin), "the file is fetched from the address the README names, and published beside the page");
+  assert.match(readme, /`script-src 'self'`/);
 });

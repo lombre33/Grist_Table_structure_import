@@ -4,15 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
-<!-- What may load or be reached: the widget's own files and Grist's API, nothing else (SECURITY.md) -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' https://docs.getgrist.com/grist-plugin-api.js 'unsafe-eval'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none';">
+<!-- What may load or be reached: the widget's own files, Grist's API among them, nothing else (SECURITY.md) -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-eval'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none';">
 <!-- A classic script, run before the page is drawn: it puts the saved theme and language on the page so that nothing flashes -->
 <script src="js/theme-init.js"></script>
 <title>Structure de table Grist</title>
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="stylesheet" href="style.css">
-<!-- The official Grist API, the only script from another domain (README, "Hébergement en réseau fermé") -->
-<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<!-- The official Grist API, from the origin of this page: an instance serves it at its root, and the publication of the repository puts a copy beside this file (README, "Hébergement en réseau fermé") -->
+<script src="/grist-plugin-api.js"></script>
 </head>
 <body>
 <main class="shell">

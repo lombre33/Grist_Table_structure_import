@@ -1,0 +1,12 @@
+grist-plugin-api.js
+===================
+
+The file that the widget loads under this name is the plugin API of Grist:
+
+  Copyright Grist Labs and the contributors of grist-core
+  Apache License, Version 2.0 (https://www.apache.org/licenses/LICENSE-2.0)
+  Source: https://github.com/gristlabs/grist-core
+
+It is not part of this repository and is not covered by its GNU GPL v3.0 licence. The publication of
+the repository (.github/workflows/pages.yml) downloads it from https://docs.getgrist.com/grist-plugin-api.js
+and serves it with the widget, so that the page does not ask any other domain for it.

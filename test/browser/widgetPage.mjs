@@ -20,10 +20,15 @@ const MIME_TYPES = {
   ".woff2": "font/woff2",
 };
 
+/** Where the page asks for Grist's API: an instance serves it there. The tests answer with an empty script, which leaves the `window.grist` they install in place. */
+const API_PATH = "/grist-plugin-api.js";
+
 function serveRepository() {
   const server = http.createServer(async (req, res) => {
     try {
-      const filePath = normalize(join(ROOT, decodeURIComponent(req.url.split("?")[0])));
+      const path = decodeURIComponent(req.url.split("?")[0]);
+      if (path === API_PATH) return res.writeHead(200, { "Content-Type": MIME_TYPES[".js"] }).end("");
+      const filePath = normalize(join(ROOT, path));
       if (!filePath.startsWith(ROOT)) throw new Error("outside the repository");
       res.writeHead(200, { "Content-Type": MIME_TYPES[extname(filePath)] ?? "application/octet-stream" });
       res.end(await readFile(filePath));
@@ -48,7 +53,6 @@ export async function launchWidget() {
     page.problems = [];
     page.on("pageerror", (err) => page.problems.push(`pageerror: ${err.message}`));
     page.on("console", (msg) => msg.type() === "error" && page.problems.push(`console: ${msg.text()}`));
-    await page.route("https://docs.getgrist.com/**", (route) => route.fulfill({ contentType: "text/javascript", body: "" }));
     await page.exposeFunction("__gristCall", (method, args) => grist.docApi[method](...args));
     await page.addInitScript((initialLocale) => {
       window.grist = {

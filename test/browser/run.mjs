@@ -1599,7 +1599,6 @@ after(() => widget.close());
 
 test("the saved theme and language apply before any module has run", async () => {
   const page = await widget.browser.newPage();
-  await page.route("https://docs.getgrist.com/**", (route) => route.fulfill({ contentType: "text/javascript", body: "" }));
   await page.route("**/js/app.js", (route) => route.abort());
   await page.addInitScript(() => {
     localStorage.setItem("gristFactory.theme", "dark");
@@ -1607,6 +1606,15 @@ test("the saved theme and language apply before any module has run", async () =>
   });
   await page.goto(widget.url);
   assert.deepEqual(await page.evaluate(() => [document.documentElement.dataset.theme, document.documentElement.lang]), ["dark", "en"]);
+  await page.close();
+});
+
+test("a page without Grist's API says so in both tabs, and names the file that carries it", async () => {
+  const page = await widget.browser.newPage();
+  await page.goto(widget.url);
+  assert.match(await textOf(page, "#import-status-region"), /grist-plugin-api\.js/);
+  await page.click("#tab-export");
+  assert.match(await textOf(page, "#export-status-region"), /grist-plugin-api\.js/);
   await page.close();
 });
 
@@ -1619,7 +1627,6 @@ test("an English reader never sees the French markup: the page waits for its tra
   await translated.close();
 
   const stuck = await widget.browser.newPage();
-  await stuck.route("https://docs.getgrist.com/**", (route) => route.fulfill({ contentType: "text/javascript", body: "" }));
   await stuck.route("**/js/app.js", (route) => route.abort());
   await stuck.addInitScript(() => localStorage.setItem("gristFactory.locale", "en"));
   await stuck.goto(widget.url);

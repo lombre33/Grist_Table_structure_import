@@ -120,7 +120,8 @@ export const STRINGS = {
     // What the widget says while it works. First what both tabs share: the errors, and the counts that sentences are built from.
     "error.noGristApi":
       "Impossible de trouver l’API Grist. Ouvrez cette page en tant que widget personnalisé " +
-      "dans un document Grist (elle ne fonctionne pas seule, hors d’un document).",
+      "dans un document Grist (elle ne fonctionne pas seule, hors d’un document), avec le fichier " +
+      "grist-plugin-api.js servi à côté d’elle (voir le README).",
     "error.timeout": "Délai dépassé en attendant la réponse du document Grist.",
     "common.tablesCount": { one: "{n} table", other: "{n} tables" },
     "common.columnsCount": { one: "{n} colonne", other: "{n} colonnes" },
@@ -342,7 +343,8 @@ export const STRINGS = {
 
     "error.noGristApi":
       "Could not find the Grist API. Open this page as a custom widget inside a Grist document " +
-      "(it does not work standalone, outside of a document).",
+      "(it does not work standalone, outside of a document), with the file grist-plugin-api.js " +
+      "served next to it (see the README).",
     "error.timeout": "Timed out waiting for a response from the Grist document.",
     "common.tablesCount": { one: "{n} table", other: "{n} tables" },
     "common.columnsCount": { one: "{n} column", other: "{n} columns" },
