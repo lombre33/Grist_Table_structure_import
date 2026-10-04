@@ -43,7 +43,9 @@ l'ajout de colonnes dans le document Grist courant, via l'API officielle du widg
 4. Vérifiez l'aperçu (types détectés, colonnes ignorées, remarques éventuelles) — chaque
    colonne a sa propre case à cocher (cochée par défaut, la case de l'en-tête les coche ou
    les décoche toutes) pour l'exclure individuellement de l'action, en plus de la sélection
-   par table ; une colonne décochée est grisée. Sous l'aperçu, le groupe **Éléments à
+   par table ; une colonne décochée est grisée. Sous le champ d'identifiant de chaque table,
+   une ligne en italique donne la description que le code lui donne (tant que l'élément
+   **Descriptions des tables** est coché). Sous l'aperçu, le groupe **Éléments à
    importer**, replié, liste ce que le texte contient au-delà du type des colonnes (voir plus
    bas) : tout y est coché par défaut, sauf les formules, et son résumé dit ce qui sera
    importé (« Tous », « Sans formules », « 4 sur 7 »…). Cliquez ensuite sur le bouton
@@ -269,6 +271,16 @@ métadonnées est un élément que le groupe **Éléments à importer** laisse d
    formules »…) : dépliez-le pour décocher ce que le code ne doit pas contenir (le type de
    chaque colonne est toujours exporté). Cliquez ensuite sur **Générer le code**, bouton
    qui reste affiché en bas du cadre pendant qu'on le parcourt.
+   Pour aller plus loin que le choix par table, le chevron (›) à droite de chaque ligne
+   déplie les colonnes de la table, toutes cochées : décochez celles que le code ne doit
+   pas contenir (le bouton dit alors « 3 colonnes sur 5 »). Les compteurs du groupe
+   **Éléments à exporter**, le bandeau des tables référencées et le code ne tiennent plus
+   compte d'une colonne décochée : une référence décochée n'appelle plus sa table, et une
+   colonne que montre une référence, ou qui est l'autre bout d'un lien bidirectionnel,
+   emporte avec elle ce lien (`visible_col`, `reverse_of`) dans le code. Ce choix est gardé
+   quand on décoche puis recoche une table, quand on actualise la liste et quand la langue
+   change. Il ne réécrit pas les formules : la formule d'une colonne gardée qui cite une
+   colonne décochée est exportée telle quelle.
 3. Copiez le code affiché (icône **Copier**, qui montre un ✓ un instant, ou sélection
    manuelle du texte) et collez-le où vous en avez besoin — par exemple dans l'onglet **Import** de ce même
    widget, ouvert sur un autre document.

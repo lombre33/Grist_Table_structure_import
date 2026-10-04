@@ -6,7 +6,7 @@
  */
 
 import { $, byIds, restoreFocus, statusWriter } from "./dom.js";
-import { fetchDocSchema, buildExportSchema, omitFromExport } from "./schema.js";
+import { fetchDocSchema, buildExportSchema, omitFromExport, tablesWithColumns, withoutExcluded } from "./schema.js";
 import { elementCounts } from "./elements.js";
 import { elementsPicker } from "./elementsPicker.js";
 import { generateCode } from "./codeGenerator.js";
@@ -26,8 +26,9 @@ export function initExportTab(grist) {
   }
 
   // docSchema: the document's tables and columns; busy: the list is being read, or the code generated;
-  // omitted: the elements (see elements.js) the user leaves out of the code
-  const state = { docSchema: null, loaded: false, busy: false, omitted: new Set() };
+  // omitted: the elements (see elements.js) the user leaves out of the code;
+  // excluded: the columns the user leaves out of it, by table (table id → Set of column ids)
+  const state = { docSchema: null, loaded: false, busy: false, omitted: new Set(), excluded: new Map() };
   const ctx = { grist, ui, setStatus, state, output: createOutput() };
   ctx.showElements = elementsPicker(
     $("export-elements-list"),
@@ -38,7 +39,7 @@ export function initExportTab(grist) {
     },
     { summary: ui.elementsSummary }
   );
-  ctx.tables = createTableList({ onChange: () => refresh(ctx) });
+  ctx.tables = createTableList({ onChange: () => refresh(ctx), excluded: state.excluded });
   ctx.banner = createRefsBanner({ onInclude: () => include(ctx), onDismiss: () => dismiss(ctx) });
 
   ui.refreshBtn.addEventListener("click", () => loadTables(ctx));
@@ -54,7 +55,10 @@ export function initExportTab(grist) {
   };
 }
 
-const missing = ({ state, tables }) => missingTables(state.docSchema, tables.selected());
+/** The document as the export sees it: without the columns the user left out, so that what it counts, asks for and writes agrees with them. */
+const retained = ({ state }) => state.docSchema && { ...state.docSchema, allColumns: withoutExcluded(state.docSchema, state.excluded) };
+
+const missing = (ctx) => missingTables(retained(ctx), ctx.tables.selected());
 
 /** Writes again what depends on the tables ticked: the list, the button, the elements offered, the banner. */
 function refresh(ctx) {
@@ -62,7 +66,8 @@ function refresh(ctx) {
   tables.render();
   const selected = tables.selected();
   ui.generateBtn.disabled = state.busy || selected.length === 0;
-  const schema = state.docSchema ? buildExportSchema(state.docSchema.tables, state.docSchema.allColumns, selected) : [];
+  const kept = retained(ctx);
+  const schema = kept ? buildExportSchema(kept.tables, kept.allColumns, selected) : [];
   ui.elementsBox.hidden = !showElements(elementCounts(schema.flatMap((table) => table.columns), schema), (element) => !state.omitted.has(element));
   banner.render(missing(ctx));
 }
@@ -98,7 +103,7 @@ async function loadTables(ctx) {
   try {
     state.docSchema = await callGrist(fetchDocSchema(grist));
     setStatus(null);
-    tables.show(state.docSchema.tables, kept);
+    tables.show(tablesWithColumns(state.docSchema), kept);
   } catch (err) {
     setStatus(t("export.error.fetchTables", { error: reportError(err) }), "error");
   } finally {
@@ -115,7 +120,8 @@ async function generate(ctx) {
   setBusy(ctx, true);
   try {
     state.docSchema = await callGrist(fetchDocSchema(grist)); // columns may have changed since the list was loaded
-    const schema = omitFromExport(buildExportSchema(state.docSchema.tables, state.docSchema.allColumns, tables.selected()), state.omitted);
+    const kept = retained(ctx);
+    const schema = omitFromExport(buildExportSchema(kept.tables, kept.allColumns, tables.selected()), state.omitted);
     output.show(generateCode(schema));
     const columns = schema.reduce((total, table) => total + table.columns.length, 0);
     setStatus(t("export.success.generated", { tablesPhrase: tn("common.tablesCount", schema.length), columnsPhrase: tn("common.columnsCount", columns) }), "success");

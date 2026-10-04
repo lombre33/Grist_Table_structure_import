@@ -9,7 +9,7 @@ export const freshExisting = (index = 0) => ({ index, excluded: new Set(), colum
 /**
  * - parsed: the tables found in the text; warnings: about the text, and about reading the document;
  * - docSchema: this document's tables and columns, null when unreadable;
- * - entries: "new table" mode, one per ticked table: { index, table, id, excluded, columns, input, error };
+ * - entries: "new table" mode, one per ticked table: { index, table, id, excluded, columns, input, error, about };
  * - omitted: the elements (see elements.js) left out of what is created: the formulas, until the user asks for them;
  * - busy: an action is being applied.
  */

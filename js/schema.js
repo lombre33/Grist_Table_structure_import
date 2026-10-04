@@ -23,6 +23,20 @@ export function userColumns(allColumns, tableRef) {
     .sort((a, b) => Number(a.isFormula) - Number(b.isFormula) || a.parentPos - b.parentPos);
 }
 
+/** The tables of the document with the ids of the columns the user sees in each: what the Export tab lists, and lets the user take columns out of. */
+export const tablesWithColumns = ({ tables, allColumns }) =>
+  tables.map((table) => ({ tableId: table.tableId, columns: userColumns(allColumns, table.tableRef).map((col) => col.colId) }));
+
+/**
+ * The columns of the document without those the user left out of the export (`excluded`: table id → Set of column ids).
+ * Export reads this rather than every column, so that nothing it counts or writes mentions a column left out: a
+ * column it displayed or was the two-way counterpart of is no longer found by its row id, and those links go with it.
+ */
+export function withoutExcluded({ tables, allColumns }, excluded) {
+  const tableIdOf = new Map(tables.map((table) => [table.tableRef, table.tableId]));
+  return allColumns.filter((col) => !excluded.get(tableIdOf.get(col.parentId))?.has(col.colId));
+}
+
 /**
  * Lower-cased ids of all the columns of a table, hidden ones included: Grist keeps
  * column ids unique ignoring case, so this is what a new id is checked against.

@@ -8,6 +8,8 @@ import {
   buildExportSchema,
   findReferencedTables,
   omitFromExport,
+  tablesWithColumns,
+  withoutExcluded,
 } from "../js/schema.js";
 
 test("zipRows converts column-oriented data into row objects", () => {
@@ -311,4 +313,62 @@ test("buildExportSchema gives the description of each table", () => {
   const tables = [{ tableRef: 10, tableId: "Foo", description: "About Foo" }, { tableRef: 20, tableId: "Bar", description: null }, { tableRef: 30, tableId: "Old" }];
   const schema = buildExportSchema(tables, [], ["Foo", "Bar", "Old"]);
   assert.deepEqual(schema.map((table) => table.description), ["About Foo", null, null]);
+});
+
+/** Pets and People linked both ways, Pets also showing the Name of its owner, and a Log table that refers to People. */
+const LINKED = {
+  tables: [
+    { tableRef: 10, tableId: "Pets" },
+    { tableRef: 20, tableId: "People" },
+    { tableRef: 30, tableId: "Log" },
+  ],
+  allColumns: [
+    { id: 1, parentId: 10, colId: "Owner", type: "Ref:People", isFormula: false, formula: "", parentPos: 1, reverseCol: 3, visibleCol: 4 },
+    { id: 2, parentId: 10, colId: "Kind", type: "Text", isFormula: false, formula: "", parentPos: 2 },
+    { id: 3, parentId: 20, colId: "Pets", type: "RefList:Pets", isFormula: false, formula: "", parentPos: 2, reverseCol: 1 },
+    { id: 4, parentId: 20, colId: "Name", type: "Text", isFormula: false, formula: "", parentPos: 1 },
+    { id: 5, parentId: 30, colId: "Who", type: "Ref:People", isFormula: false, formula: "", parentPos: 1 },
+    { id: 6, parentId: 30, colId: "manualSort", type: "ManualSortPos", isFormula: false, formula: "", parentPos: 0 },
+  ],
+};
+
+test("tablesWithColumns gives each table with the ids of the columns the user sees, in Code View's order", () => {
+  assert.deepEqual(tablesWithColumns(LINKED), [
+    { tableId: "Pets", columns: ["Owner", "Kind"] },
+    { tableId: "People", columns: ["Name", "Pets"] },
+    { tableId: "Log", columns: ["Who"] },
+  ]);
+});
+
+test("withoutExcluded takes the columns left out of a table, and only those of that table", () => {
+  const ids = (excluded) => withoutExcluded(LINKED, excluded).map((col) => `${col.parentId}.${col.colId}`);
+  assert.equal(withoutExcluded(LINKED, new Map()).length, LINKED.allColumns.length, "nothing left out: every column, the hidden ones too");
+  assert.deepEqual(ids(new Map([["Pets", new Set(["Kind"])]])), ["10.Owner", "20.Pets", "20.Name", "30.Who", "30.manualSort"]);
+  assert.deepEqual(ids(new Map([["Log", new Set(["Name", "Pets"])]])).length, 6, "the ids of other tables do not count");
+  assert.deepEqual(ids(new Map([["Nowhere", new Set(["Kind"])]])).length, 6, "nor does a table that does not exist");
+  assert.deepEqual(ids(new Map([["Pets", new Set()]])).length, 6, "a table with nothing left out");
+  const all = new Map(LINKED.tables.map((table) => [table.tableId, new Set(LINKED.allColumns.map((col) => col.colId))]));
+  assert.deepEqual(ids(all), [], "everything left out");
+});
+
+test("a column left out takes with it the links that told of it: the display column and the other end of a two-way link", () => {
+  const exported = (excluded, ...tableIds) => buildExportSchema(LINKED.tables, withoutExcluded(LINKED, excluded), tableIds);
+  const [pets, people] = exported(new Map(), "Pets", "People");
+  assert.deepEqual([pets.columns[0].visibleColId, pets.columns[0].reverseColId, people.columns[1].reverseColId], ["Name", "Pets", "Owner"]);
+
+  const [petsNoName] = exported(new Map([["People", new Set(["Name"])]]), "Pets");
+  assert.deepEqual([petsNoName.columns[0].visibleColId, petsNoName.columns[0].reverseColId], [null, "Pets"], "the column shown is gone, the link is not");
+
+  const [petsNoPets, peopleNoPets] = exported(new Map([["People", new Set(["Pets"])]]), "Pets", "People");
+  assert.deepEqual([petsNoPets.columns[0].reverseColId, peopleNoPets.columns.map((col) => col.colId)], [null, ["Name"]], "the other end is gone, so is the link");
+
+  const [petsNoOwner] = exported(new Map([["Pets", new Set(["Owner"])]]), "Pets");
+  assert.deepEqual(petsNoOwner.columns.map((col) => col.colId), ["Kind"]);
+});
+
+test("a reference left out no longer asks for the table it referred to", () => {
+  const referenced = (excluded) => [...findReferencedTables(LINKED.tables, withoutExcluded(LINKED, excluded), ["Log"]).keys()];
+  assert.deepEqual(referenced(new Map()), ["People"]);
+  assert.deepEqual(referenced(new Map([["Log", new Set(["Who"])]])), []);
+  assert.deepEqual(referenced(new Map([["Pets", new Set(["Owner"])]])), ["People"], "another table's choice changes nothing");
 });

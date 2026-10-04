@@ -6,7 +6,7 @@
 import { el, syncMasterCheckbox } from "./dom.js";
 import { existingColumnIds } from "./schema.js";
 import { checkTableId, isComputed, linkedColumns, resolveColumns, twoWayWarnings } from "./importer.js";
-import { elementCounts, sumCounts } from "./elements.js";
+import { elementCounts, omitTable, sumCounts } from "./elements.js";
 import { t, tn, typeLabel } from "./i18n.js";
 import { markChosenMode, modeOf } from "./importUi.js";
 import { batchOf, documentTableIds, newEntry, tickableColumns, withFormulas } from "./importState.js";
@@ -81,14 +81,15 @@ export function renderTableIds(ctx) {
 
 function tableIdField(ctx, entry, position) {
   const inputId = `table-id-${position}`;
-  entry.input = el("input", { type: "text", id: inputId, autocomplete: "off", value: entry.id, "aria-describedby": `${inputId}-error` });
+  entry.input = el("input", { type: "text", id: inputId, autocomplete: "off", value: entry.id, "aria-describedby": `${inputId}-error ${inputId}-description` });
   entry.error = el("p", { class: "field-error", id: `${inputId}-error`, hidden: true });
+  entry.about = el("p", { class: "hint table-description", id: `${inputId}-description`, hidden: true });
   entry.input.addEventListener("input", () => {
     entry.id = entry.input.value;
     renderCreate(ctx);
   });
   const label = el("label", { text: entry.table.tableId, for: inputId, class: ctx.state.entries.length > 1 ? "" : "sr-only" });
-  return el("div", { class: "table-id-entry" }, [label, entry.input, entry.error]);
+  return el("div", { class: "table-id-entry" }, [label, entry.input, entry.error, entry.about]);
 }
 
 /** A column's row, with the checkbox that takes it out of (or back into) what will be applied; `locked` when it is there already. */
@@ -126,6 +127,7 @@ export function renderCreate(ctx) {
   const linked = linkedColumns(batch);
   const notes = [...resolved.flatMap(({ warnings }, i) => warnings.map((warning) => ({ ...warning, table: batch[i].id }))), ...twoWayWarnings(batch)];
   const valid = checkTableIds(state);
+  renderTableDescriptions(state);
 
   ui.columnsBody.replaceChildren(...createRows(ctx, batch, linked));
   ui.tableIdsLabel.textContent = tn("import.tableId.label", Math.max(state.entries.length, 1));
@@ -135,6 +137,15 @@ export function renderCreate(ctx) {
   const anyColumn = batch.some((table) => table.columns.length > 0);
   ui.actionBtn.disabled = state.busy || !valid || !anyColumn;
   ui.actionBtn.textContent = createLabel(state.entries.length, anyColumn);
+}
+
+/** Says, under each field, the description the table will have: the one its code gives it, as long as that element is kept. */
+function renderTableDescriptions({ entries, omitted }) {
+  for (const entry of entries) {
+    const description = omitTable(entry.table, omitted).description ?? "";
+    entry.about.textContent = description;
+    entry.about.hidden = !description;
+  }
 }
 
 /** Tells, under each field, what is wrong with the id typed (nothing, for a valid one), and whether every id is valid. */

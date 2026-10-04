@@ -84,7 +84,7 @@ export async function tableDescriptions(doc) {
   return Object.fromEntries(rows(tables).filter((table) => !table.summarySourceTable).map((table) => [table.tableId, byRef.get(table.rawViewSectionRef) ?? ""]));
 }
 
-import { fetchDocSchema, buildExportSchema, omitFromExport } from "../../js/schema.js";
+import { fetchDocSchema, buildExportSchema, omitFromExport, withoutExcluded } from "../../js/schema.js";
 import { generateCode } from "../../js/codeGenerator.js";
 
 /**
@@ -116,10 +116,11 @@ export async function buildSource(doc, spec, { descriptions = {} } = {}) {
   if (followUps.length > 0) await doc.apply(followUps);
 }
 
-/** The Export tab's text for the given tables of `doc`, without the elements (see js/elements.js) in `omitted`. */
-export async function exportText(doc, tableIds, omitted = []) {
-  const { tables, allColumns } = await fetchDocSchema(doc.grist);
-  return generateCode(omitFromExport(buildExportSchema(tables, allColumns, tableIds), new Set(omitted)));
+/** The Export tab's text for the given tables of `doc`, without the elements (see js/elements.js) in `omitted` and the columns in `excluded` (table id → Set of column ids). */
+export async function exportText(doc, tableIds, omitted = [], excluded = new Map()) {
+  const schema = await fetchDocSchema(doc.grist);
+  const columns = withoutExcluded(schema, excluded);
+  return generateCode(omitFromExport(buildExportSchema(schema.tables, columns, tableIds), new Set(omitted)));
 }
 
 /** Builds `spec` (with the `descriptions` of some tables) in a first document, exports it, imports the text in a second one (with the formulas if `withFormulas`). */

@@ -231,6 +231,42 @@ test("elements left out in the Export tab, then others in the Import tab, are mi
   });
 });
 
+test("columns left out in the Export tab are missing from the document that results, and so is the link to the one that shows them", async () => {
+  const source = await instance.newDoc("e2e columns: source");
+  await buildSource(source, {
+    Teams: [{ id: "Title", type: "Text" }, { id: "Roster", type: "RefList:Members" }, { id: "Budget", type: "Numeric" }],
+    Members: [{ id: "Team", type: "Ref:Teams", visibleCol: "Title", reverse: "Roster" }, { id: "Mood", type: "Text" }, { id: "Note", type: "Text" }],
+  });
+
+  const exporter = await widget.open(source.grist);
+  await exporter.click("#tab-export");
+  const row = (tableId) => exporter.locator("#export-table-list li", { hasText: tableId });
+  await row("Members").locator("input.table-box").check();
+  await exporter.click("#refs-include-btn");
+  for (const [tableId, columns] of [["Members", ["Note"]], ["Teams", ["Budget", "Title"]]]) {
+    await row(tableId).locator(".columns-toggle").click();
+    for (const colId of columns) await row(tableId).locator(".columns-list label", { hasText: colId }).locator("input").uncheck();
+  }
+  assert.deepEqual(await exporter.$$eval("#export-table-list .tag:not([hidden])", (tags) => tags.map((tag) => tag.textContent)), ["2 colonnes sur 3", "1 colonne sur 3"]);
+  assert.deepEqual(await offered(exporter, "export"), ["[x] Liens bidirectionnels (2 colonnes)"], "what the columns that stay carry, and nothing of the others");
+  await exporter.click("#generate-btn");
+  await exporter.waitForFunction(() => document.getElementById("export-output").value.includes("class Members"));
+  const text = await exporter.inputValue("#export-output");
+  assert.deepEqual(exporter.problems, []);
+  await exporter.close();
+  assert.doesNotMatch(text, /Note|Budget|Title|visible_col/, "what was left out, and the display column that went with it, are not in the text");
+  assert.match(text, /Team = grist\.Reference\('Teams', reverse_of='Roster'\)/);
+
+  await inWidget(async (page, target) => {
+    await analyse(page, text);
+    assert.match(await apply(page), /^2 tables créées \(Members, Teams\)/);
+    const after = await snapshot(target);
+    const links = (tableId) => after[tableId].map((col) => [col.id, col.visibleCol, col.reverseCol]);
+    assert.deepEqual(links("Members"), [["Team", null, "Roster"], ["Mood", null, null]]);
+    assert.deepEqual(links("Teams"), [["Roster", null, "Team"]], "the link is back, between the columns that stayed");
+  });
+});
+
 test("an existing table: columns are matched ignoring case, and only the new ones are added", () =>
   inWidget(async (page, doc) => {
     await addTable(doc, "Contacts", [column("Name"), column("Email")]);

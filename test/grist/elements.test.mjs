@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { ELEMENTS, elementCounts, sumCounts } from "../../js/elements.js";
 import { parseGristSchema } from "../../js/parser.js";
 import { addColumns, defaultTableId, resolveColumns } from "../../js/importer.js";
-import { buildExportSchema, fetchDocSchema } from "../../js/schema.js";
+import { buildExportSchema, fetchDocSchema, findReferencedTables, withoutExcluded } from "../../js/schema.js";
 import { instance, addTable, column, buildSource, exportText, importText, snapshot, tableDescriptions, expectedAfterImport } from "./support.mjs";
 import { SPEC, TABLE_DESCRIPTIONS } from "./spec.mjs";
 
@@ -98,4 +98,45 @@ test("the columns added to an existing table leave out the elements too", async 
   const [, age, mood] = (await snapshot(doc)).Contacts;
   assert.deepEqual([age.label, age.untied, age.description, age.widgetOptions], ["Age", false, "Years", { alignment: "right" }]);
   assert.deepEqual([mood.label, mood.untied, mood.widgetOptions], ["Mood", false, null]);
+});
+
+/** Teams and Members linked both ways (Members.Team shows Teams.Title), with a column on each side that nothing refers to. */
+const TEAMS_AND_MEMBERS = {
+  Teams: [{ id: "Title", type: "Text" }, { id: "Roster", type: "RefList:Members" }, { id: "Budget", type: "Numeric" }],
+  Members: [{ id: "Team", type: "Ref:Teams", visibleCol: "Title", reverse: "Roster" }, { id: "Mood", type: "Choice", widgetOptions: { choices: ["a", "b"] } }, { id: "Note", type: "Text", label: "Remarque" }],
+};
+
+test("columns left out of the Export tab are not in the document that results, and nor are the links that told of them", async () => {
+  const doc = await instance.newDoc("elements: columns left out");
+  await buildSource(doc, TEAMS_AND_MEMBERS);
+  const ids = ["Members", "Teams"];
+  const columns = async (excluded) => {
+    const text = await exportText(doc, ids, [], new Map(Object.entries(excluded).map(([tableId, left]) => [tableId, new Set(left)])));
+    return { text, ...(await imported(text, { withFormulas: true })) };
+  };
+  const shape = (result) => Object.fromEntries(ids.map((tableId) => [tableId, result[tableId].map((col) => [col.id, col.visibleCol, col.reverseCol])]));
+
+  const all = await columns({});
+  assert.deepEqual(shape(all), { Members: [["Team", "Title", "Roster"], ["Mood", null, null], ["Note", null, null]], Teams: [["Title", null, null], ["Roster", null, "Team"], ["Budget", null, null]] });
+
+  const noNote = await columns({ Members: ["Note"], Teams: ["Budget"] });
+  assert.deepEqual(shape(noNote), { Members: [["Team", "Title", "Roster"], ["Mood", null, null]], Teams: [["Title", null, null], ["Roster", null, "Team"]] }, "columns nothing refers to: only they go");
+  assert.doesNotMatch(noNote.text, /Note|Remarque|Budget/);
+
+  const noTitle = await columns({ Teams: ["Title"] });
+  assert.deepEqual(shape(noTitle).Members[0], ["Team", null, "Roster"], "the column a reference shows is gone: it shows nothing, and the link stays");
+  assert.doesNotMatch(noTitle.text, /visible_col/);
+
+  const noRoster = await columns({ Teams: ["Roster"] });
+  assert.deepEqual(shape(noRoster), { Members: [["Team", "Title", null], ["Mood", null, null], ["Note", null, null]], Teams: [["Title", null, null], ["Budget", null, null]] }, "the other end of a link is gone: so is the link");
+  assert.doesNotMatch(noRoster.text, /reverse_of/);
+});
+
+test("a reference left out no longer has the table it referred to follow it", async () => {
+  const doc = await instance.newDoc("elements: references left out");
+  await buildSource(doc, TEAMS_AND_MEMBERS);
+  const { tables, allColumns } = await fetchDocSchema(doc.grist);
+  const asked = (excluded) => [...findReferencedTables(tables, withoutExcluded({ tables, allColumns }, new Map(Object.entries(excluded).map(([tableId, left]) => [tableId, new Set(left)]))), ["Members"]).keys()];
+  assert.deepEqual(asked({}), ["Teams"]);
+  assert.deepEqual(asked({ Members: ["Team"] }), []);
 });

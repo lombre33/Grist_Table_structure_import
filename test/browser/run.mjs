@@ -73,6 +73,8 @@ const count = (page, selector) => page.locator(selector).count();
 /** The tables of the Export tab that are shown, and those that are ticked (shown or not). */
 const shownTables = (page) => page.$$eval("#export-table-list li:not([hidden])", (items) => items.map((item) => item.textContent));
 const tickedTables = (page) => page.$$eval("#export-table-list input:checked", (boxes) => boxes.map((box) => box.value));
+/** The ids of the tables ticked, apart from the boxes of their columns. */
+const tickedTablesBoxes = async (page) => (await page.$$eval("#export-table-list input.table-box:checked", (boxes) => boxes.map((box) => box.value))).join(", ");
 const ALL_TABLES = ["Existing_Table", "Other_Table", "Standalone_Table"];
 /** The same with five more tables (`extraTables: 5`): enough for the search to be offered. */
 const EVERY_TABLE = ["Existing_Table", "Ledger_1", "Ledger_2", "Ledger_3", "Ledger_4", "Ledger_5", "Other_Table", "Standalone_Table"];
@@ -475,8 +477,9 @@ const TESTS = [
     assert.equal(await page.getByRole("textbox", { name: "TableA" }).count(), 1);
     await page.getByRole("textbox", { name: "TableB" }).fill("TableA");
     assert.equal(await page.getByRole("textbox", { name: "TableB" }).getAttribute("aria-invalid"), "true");
-    const error = await page.getByRole("textbox", { name: "TableB" }).getAttribute("aria-describedby");
+    const [error, about] = (await page.getByRole("textbox", { name: "TableB" }).getAttribute("aria-describedby")).split(" ");
     assert.match(await page.textContent(`#${error}`), /plusieurs fois/);
+    assert.equal(about, error.replace("-error", "-description"), "and by the description of the table, which it may not have");
     assert.equal(await textOf(page, "#import-announcement"), "Analyse terminée : 2 tables, 3 colonnes au total.");
     assert.equal(await page.getByRole("radiogroup", { name: /Que faire/ }).count(), 1);
   }],
@@ -986,6 +989,24 @@ const TESTS = [
     assert.equal(await page.evaluate(() => document.getElementById("settings-dialog").open), false);
   }],
 
+  ["Import: the description a table will have is shown under the field of its id, for as long as that element is kept", async (page) => {
+    await analyse(page, "@grist.UserTable\nclass Tasks:\n  'Les tâches à faire'\n  A = grist.Text()\n\n@grist.UserTable\nclass Done:\n  \"Les tâches <b>faites</b>\"\n  B = grist.Text()\n\n@grist.UserTable\nclass Plain:\n  C = grist.Text()\n");
+    const lines = () => page.$$eval("#table-ids-list .table-description", (items) => items.map((item) => [item.hidden, item.textContent]));
+    assert.deepEqual(await lines(), [[false, "Les tâches à faire"], [false, "Les tâches <b>faites</b>"], [true, ""]], "what the code says, as text, and nothing for a table without");
+    assert.equal(await count(page, "#table-ids-list .table-description b"), 0, "never markup");
+    assert.equal((await description(page, "#table-id-0")).trim(), "Les tâches à faire", "read with the field");
+
+    await leaveOutElement(page, "import", "Descriptions des tables");
+    assert.deepEqual(await lines(), [[true, ""], [true, ""], [true, ""]], "a description that will not be written is not shown");
+    await keepElement(page, "import", "Descriptions des tables");
+    assert.equal((await lines())[0][1], "Les tâches à faire");
+
+    await page.locator("#table-multi-select input").nth(0).uncheck();
+    assert.deepEqual(await lines(), [[false, "Les tâches <b>faites</b>"], [true, ""]], "the tables that stay ticked");
+    await page.click('label.segmented-option:has(input[value="existing"])');
+    assert.equal(await hidden(page, "table-id-row"), true, "a table that receives columns is not given a description");
+  }],
+
   ["Import: the elements are folded, and what is chosen is written on their summary", async (page) => {
     await analyse(page, ALL_ELEMENTS);
     const folded = () => page.evaluate(() => !document.getElementById("import-elements").open);
@@ -1156,6 +1177,152 @@ const TESTS = [
     assert.deepEqual(await shownTables(page), ALL_TABLES);
   }, { extraTables: 5 }],
 
+  ["Export: the columns of a table are chosen from its row, and a column left out is neither counted nor written", async (page) => {
+    await page.click("#tab-export");
+    await tick(page, "Existing_Table");
+    const row = page.locator("#export-table-list li", { hasText: "Existing_Table" });
+    const toggle = row.locator(".columns-toggle");
+    assert.equal(await count(page, "#export-table-list .columns-list label"), 0, "no box for a column until the choice is asked for");
+    assert.equal(await toggle.getAttribute("aria-expanded"), "false");
+    assert.equal(await toggle.getAttribute("aria-label"), "Choisir les colonnes de Existing_Table");
+    assert.equal(await toggle.getAttribute("title"), "Choisir les colonnes de Existing_Table");
+    assert.equal(await hidden(page, "export-columns-0"), true);
+    const listHeight = () => page.$eval("#export-table-list", (list) => getComputedStyle(list).maxHeight);
+    assert.equal(await listHeight(), "260px", "a long list scrolls");
+
+    await toggle.click();
+    assert.equal(await toggle.getAttribute("aria-expanded"), "true");
+    assert.equal(await listHeight(), "none", "but not through two boxes at once: the list grows with the columns it shows");
+    const names = () => row.locator(".columns-list label").allTextContents();
+    assert.deepEqual(await names(), ["Name", "Age", "Mood", "Owner", "Computed"], "the columns of Code View, in its order, without the hidden ones");
+    assert.equal(await row.locator(".columns-list input:checked").count(), 5, "all kept");
+    assert.equal(await page.getByRole("group", { name: "Colonnes de Existing_Table" }).count(), 1);
+    assert.equal(await toggle.getAttribute("aria-controls"), "export-columns-0");
+
+    await row.locator(".columns-list label", { hasText: "Age" }).locator("input").uncheck();
+    await row.locator(".columns-list label", { hasText: "Computed" }).locator("input").uncheck();
+    assert.equal(await textOf(page, "#export-table-list li .tag:not([hidden])"), "3 colonnes sur 5");
+    assert.equal(await toggle.getAttribute("aria-label"), "Choisir les colonnes de Existing_Table, 3 colonnes sur 5");
+    assert.equal(await tickedTablesBoxes(page), "Existing_Table", "the box of the table is not touched by those of its columns");
+    assert.ok(!(await offered(page, "export")).some((item) => /Formules/.test(item)), "the formula that is left out is no longer offered");
+
+    const code = await generate(page);
+    assert.match(code, /class Existing_Table:\n {2}Name = grist\.Text\(\)\n {2}Mood = grist\.Choice\(/);
+    assert.doesNotMatch(code, /Age|Computed/);
+    assert.match(await textOf(page, "#export-status-region"), /1 table, 3 colonnes au total/, "what is said of the code counts what is in it");
+
+    await row.locator(".columns-list label", { hasText: "Age" }).locator("input").check();
+    assert.equal(await textOf(page, "#export-table-list li .tag:not([hidden])"), "4 colonnes sur 5");
+    await row.locator(".columns-list label", { hasText: "Computed" }).locator("input").check();
+    assert.equal(await count(page, "#export-table-list .tag:not([hidden])"), 0, "nothing left out: nothing said");
+    assert.equal(await toggle.getAttribute("aria-label"), "Choisir les colonnes de Existing_Table");
+    await toggle.click();
+    assert.equal(await toggle.getAttribute("aria-expanded"), "false");
+    assert.equal(await hidden(page, "export-columns-0"), true, "folded again");
+    assert.equal(await listHeight(), "260px");
+  }],
+
+  ["Export: leaving out the reference to a table asks for nothing from it, and leaving out the column a reference shows takes the link with it", async (page) => {
+    await page.click("#tab-export");
+    await tick(page, "Existing_Table");
+    const open = async (tableId) => {
+      const row = page.locator("#export-table-list li", { hasText: tableId });
+      if ((await row.locator(".columns-toggle").getAttribute("aria-expanded")) === "false") await row.locator(".columns-toggle").click();
+      return row;
+    };
+    assert.equal(await hidden(page, "export-refs-banner"), false, "Owner refers to Other_Table");
+    const existing = await open("Existing_Table");
+    await existing.locator(".columns-list label", { hasText: "Owner" }).locator("input").uncheck();
+    assert.equal(await hidden(page, "export-refs-banner"), true, "no column refers to it any more");
+    await existing.locator(".columns-list label", { hasText: "Owner" }).locator("input").check();
+    assert.equal(await hidden(page, "export-refs-banner"), false, "back with the column");
+    await page.click("#refs-include-btn");
+
+    assert.match(await generate(page), /Owner = grist\.Reference\('Other_Table', visible_col='Label'\)/);
+    assert.ok((await offered(page, "export")).some((item) => /Colonne affichée des références/.test(item)));
+    const other = await open("Other_Table");
+    await other.locator(".columns-list label", { hasText: "Label" }).locator("input").uncheck();
+    assert.ok(!(await offered(page, "export")).some((item) => /Colonne affichée des références/.test(item)), "nothing shows that column any more");
+    const code = await generate(page);
+    assert.match(code, /Owner = grist\.Reference\('Other_Table'\)/, "the reference stays, plain");
+    assert.doesNotMatch(code, /visible_col|Label/);
+  }],
+
+  ["Export: the columns left out stay when a table is unticked, when the list is read again and when the language changes", async (page) => {
+    await page.click("#tab-export");
+    await tick(page, "Existing_Table");
+    const row = () => page.locator("#export-table-list li", { hasText: "Existing_Table" });
+    await row().locator(".columns-toggle").click();
+    await row().locator(".columns-list label", { hasText: "Age" }).locator("input").uncheck();
+
+    await row().locator("input.table-box").uncheck();
+    await row().locator("input.table-box").check();
+    assert.equal(await textOf(page, "#export-table-list li .tag:not([hidden])"), "4 colonnes sur 5", "a table unticked and ticked again");
+    await page.check("#export-select-all");
+    assert.equal(await textOf(page, "#export-table-list li .tag:not([hidden])"), "4 colonnes sur 5", "the box that takes all the tables takes no column");
+
+    await page.click("#refresh-tables-btn");
+    await page.waitForFunction(() => !document.getElementById("refresh-tables-btn").disabled);
+    assert.equal(await row().locator(".columns-toggle").getAttribute("aria-expanded"), "false", "the list is made again");
+    assert.equal(await textOf(page, "#export-table-list li .tag:not([hidden])"), "4 colonnes sur 5", "what was left out still is");
+    await row().locator(".columns-toggle").click();
+    assert.equal(await row().locator(".columns-list label", { hasText: "Age" }).locator("input").isChecked(), false);
+    assert.doesNotMatch(await generate(page), /Age = grist/, "the formula of a column that stays still says $Age: a formula is never rewritten");
+
+    await page.click("#settings-btn");
+    await page.click('label.segmented-option:has(input[value="en"])');
+    assert.equal(await textOf(page, "#export-table-list li .tag:not([hidden])"), "4 of 5 columns");
+    assert.equal(await row().locator(".columns-toggle").getAttribute("aria-label"), "Choose the columns of Existing_Table, 4 of 5 columns");
+    assert.equal(await page.getByRole("group", { name: "Columns of Existing_Table" }).count(), 1);
+  }],
+
+  ["Export: the boxes of the columns are not tables: they are not counted among the tables ticked that a search hides", async (page) => {
+    await page.click("#tab-export");
+    await tick(page, "Existing_Table");
+    await page.locator("#export-table-list li", { hasText: "Existing_Table" }).locator(".columns-toggle").click();
+    assert.equal(await page.locator("#export-table-list li", { hasText: "Existing_Table" }).locator(".columns-list input:checked").count(), 5);
+    await page.fill("#export-search", "stand");
+    assert.equal(await textOf(page, "#export-search-status"), "1 table affichée sur 8. 1 table cochée est masquée.");
+    await page.check("#export-select-all");
+    assert.deepEqual(await page.$$eval("#export-table-list input.table-box:checked", (boxes) => boxes.map((box) => box.value)), ["Existing_Table", "Standalone_Table"]);
+    assert.equal(await page.locator("#export-table-list li", { hasText: "Existing_Table" }).locator(".columns-list input:checked").count(), 5, "the box that takes the tables shown takes no column");
+    await page.fill("#export-search", "");
+    await page.check("#export-select-all");
+    await page.uncheck("#export-select-all");
+    assert.equal(await page.locator("#export-table-list li", { hasText: "Existing_Table" }).locator(".columns-list input:checked").count(), 5, "nor does it leave one out");
+    assert.equal(await page.isDisabled("#generate-btn"), true, "no table ticked: nothing to generate, whatever the columns say");
+  }, { extraTables: 5 }],
+
+  ["Export: the button of the columns comes right after the box of its table, and the boxes of the columns after the button", async (page) => {
+    await page.click("#tab-export");
+    await page.waitForSelector("#export-table-list input");
+    const focused = () => page.evaluate(() => (document.activeElement.className || document.activeElement.type) + ":" + (document.activeElement.closest("li")?.querySelector("span")?.textContent ?? ""));
+    await page.focus("#export-table-list input.table-box");
+    await page.keyboard.press("Tab");
+    assert.equal(await focused(), "columns-toggle:Existing_Table");
+    await page.keyboard.press("Enter");
+    assert.equal(await page.evaluate(() => document.querySelector(".columns-toggle").getAttribute("aria-expanded")), "true");
+    await page.keyboard.press("Tab");
+    assert.equal(await page.evaluate(() => document.activeElement.closest(".columns-list") !== null), true, "the first column");
+    await page.keyboard.press("Space");
+    assert.equal(await textOf(page, "#export-table-list li .tag:not([hidden])"), "4 colonnes sur 5", "a column left out with the keyboard");
+  }],
+
+  ["Accessibility: a long table id and the count of its columns do not make the screen scroll sideways at 320 px", async (page) => {
+    await page.setViewportSize({ width: 320, height: 700 });
+    await page.click("#tab-export");
+    await page.waitForSelector("#export-table-list input");
+    const row = page.locator("#export-table-list li", { hasText: "Ledger_1" });
+    await row.locator(".columns-toggle").click();
+    assert.equal(await row.locator(".columns-list label").count(), 0, "a table without column has an empty group");
+    const existing = page.locator("#export-table-list li", { hasText: "Existing_Table" });
+    await existing.locator(".columns-toggle").click();
+    await existing.locator(".columns-list label", { hasText: "Age" }).locator("input").uncheck();
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true);
+    const sizes = await page.$$eval(".columns-toggle", (buttons) => buttons.map((button) => [button.offsetWidth, button.offsetHeight]));
+    for (const [width, height] of sizes) assert.ok(width >= 24 && height >= 24, `${width} x ${height}`);
+  }, { extraTables: 1 }],
+
   ["Accessibility: the icon buttons have a name and a tooltip, and keep them in the other language", async (page) => {
     const ICONS = [
       ["clear-btn", "Effacer", "Clear"],
@@ -1317,6 +1484,16 @@ const SCREENS = [
     async (page) => {
       await analyse(page, RICH_SOURCE);
       await unfold(page, "import");
+    },
+  ],
+  [
+    "the Export tab with the columns of a table unfolded, one of them left out",
+    async (page) => {
+      await page.click("#tab-export");
+      await page.waitForSelector("#export-table-list input");
+      await page.locator("#export-table-list li", { hasText: "Existing_Table" }).locator("input").check();
+      await page.locator("#export-table-list li", { hasText: "Existing_Table" }).locator(".columns-toggle").click();
+      await page.locator("#export-table-list .columns-list label", { hasText: "Age" }).locator("input").uncheck();
     },
   ],
   [
