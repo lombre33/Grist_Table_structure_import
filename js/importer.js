@@ -7,7 +7,7 @@ import { elementCounts, omitElements } from "./elements.js";
 import { defaultLiteralForType, resolveColumnType, splitType } from "./gristTypes.js";
 import { fetchDocSchema, existingColumnIds } from "./schema.js";
 import { reportError } from "./util.js";
-import { t, tn } from "./i18n.js";
+import { translate, translatePlural } from "./i18n.js";
 
 // Table ids Grist creates as they are. It rewrites anything else (capital first
 // letter, ASCII only, "None" -> "TNone", ...) and renames clashes with an
@@ -119,10 +119,10 @@ const keyOf = (tableId, colId) => `${tableId}.${colId}`;
 export function twoWayPairs(tables) {
   const all = tables.flatMap(({ id, columns }) => columns.map((col) => ({ tableId: id, col })));
   const byKey = new Map(all.map((entry) => [keyOf(entry.tableId, entry.col.id), entry]));
-  return all.flatMap((a, i) => {
-    const b = a.col.reverseColId && byKey.get(keyOf(splitType(a.col.type).arg, a.col.reverseColId));
-    const mutual = b && b.col.reverseColId === a.col.id && splitType(b.col.type).arg === a.tableId;
-    return mutual && i < all.indexOf(b) ? [[a, b]] : [];
+  return all.flatMap((entry, i) => {
+    const other = entry.col.reverseColId && byKey.get(keyOf(splitType(entry.col.type).arg, entry.col.reverseColId));
+    const mutual = other && other.col.reverseColId === entry.col.id && splitType(other.col.type).arg === entry.tableId;
+    return mutual && i < all.indexOf(other) ? [[entry, other]] : []; // each pair once, from the entry that comes first
   });
 }
 
@@ -156,7 +156,7 @@ const columnPayload = (col, withFormulas) => ({
 export async function createTables(grist, tables, { withFormulas = false } = {}) {
   const taken = new Set((await grist.docApi.listTables()).map((id) => id.toLowerCase()));
   const clashes = tables.filter(({ id }) => taken.has(id.toLowerCase())).map(({ id }) => id);
-  if (clashes.length > 0) throw new Error(tn("import.error.tableCollision", clashes.length, { ids: clashes.join(", ") }));
+  if (clashes.length > 0) throw new Error(translatePlural("import.error.tableCollision", clashes.length, { ids: clashes.join(", ") }));
 
   const actions = tables.map(({ id, columns }) => ["AddTable", id, columns.map((col) => columnPayload(col, withFormulas))]);
   const { retValues } = await grist.docApi.applyUserActions(actions);
@@ -214,7 +214,7 @@ async function applyDetails(grist, tables) {
     if (actions.length > 0) await grist.docApi.applyUserActions(actions);
     return columns.filter((col) => col.visibleColId && !displayColumnRef(schema, col)).map(visibleColMissing).join("");
   } catch (err) {
-    return t("import.note.refineFailed", { error: reportError(err) });
+    return translate("import.note.refineFailed", { error: reportError(err) });
   }
 }
 
@@ -248,7 +248,7 @@ function columnActions(schema, col) {
 }
 
 /** What is said of a display column that its table does not have, with the space that separates it from what precedes it. */
-const visibleColMissing = (col) => ` ${t("warn.visibleColMissing", { colId: col.id, visibleColId: col.visibleColId, target: splitType(col.type).arg })}`;
+const visibleColMissing = (col) => ` ${translate("warn.visibleColMissing", { colId: col.id, visibleColId: col.visibleColId, target: splitType(col.type).arg })}`;
 
 /**
  * Links each pair of two-way reference columns (`[{ tableId, id }, { tableId, id }]`): Grist then
@@ -258,10 +258,10 @@ async function linkTwoWay(grist, pairs) {
   if (pairs.length === 0) return "";
   try {
     const schema = await fetchDocSchema(grist);
-    await grist.docApi.applyUserActions(pairs.map(([a, b]) => ["ModifyColumn", a.tableId, a.id, { reverseCol: columnRef(schema, b.tableId, b.id) }]));
+    await grist.docApi.applyUserActions(pairs.map(([column, counterpart]) => ["ModifyColumn", column.tableId, column.id, { reverseCol: columnRef(schema, counterpart.tableId, counterpart.id) }]));
     return "";
   } catch (err) {
-    return t("import.note.linkFailed", { error: reportError(err) });
+    return translate("import.note.linkFailed", { error: reportError(err) });
   }
 }
 

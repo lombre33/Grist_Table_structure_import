@@ -5,7 +5,7 @@
 
 import { statusWriter } from "./dom.js";
 import { elementsPicker } from "./elementsPicker.js";
-import { t, onLocaleChange } from "./i18n.js";
+import { translate, onLocaleChange } from "./i18n.js";
 import { importUi, markChosenMode } from "./importUi.js";
 import { freshExisting, freshState, toggleElement } from "./importState.js";
 import { onChecklistChange, onModeChange, onSelectAll, render, renderExisting, updateModeUI } from "./importView.js";
@@ -16,7 +16,7 @@ export function initImportTab(grist) {
   const setStatus = statusWriter(ui.statusRegion);
   if (!grist) {
     ui.analyzeBtn.disabled = true;
-    setStatus(t("error.noGristApi"), "error");
+    setStatus(translate("error.noGristApi"), "error");
     return;
   }
 

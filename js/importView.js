@@ -3,11 +3,11 @@
  * fields of the tables to create, the notes, the button. `ctx` is { grist, ui, state, setStatus, render, showElements }.
  */
 
-import { el, syncMasterCheckbox } from "./dom.js";
+import { buildElement, syncMasterCheckbox } from "./dom.js";
 import { existingColumnIds } from "./schema.js";
 import { checkTableId, isComputed, linkedColumns, resolveColumns, twoWayWarnings } from "./importer.js";
 import { elementCounts, omitTable, sumCounts } from "./elements.js";
-import { t, tn, typeLabel } from "./i18n.js";
+import { translate, translatePlural, typeLabel } from "./i18n.js";
 import { markChosenMode, modeOf } from "./importUi.js";
 import { batchOf, documentTableIds, newEntry, tickableColumns, withFormulas } from "./importState.js";
 
@@ -16,8 +16,8 @@ const COMPUTED_TAGS = { formula: "import.preview.formula", trigger: "import.prev
 /** Writes the preview again, for the mode that is chosen. */
 export function render(ctx) {
   const { ui, state } = ctx;
-  ui.previewHeading.textContent = t(state.parsed.length > 0 ? "import.step2.eyebrow" : "import.step2.none");
-  ui.modeHint.textContent = t(modeOf(ui) === "existing" ? "import.mode.existing.desc" : "import.mode.create.desc");
+  ui.previewHeading.textContent = translate(state.parsed.length > 0 ? "import.step2.eyebrow" : "import.step2.none");
+  ui.modeHint.textContent = translate(modeOf(ui) === "existing" ? "import.mode.existing.desc" : "import.mode.create.desc");
   renderTargetProblem(ctx);
   return modeOf(ui) === "existing" ? renderExisting(ctx) : renderCreate(ctx);
 }
@@ -29,7 +29,7 @@ export const targetTable = ({ ui, state }) => state.docSchema?.tables.find((tabl
 function renderTargetProblem({ ui, state }) {
   const problem = !state.docSchema ? "import.error.noTableList" : state.docSchema.tables.length === 0 ? "import.error.noTablesToComplete" : null;
   ui.targetError.hidden = !problem;
-  ui.targetError.textContent = problem ? t(problem) : "";
+  ui.targetError.textContent = problem ? translate(problem) : "";
 }
 
 /** Shows what the mode chosen needs: the id of each table to create, or the table to complete (and its source, among several). */
@@ -44,7 +44,7 @@ export function updateModeUI({ ui, state }) {
 }
 
 export function fillTargetSelect({ ui, state }) {
-  ui.targetSelect.replaceChildren(...(state.docSchema?.tables ?? []).map((table) => el("option", { value: String(table.tableRef), text: table.tableId })));
+  ui.targetSelect.replaceChildren(...(state.docSchema?.tables ?? []).map((table) => buildElement("option", { value: String(table.tableRef), text: table.tableId })));
 }
 
 export function onModeChange(ctx) {
@@ -81,24 +81,24 @@ export function renderTableIds(ctx) {
 
 function tableIdField(ctx, entry, position) {
   const inputId = `table-id-${position}`;
-  entry.input = el("input", { type: "text", id: inputId, autocomplete: "off", value: entry.id, "aria-describedby": `${inputId}-error ${inputId}-description` });
-  entry.error = el("p", { class: "field-error", id: `${inputId}-error`, hidden: true });
-  entry.about = el("p", { class: "hint table-description", id: `${inputId}-description`, hidden: true });
+  entry.input = buildElement("input", { type: "text", id: inputId, autocomplete: "off", value: entry.id, "aria-describedby": `${inputId}-error ${inputId}-description` });
+  entry.error = buildElement("p", { class: "field-error", id: `${inputId}-error`, hidden: true });
+  entry.about = buildElement("p", { class: "hint table-description", id: `${inputId}-description`, hidden: true });
   entry.input.addEventListener("input", () => {
     entry.id = entry.input.value;
     renderCreate(ctx);
   });
-  const label = el("label", { text: entry.table.tableId, for: inputId, class: ctx.state.entries.length > 1 ? "" : "sr-only" });
-  return el("div", { class: "table-id-entry" }, [label, entry.input, entry.error, entry.about]);
+  const label = buildElement("label", { text: entry.table.tableId, for: inputId, class: ctx.state.entries.length > 1 ? "" : "sr-only" });
+  return buildElement("div", { class: "table-id-entry" }, [label, entry.input, entry.error, entry.about]);
 }
 
 /** A column's row, with the checkbox that takes it out of (or back into) what will be applied; `locked` when it is there already. */
 function columnRow(ctx, col, { excluded, rerender, status = null, locked = false, linked = false }) {
-  const checkbox = el("input", {
+  const checkbox = buildElement("input", {
     type: "checkbox",
     checked: !locked && !excluded.has(col.id),
     disabled: locked,
-    "aria-label": t("import.preview.includeColumn", { colId: col.id }),
+    "aria-label": translate("import.preview.includeColumn", { colId: col.id }),
   });
   checkbox.addEventListener("change", () => {
     if (checkbox.checked) excluded.delete(col.id);
@@ -110,9 +110,9 @@ function columnRow(ctx, col, { excluded, rerender, status = null, locked = false
   });
   const tags = [isComputed(col) && COMPUTED_TAGS[col.kind], linked && "import.preview.twoWay"].filter(Boolean);
   const included = !locked && !excluded.has(col.id);
-  const type = el("td", {}, [typeLabel(col.type), ...tags.flatMap((key) => [" ", el("span", { class: "tag", text: t(key) })])]);
-  const cells = [el("td", { class: "col-checkbox" }, [el("label", {}, [checkbox])]), el("td", { text: col.id }), type];
-  return el("tr", { class: included ? "" : "is-excluded" }, status ? [...cells, status] : cells);
+  const type = buildElement("td", {}, [typeLabel(col.type), ...tags.flatMap((key) => [" ", buildElement("span", { class: "tag", text: translate(key) })])]);
+  const cells = [buildElement("td", { class: "col-checkbox" }, [buildElement("label", {}, [checkbox])]), buildElement("td", { text: col.id }), type];
+  return buildElement("tr", { class: included ? "" : "is-excluded" }, status ? [...cells, status] : cells);
 }
 
 /** Resolves and checks every ticked table again: called after each change the user makes. */
@@ -130,7 +130,7 @@ export function renderCreate(ctx) {
   renderTableDescriptions(state);
 
   ui.columnsBody.replaceChildren(...createRows(ctx, batch, linked));
-  ui.tableIdsLabel.textContent = tn("import.tableId.label", Math.max(state.entries.length, 1));
+  ui.tableIdsLabel.textContent = translatePlural("import.tableId.label", Math.max(state.entries.length, 1));
   renderSelectAll(ctx);
   renderElements(ctx, sumCounts([...resolved.map(({ counts }) => counts), elementCounts([], state.entries.map((entry) => entry.table))]));
   renderWarnings(ctx, notes);
@@ -156,7 +156,7 @@ function checkTableIds(state) {
     const others = state.entries.filter((other) => other !== entry).map((other) => other.id.trim());
     const problem = checkTableId(id, documentTableIds(state), others);
     entry.error.hidden = !problem;
-    entry.error.textContent = problem ? t(problem, { tableId: id }) : "";
+    entry.error.textContent = problem ? translate(problem, { tableId: id }) : "";
     entry.input.setAttribute("aria-invalid", String(Boolean(problem)));
     if (problem) valid = false;
   }
@@ -174,15 +174,15 @@ function createRows(ctx, batch, linked) {
 
 /** What the button says: what it creates, or what is missing for it to. */
 function createLabel(tableCount, anyColumn) {
-  if (tableCount === 0) return t("import.action.chooseTables");
-  if (!anyColumn) return t("import.action.noColumns");
-  return tableCount > 1 ? tn("import.action.createTables", tableCount) : t("import.action.create");
+  if (tableCount === 0) return translate("import.action.chooseTables");
+  if (!anyColumn) return translate("import.action.noColumns");
+  return tableCount > 1 ? translatePlural("import.action.createTables", tableCount) : translate("import.action.create");
 }
 
 /** The row that names a table of several: the id it will have, and the table of the code it comes from when that is another. */
 function separatorRow(id, source) {
-  const origin = id === source ? [] : [" ", el("span", { class: "tag", text: t("import.preview.fromTable", { tableId: source }) })];
-  return el("tr", { class: "table-separator" }, [el("td", { colspan: "3" }, [id, ...origin])]);
+  const origin = id === source ? [] : [" ", buildElement("span", { class: "tag", text: translate("import.preview.fromTable", { tableId: source }) })];
+  return buildElement("tr", { class: "table-separator" }, [buildElement("td", { colspan: "3" }, [id, ...origin])]);
 }
 
 /** The checkbox of the table's head: all the columns that can be ticked, or some. */
@@ -218,17 +218,17 @@ export function renderExisting(ctx) {
 function existingRows(ctx, linked) {
   const { existing } = ctx.state;
   return existing.columns.map((col) => {
-    const pill = col.isNew ? ["new", t("import.status.new")] : ["skip", t("import.status.existing")];
-    const status = el("td", {}, [el("span", { class: `status-pill status-pill-${pill[0]}`, text: pill[1] })]);
+    const pill = col.isNew ? ["new", translate("import.status.new")] : ["skip", translate("import.status.existing")];
+    const status = buildElement("td", {}, [buildElement("span", { class: `status-pill status-pill-${pill[0]}`, text: pill[1] })]);
     return columnRow(ctx, col, { excluded: existing.excluded, rerender: () => renderExisting(ctx), status, locked: !col.isNew, linked: linked.has(col) });
   });
 }
 
 /** What the button says: what it adds, or what is missing for it to. */
 function addLabel(target, known, included) {
-  if (!known) return t("import.action.chooseTarget");
-  if (included.length === 0) return t("import.action.noNewColumns");
-  return tn("import.action.addColumns", included.length, { table: target.tableId });
+  if (!known) return translate("import.action.chooseTarget");
+  if (included.length === 0) return translate("import.action.noNewColumns");
+  return translatePlural("import.action.addColumns", included.length, { table: target.tableId });
 }
 
 /** The elements of the text that the user can keep or leave out, with how many columns carry each. */
@@ -240,9 +240,9 @@ export function renderElements({ ui, state, showElements }, counts) {
 /** The notes about the text and about what would be applied, each naming its table when there are several. */
 export function renderWarnings({ ui, state }, more = []) {
   const texts = [...state.warnings, ...more].map(({ key, params, table }) => {
-    const message = t(key, params);
-    return table && state.parsed.length > 1 ? t("warn.tablePrefix", { tableId: table, message }) : message;
+    const message = translate(key, params);
+    return table && state.parsed.length > 1 ? translate("warn.tablePrefix", { tableId: table, message }) : message;
   });
   ui.warningsBlock.hidden = texts.length === 0;
-  ui.warningsList.replaceChildren(...texts.map((text) => el("li", { text })));
+  ui.warningsList.replaceChildren(...texts.map((text) => buildElement("li", { text })));
 }

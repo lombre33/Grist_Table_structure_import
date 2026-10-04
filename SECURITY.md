@@ -190,7 +190,10 @@ chargement, dans ce même navigateur. Le widget s'exécutant dans un `<iframe>`
 intégré par Grist, l'accès au stockage peut être partitionné ou bloqué par le
 navigateur (protections anti-tracking tierces) : chaque lecture/écriture est entourée
 d'un `try/catch` et une indisponibilité ne casse rien, elle fait simplement revenir le
-réglage à sa valeur par défaut (thème système, français) au chargement suivant.
+réglage à sa valeur par défaut (thème système, français) au chargement suivant. Un test
+vérifie dans le code que ces deux clés sont les seules, et que seuls `js/storage.js` et
+`js/theme-init.js` touchent au stockage ; un autre, dans le navigateur, qu'un import et un export
+complets ne laissent rien dans `localStorage`, `sessionStorage`, les cookies ni `indexedDB`.
 
 Pour que ce réglage s'applique dès le premier affichage plutôt qu'après le chargement des
 modules, un petit script classique, `js/theme-init.js` (une dizaine de lignes, seule autre
@@ -253,6 +256,12 @@ ni `node_modules/` ni `package.json`) et ne sont jamais chargées par le widget 
 l'affirmation « aucune dépendance d'exécution » ci-dessus reste exacte. L'image Docker de
 Grist ne sert qu'aux tests, jamais au widget publié.
 
+Les vulnérabilités connues de ces dépendances sont contrôlées à chaque envoi : l'intégration
+continue lance `npm audit --audit-level=high` après `npm ci` (une alerte haute ou critique
+fait échouer la construction, donc le déploiement), et `package-lock.json` épingle les versions.
+Au 4 octobre 2026, `npm audit` ne signale aucune vulnérabilité (0 sur les dépendances de développement,
+0 sur celles d'exécution, qui n'existent pas).
+
 ## Logo Grist Factory
 
 `assets/grist-factory-logo.jpg` est une image statique fournie par l'auteur (Grist
@@ -263,12 +272,12 @@ modification de la CSP.
 
 ## Icônes : SVG en ligne, jamais de police d'icônes
 
-Les deux icônes de l'interface (Réglages, fermer) sont des `<svg>` écrits directement
-dans `index.html`, en contour (`stroke="currentColor"`, sans `fill`) : elles héritent
+Les icônes de l'interface (Réglages, fermer, effacer, actualiser la liste, copier et son
+✓) sont des `<svg>` écrits directement dans `index.html` (les chevrons des groupes qui se
+déplient sont dessinés en CSS, par une bordure), en contour (`stroke="currentColor"`, sans `fill`) : elles héritent
 la couleur du texte du bouton qui les contient, s'adaptent donc automatiquement au thème
 clair/sombre sans code ni fichier supplémentaire. Aucune police d'icônes, aucun emoji,
-aucune image externe (`<img>`) : rien de plus que les deux balises `<svg>` déjà présentes
-dans le HTML.
+aucune image externe (`<img>`) : rien de plus que les balises `<svg>` écrites dans le HTML.
 
 ## Content-Security-Policy
 
@@ -333,7 +342,12 @@ Points notables :
 
 ## Portée d'accès demandée à Grist
 
-Le widget appelle `grist.ready({ requiredAccess: "full" })`. Ce niveau est nécessaire
+Le widget appelle `grist.ready({ requiredAccess: "full" })` (le `README.md` détaille, dans
+« Accès demandé à Grist », ce qui est lu et écrit, et quand ; `test/security.test.mjs` vérifie
+dans le code que les seules actions envoyées sont `AddTable`, `AddVisibleColumn`,
+`ModifyColumn`, `SetDisplayFormula` et `UpdateRecord`, que les seules tables lues sont
+`_grist_Tables`, `_grist_Tables_column` et `_grist_Views_section`, et qu'aucune ligne de table n'est
+lue). Ce niveau est nécessaire
 pour créer une table ou des colonnes (`applyUserActions`), lister les tables existantes
 (`listTables`) et lire leur structure (`fetchTable`, voir ci-dessus) ; Grist affiche
 explicitement à l'utilisateur, lors du premier ajout du widget, une demande

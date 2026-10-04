@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readdirSync } from "node:fs";
-import { STRINGS, tn, typeLabel } from "../js/i18n.js";
+import { STRINGS, translatePlural, typeLabel } from "../js/i18n.js";
 import { plain, read } from "./helpers.mjs";
 
 test("typeLabel gives a readable name, with the target or time zone when there is one", () => {
@@ -13,9 +13,9 @@ test("typeLabel gives a readable name, with the target or time zone when there i
 });
 
 test("tn follows the plural rules of the language: in French zero is singular", () => {
-  assert.equal(tn("common.columnsCount", 0), "0 colonne");
-  assert.equal(tn("common.columnsCount", 1), "1 colonne");
-  assert.equal(tn("common.columnsCount", 2), "2 colonnes");
+  assert.equal(translatePlural("common.columnsCount", 0), "0 colonne");
+  assert.equal(translatePlural("common.columnsCount", 1), "1 colonne");
+  assert.equal(translatePlural("common.columnsCount", 2), "2 colonnes");
 });
 
 const [, i18nCode] = read("js/i18n.js").split("const LOCALE_KEY");

@@ -4,12 +4,12 @@
  */
 
 import { parseGristSchema } from "./parser.js";
-import { el, checklistItem, restoreFocus } from "./dom.js";
+import { buildElement, checklistItem, restoreFocus } from "./dom.js";
 import { fetchDocSchema } from "./schema.js";
 import { addColumns, createTables } from "./importer.js";
 import { sumCounts } from "./elements.js";
 import { callGrist, reportError } from "./util.js";
-import { t, tn } from "./i18n.js";
+import { translate, translatePlural } from "./i18n.js";
 import { markChosenMode, modeOf } from "./importUi.js";
 import { batchOf, newEntry, resetState, withFormulas } from "./importState.js";
 import { fillTargetSelect, render, renderElements, renderTableIds, renderWarnings, targetTable, updateModeUI } from "./importView.js";
@@ -40,7 +40,7 @@ export async function analyze(ctx) {
   ui.previewSection.hidden = false;
   if (!found) return showNothingFound(ctx);
 
-  setStatus(t("import.status.analyzing"));
+  setStatus(translate("import.status.analyzing"));
   ui.actionBtn.disabled = true; // the button of the previous analysis, its tables gone
   await loadSchema(ctx);
   restoreFocus(ui.analyzeBtn);
@@ -54,24 +54,24 @@ function showNothingFound(ctx) {
   for (const list of [ui.columnsBody, ui.tableIdsList, ui.checklist]) list.replaceChildren();
   ui.sourcePickerRow.hidden = ui.checklistRow.hidden = ui.tableIdRow.hidden = ui.targetRow.hidden = true;
   ui.actionBtn.disabled = true;
-  ui.previewHeading.textContent = t("import.step2.none");
+  ui.previewHeading.textContent = translate("import.step2.none");
   renderElements(ctx, sumCounts([]));
   renderWarnings(ctx);
-  ui.announcement.textContent = t("import.announce.none");
+  ui.announcement.textContent = translate("import.announce.none");
 }
 
 function showTables(ctx) {
   const { ui, state } = ctx;
-  ui.sourceSelect.replaceChildren(...state.parsed.map((table, index) => el("option", { value: String(index), text: table.tableId })));
+  ui.sourceSelect.replaceChildren(...state.parsed.map((table, index) => buildElement("option", { value: String(index), text: table.tableId })));
   ui.checklist.replaceChildren(...state.parsed.map((table, index) => checklistItem(String(index), table.tableId, true)));
   fillTargetSelect(ctx);
   updateModeUI(ctx);
   state.entries = state.parsed.map(newEntry);
   renderTableIds(ctx);
   render(ctx);
-  ui.announcement.textContent = t("import.announce.found", {
-    tablesPhrase: tn("common.tablesCount", state.parsed.length),
-    columnsPhrase: tn("common.columnsCount", state.parsed.reduce((total, table) => total + table.columns.length, 0)),
+  ui.announcement.textContent = translate("import.announce.found", {
+    tablesPhrase: translatePlural("common.tablesCount", state.parsed.length),
+    columnsPhrase: translatePlural("common.columnsCount", state.parsed.reduce((total, table) => total + table.columns.length, 0)),
   });
   ui.previewSection.scrollIntoView({ block: "nearest" });
 }
@@ -113,18 +113,18 @@ export async function apply(ctx) {
 async function create(ctx) {
   const { grist, state, setStatus } = ctx;
   const batch = batchOf(state);
-  setStatus(tn("import.status.creating", batch.length));
+  setStatus(translatePlural("import.status.creating", batch.length));
   try {
     const { tables: created, note } = await createTables(grist, batch, { withFormulas: withFormulas(state) });
-    const columnsPhrase = tn("common.columnsCount", created.reduce((total, table) => total + table.columns.length, 0));
+    const columnsPhrase = translatePlural("common.columnsCount", created.reduce((total, table) => total + table.columns.length, 0));
     const summary =
       created.length > 1
-        ? t("import.success.createdMulti", { count: created.length, ids: created.map((table) => table.id).join(", "), columnsPhrase })
-        : t("import.success.createdSingle", { tableId: created[0].id, columnsPhrase });
+        ? translate("import.success.createdMulti", { count: created.length, ids: created.map((table) => table.id).join(", "), columnsPhrase })
+        : translate("import.success.createdSingle", { tableId: created[0].id, columnsPhrase });
     clearResults(ctx);
     setStatus(summary + note, "success");
   } catch (err) {
-    setStatus(t("import.error.createFailed", { error: reportError(err) }), "error");
+    setStatus(translate("import.error.createFailed", { error: reportError(err) }), "error");
   }
 }
 
@@ -132,14 +132,14 @@ async function addToExisting(ctx) {
   const { grist, state, setStatus } = ctx;
   const target = targetTable(ctx);
   if (!target) return;
-  setStatus(t("import.status.addingColumns", { table: target.tableId }));
+  setStatus(translate("import.status.addingColumns", { table: target.tableId }));
   try {
     const columns = state.existing.columns.filter((col) => !state.existing.excluded.has(col.id));
     const { added, note } = await addColumns(grist, target, columns, { withFormulas: withFormulas(state) });
     await loadSchema(ctx);
-    if (added === 0) setStatus(t("import.info.noNewColumns", { table: target.tableId }));
-    else setStatus(tn("import.success.columnsAdded", added, { table: target.tableId }) + note, "success");
+    if (added === 0) setStatus(translate("import.info.noNewColumns", { table: target.tableId }));
+    else setStatus(translatePlural("import.success.columnsAdded", added, { table: target.tableId }) + note, "success");
   } catch (err) {
-    setStatus(t("import.error.addColumnsFailed", { error: reportError(err) }), "error");
+    setStatus(translate("import.error.addColumnsFailed", { error: reportError(err) }), "error");
   }
 }

@@ -11,7 +11,7 @@ import { elementCounts } from "./elements.js";
 import { elementsPicker } from "./elementsPicker.js";
 import { generateCode } from "./codeGenerator.js";
 import { callGrist, reportError } from "./util.js";
-import { t, tn, onLocaleChange } from "./i18n.js";
+import { translate, translatePlural, onLocaleChange } from "./i18n.js";
 import { createTableList } from "./exportTables.js";
 import { createRefsBanner, missingTables } from "./exportRefs.js";
 import { createOutput } from "./exportOutput.js";
@@ -21,7 +21,7 @@ export function initExportTab(grist) {
   const setStatus = statusWriter($("export-status-region"));
   if (!grist) {
     ui.refreshBtn.disabled = true;
-    setStatus(t("error.noGristApi"), "error");
+    setStatus(translate("error.noGristApi"), "error");
     return { activate() {} };
   }
 
@@ -95,7 +95,7 @@ function dismiss(ctx) {
 async function loadTables(ctx) {
   const { grist, ui, state, setStatus, tables, banner, output } = ctx;
   const kept = new Set(tables.selected());
-  setStatus(t("export.status.loading"));
+  setStatus(translate("export.status.loading"));
   output.hide();
   tables.hide();
   banner.reset();
@@ -105,7 +105,7 @@ async function loadTables(ctx) {
     setStatus(null);
     tables.show(tablesWithColumns(state.docSchema), kept);
   } catch (err) {
-    setStatus(t("export.error.fetchTables", { error: reportError(err) }), "error");
+    setStatus(translate("export.error.fetchTables", { error: reportError(err) }), "error");
   } finally {
     setBusy(ctx, false);
     restoreFocus(ui.refreshBtn);
@@ -116,7 +116,7 @@ async function loadTables(ctx) {
 async function generate(ctx) {
   const { grist, ui, state, setStatus, tables, output } = ctx;
   if (tables.selected().length === 0) return;
-  setStatus(t("export.status.generating"));
+  setStatus(translate("export.status.generating"));
   setBusy(ctx, true);
   try {
     state.docSchema = await callGrist(fetchDocSchema(grist)); // columns may have changed since the list was loaded
@@ -124,10 +124,10 @@ async function generate(ctx) {
     const schema = omitFromExport(buildExportSchema(kept.tables, kept.allColumns, tables.selected()), state.omitted);
     output.show(generateCode(schema));
     const columns = schema.reduce((total, table) => total + table.columns.length, 0);
-    setStatus(t("export.success.generated", { tablesPhrase: tn("common.tablesCount", schema.length), columnsPhrase: tn("common.columnsCount", columns) }), "success");
+    setStatus(translate("export.success.generated", { tablesPhrase: translatePlural("common.tablesCount", schema.length), columnsPhrase: translatePlural("common.columnsCount", columns) }), "success");
     output.reveal();
   } catch (err) {
-    setStatus(t("export.error.generateFailed", { error: reportError(err) }), "error");
+    setStatus(translate("export.error.generateFailed", { error: reportError(err) }), "error");
   } finally {
     setBusy(ctx, false);
     restoreFocus(ui.generateBtn);

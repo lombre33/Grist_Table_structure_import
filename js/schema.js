@@ -20,7 +20,7 @@ export function zipRows(columns) {
 export function userColumns(allColumns, tableRef) {
   return allColumns
     .filter((col) => col.parentId === tableRef && !isHidden(col.colId))
-    .sort((a, b) => Number(a.isFormula) - Number(b.isFormula) || a.parentPos - b.parentPos);
+    .sort((first, second) => Number(first.isFormula) - Number(second.isFormula) || first.parentPos - second.parentPos);
 }
 
 /** The tables of the document with the ids of the columns the user sees in each: what the Export tab lists, and lets the user take columns out of. */
@@ -59,7 +59,7 @@ export async function fetchDocSchema(grist) {
   const tables = allTables
     .filter((table) => !table.tableId.startsWith("_grist_") && !table.summarySourceTable)
     .map((table) => ({ tableRef: table.id, tableId: table.tableId, rawViewSectionRef: table.rawViewSectionRef, description: descriptions.get(table.rawViewSectionRef) || null }))
-    .sort((a, b) => a.tableId.localeCompare(b.tableId));
+    .sort((first, second) => first.tableId.localeCompare(second.tableId));
   return { tables, allColumns: zipRows(columnsRaw), tableIds: allTables.map((table) => table.tableId) };
 }
 
@@ -126,5 +126,5 @@ export function findReferencedTables(tables, allColumns, tableIds) {
       }
     }
   }
-  return new Map([...referencedBy].sort(([a], [b]) => a.localeCompare(b)));
+  return new Map([...referencedBy].sort(([first], [second]) => first.localeCompare(second)));
 }

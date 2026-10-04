@@ -1007,6 +1007,27 @@ const TESTS = [
     assert.equal(await hidden(page, "table-id-row"), true, "a table that receives columns is not given a description");
   }],
 
+  ["Réglages: the only things the widget keeps in the browser are the theme and the language, and only once the user chose them", async (page) => {
+    const kept = () =>
+      page.evaluate(async () => ({
+        local: Object.fromEntries(Object.entries(localStorage)),
+        session: sessionStorage.length,
+        cookie: document.cookie,
+        databases: (await indexedDB.databases()).length,
+      }));
+    await analyse(page, TYPES);
+    await apply(page);
+    await page.click("#tab-export");
+    await tick(page, "Existing_Table");
+    await generate(page);
+    assert.deepEqual(await kept(), { local: {}, session: 0, cookie: "", databases: 0 }, "an import and an export keep nothing");
+
+    await page.click("#settings-btn");
+    await page.click('label.segmented-option:has(input[value="dark"])');
+    await page.click('label.segmented-option:has(input[value="en"])');
+    assert.deepEqual(await kept(), { local: { "gristFactory.theme": "dark", "gristFactory.locale": "en" }, session: 0, cookie: "", databases: 0 }, "the two choices, and what they chose");
+  }],
+
   ["Import: the elements are folded, and what is chosen is written on their summary", async (page) => {
     await analyse(page, ALL_ELEMENTS);
     const folded = () => page.evaluate(() => !document.getElementById("import-elements").open);

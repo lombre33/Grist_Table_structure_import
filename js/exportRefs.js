@@ -3,9 +3,9 @@
  * offers to include them. Exporting without them is allowed: Import then keeps a reference only if its table exists where it imports.
  */
 
-import { byIds, el } from "./dom.js";
+import { byIds, buildElement } from "./dom.js";
 import { findReferencedTables } from "./schema.js";
-import { t, tn } from "./i18n.js";
+import { translate, translatePlural } from "./i18n.js";
 
 /** The tables that the `selected` ones refer to without those being selected themselves: `{ referencedBy, ids, key }`. */
 export function missingTables(docSchema, selected) {
@@ -36,12 +36,12 @@ export function createRefsBanner({ onInclude, onDismiss }) {
       ui.announcement.textContent = "";
       return;
     }
-    const intro = tn("export.refs.intro", ids.length);
+    const intro = translatePlural("export.refs.intro", ids.length);
     ui.intro.textContent = intro;
     if (ui.announcement.textContent !== intro) ui.announcement.textContent = intro; // a screen reader says again what is written again
-    ui.includeBtn.textContent = tn("export.refs.include", ids.length);
-    ui.dismissBtn.textContent = tn("export.refs.dismiss", ids.length);
-    ui.list.replaceChildren(...ids.map((tableId) => el("li", { text: t("export.refs.item", { tableId, columns: referencedBy.get(tableId).join(", ") }) })));
+    ui.includeBtn.textContent = translatePlural("export.refs.include", ids.length);
+    ui.dismissBtn.textContent = translatePlural("export.refs.dismiss", ids.length);
+    ui.list.replaceChildren(...ids.map((tableId) => buildElement("li", { text: translate("export.refs.item", { tableId, columns: referencedBy.get(tableId).join(", ") }) })));
   }
 
   return {

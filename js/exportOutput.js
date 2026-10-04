@@ -1,7 +1,7 @@
 /** The code the Export tab generated, and the button that copies it. */
 
 import { byIds } from "./dom.js";
-import { t } from "./i18n.js";
+import { translate } from "./i18n.js";
 
 const DONE_FOR_MS = 2000; // how long the button of a copy that worked shows a tick
 
@@ -28,10 +28,10 @@ export function createOutput() {
     ui.code.select();
     try {
       await navigator.clipboard.writeText(ui.code.value);
-      setCopyStatus(t("export.copy.done"));
+      setCopyStatus(translate("export.copy.done"));
       flashTick(true);
     } catch {
-      setCopyStatus(t("export.copy.fallback"), "info");
+      setCopyStatus(translate("export.copy.fallback"), "info");
     }
   });
 

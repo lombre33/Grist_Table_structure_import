@@ -1,12 +1,22 @@
 /**
- * French and English texts. t(key, params) fills {name} placeholders, tn(key, count, params) picks the
- * singular or plural form of a {one, other} entry; the static markup uses data-i18n*, applied by applyI18n().
+ * French and English texts, and how they are used.
+ *
+ * - translate(key, params) fills {name} placeholders; translatePlural(key, count, params) picks the singular or the plural
+ *   form of a { one, other } entry by the plural rules of the language (in French, zero is singular) and offers {n}.
+ * - A key reads `area.element.part`. Both languages have the same keys, with the same plural forms and placeholders;
+ *   test/i18n.test.mjs checks it, and that every key is used and none is missing.
+ * - The static markup of index.html carries the French and names its key in data-i18n (the text), data-i18n-placeholder,
+ *   data-i18n-aria-label or data-i18n-title. applyI18n() writes the language chosen over it, and a test checks that the
+ *   French of the markup is the French below, so that nothing moves when the script takes over.
+ * - French typography: a no-break space before : ; ? ! and » and after «; ’ for the apostrophe, in both languages (tested).
+ * - What the widget says while it works is built at that moment: onLocaleChange() lets it be built again in the new language.
  */
 
 import { load, save } from "./storage.js";
 
 export const STRINGS = {
   fr: {
+    // The static texts, in the order of index.html: the Réglages dialog, the heading and the tabs, then the Import steps.
     "settings.open": "Réglages",
     "settings.close": "Fermer",
     "settings.title": "Réglages",
@@ -51,6 +61,8 @@ export const STRINGS = {
     "import.preview.status": "Statut",
     "import.preview.formula": "formule",
     "import.preview.trigger": "formule de déclenchement",
+    // The elements a column carries besides its type (see elements.js): the name of each and the line that says what it is,
+    // the same for Import and Export. The summary of the choice (elements.summary.*) is written on the folded group.
     "element.labels": "Libellés",
     "element.labels.hint": "Le nom affiché de chaque colonne, s’il diffère de son identifiant.",
     "element.descriptions": "Descriptions des colonnes",
@@ -75,6 +87,7 @@ export const STRINGS = {
       "confiance. Sans cela, ces colonnes sont créées vides.",
     "import.warnings.eyebrow": "Remarques",
     "import.action.create": "Créer la table dans ce document",
+    // The Export steps: the list of tables with its search and the choice of columns of each, the elements, the copy.
     "export.step1.eyebrow": "1. Tables à exporter",
     "export.tables.empty": "Aucune table exportable trouvée dans ce document.",
     "export.selectAll": "Tout cocher",
@@ -104,12 +117,14 @@ export const STRINGS = {
       " de Grist) quand elle existe, sinon remplacée par la valeur par défaut du type — comme le fait " +
       "Grist lui-même pour une formule vide.",
 
+    // What the widget says while it works. First what both tabs share: the errors, and the counts that sentences are built from.
     "error.noGristApi":
       "Impossible de trouver l’API Grist. Ouvrez cette page en tant que widget personnalisé " +
       "dans un document Grist (elle ne fonctionne pas seule, hors d’un document).",
     "error.timeout": "Délai dépassé en attendant la réponse du document Grist.",
     "common.tablesCount": { one: "{n} table", other: "{n} tables" },
     "common.columnsCount": { one: "{n} colonne", other: "{n} colonnes" },
+    // The name of each type of column in the preview ({arg} is the table a reference points to, or the time zone); see typeLabel().
     "type.Text": "Texte",
     "type.Numeric": "Numérique",
     "type.Int": "Entier",
@@ -124,6 +139,7 @@ export const STRINGS = {
     "type.Blob": "Binaire (Blob)",
     "type.Any": "Quelconque (Any)",
 
+    // The notes about the text that was read (parser.js) and about what would be created (importer.js), listed under the preview.
     "warn.invalidWidgetOptions": "Colonne « {colId} » : widget_options n’est pas un JSON valide, ignoré.",
     "warn.dateTimeNoTimezone":
       "Colonne « {colId} » : fuseau horaire non précisé pour DateTime, « {timezone} » utilisé par défaut (à vérifier).",
@@ -152,6 +168,7 @@ export const STRINGS = {
     "warn.visibleColMissing":
       "Colonne « {colId} » : colonne d’affichage « {visibleColId} » introuvable dans la table « {target} » de ce " +
       "document, ignorée (visible_col).",
+    // Import: reading the document, checking the ids, the label of the action button, then what is said once it ran.
     "import.status.analyzing": "Lecture des tables du document…",
     "import.error.noTableList": "Impossible de charger la liste des tables de ce document.",
     "import.error.noTablesToComplete": "Ce document ne contient aucune table à compléter.",
@@ -191,6 +208,7 @@ export const STRINGS = {
     "import.announce.found": "Analyse terminée : {tablesPhrase}, {columnsPhrase} au total.",
     "import.announce.none": "Analyse terminée : aucune table trouvée.",
 
+    // Export: the banner of the tables the ticked ones refer to, then what is said as the list is read and the code generated and copied.
     "export.error.fetchTables": "Impossible de lire les tables de ce document : {error}",
     "export.refs.intro": {
       one:
@@ -212,6 +230,7 @@ export const STRINGS = {
       "Copie automatique indisponible ici : le texte est sélectionné, utilisez Ctrl+C (Cmd+C sur Mac).",
   },
   en: {
+    // The same keys in the same order as in French.
     "settings.open": "Settings",
     "settings.close": "Close",
     "settings.title": "Settings",
@@ -421,11 +440,11 @@ function interpolate(text, params) {
   return params ? text.replace(/\{(\w+)\}/g, (match, name) => (name in params ? String(params[name]) : match)) : text;
 }
 
-export function t(key, params) {
+export function translate(key, params) {
   return interpolate(STRINGS[currentLocale][key] ?? key, params);
 }
 
-export function tn(key, count, params) {
+export function translatePlural(key, count, params) {
   const entry = STRINGS[currentLocale][key];
   return interpolate(entry[new Intl.PluralRules(currentLocale).select(count)] ?? entry.other, { n: count, ...params });
 }
@@ -433,7 +452,7 @@ export function tn(key, count, params) {
 /** Readable name of a Grist column type such as "Ref:People" or "DateTime:UTC". */
 export function typeLabel(type) {
   const [name, arg] = type.split(":");
-  return t(`type.${name}`, { arg });
+  return translate(`type.${name}`, { arg });
 }
 
 const BINDINGS = [
@@ -446,9 +465,9 @@ const BINDINGS = [
 function applyI18n() {
   document.documentElement.lang = currentLocale;
   delete document.documentElement.dataset.pendingLocale;
-  document.title = t("app.documentTitle");
+  document.title = translate("app.documentTitle");
   for (const [attribute, apply] of BINDINGS) {
-    for (const node of document.querySelectorAll(`[${attribute}]`)) apply(node, t(node.getAttribute(attribute)));
+    for (const node of document.querySelectorAll(`[${attribute}]`)) apply(node, translate(node.getAttribute(attribute)));
   }
 }
 

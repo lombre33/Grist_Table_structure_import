@@ -5,7 +5,7 @@ export const $ = (id) => document.getElementById(id);
 /** The elements of the page whose ids are listed: `byIds({ list: "export-table-list" })` is `{ list: <that element> }`. */
 export const byIds = (ids) => Object.fromEntries(Object.entries(ids).map(([name, id]) => [name, $(id)]));
 
-export function el(tag, attrs = {}, children = []) {
+export function buildElement(tag, attrs = {}, children = []) {
   const node = document.createElement(tag);
   for (const [key, value] of Object.entries(attrs)) {
     if (key === "class") node.className = value;
@@ -19,13 +19,13 @@ export function el(tag, attrs = {}, children = []) {
 
 /** One row of a checklist: a checkbox and its text. */
 export function checklistItem(value, text, checked = false) {
-  return el("li", {}, [el("label", {}, [el("input", { type: "checkbox", value, checked }), el("span", { text })])]);
+  return buildElement("li", {}, [buildElement("label", {}, [buildElement("input", { type: "checkbox", value, checked }), buildElement("span", { text })])]);
 }
 
 /** A function that shows one message (nothing for a falsy one) in `region`, scrolled into view. */
 export function statusWriter(region) {
   return (message, level = "info") => {
-    region.replaceChildren(...(message ? [el("p", { class: `status status-${level}`, text: message })] : []));
+    region.replaceChildren(...(message ? [buildElement("p", { class: `status status-${level}`, text: message })] : []));
     if (message) region.scrollIntoView({ block: "nearest" });
   };
 }

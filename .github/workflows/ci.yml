@@ -22,6 +22,8 @@ jobs:
         run: npm test
       - name: Install the dev dependencies (Playwright, axe-core)
         run: npm ci
+      - name: Known vulnerabilities of the dependencies
+        run: npm audit --audit-level=high
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
       - name: Browser tests

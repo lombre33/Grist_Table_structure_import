@@ -435,12 +435,57 @@ ou au champ de texte quand il n'y a plus rien à actionner (table créée, colon
 ### Hébergement en réseau fermé / auto-hébergé
 
 Le widget charge l'API officielle de Grist depuis `https://docs.getgrist.com/grist-plugin-api.js`
-(voir [SECURITY.md](./SECURITY.md) pour la justification). Si votre Grist est
-auto-hébergé sur un réseau sans accès à ce domaine, votre instance Grist sert déjà ce
-même fichier à sa propre racine (`<votre-grist>/grist-plugin-api.js`) : changez
-simplement la balise `<script src="...">` dans `index.html` (et l'origine correspondante
-dans la directive `script-src` de la CSP) pour pointer vers votre propre instance avant
-de publier ce dépôt sur votre propre hébergement statique.
+(voir [SECURITY.md](./SECURITY.md) pour la justification) : c'est la seule requête qu'il fait
+vers un autre domaine que celui qui le sert. Pour s'en passer (instance souveraine, réseau
+fermé, politique qui interdit un domaine tiers), votre instance Grist sert déjà ce même
+fichier à sa propre racine (`<votre-grist>/grist-plugin-api.js`) : deux lignes à changer dans
+`index.html` avant de publier ce dépôt sur votre propre hébergement statique.
+
+1. La balise `<script src="https://docs.getgrist.com/grist-plugin-api.js">` devient
+   `<script src="/grist-plugin-api.js">` si le widget est servi par le même domaine que Grist,
+   sinon `<script src="https://<votre-grist>/grist-plugin-api.js">`.
+2. Dans la balise `<meta http-equiv="Content-Security-Policy">`, la directive `script-src`
+   perd `https://docs.getgrist.com` (et gagne `https://<votre-grist>` dans le second cas).
+
+Un test (`test/security.test.mjs`) vérifie que le dépôt ne charge rien d'autre que cette API et
+ses propres scripts, et que ce paragraphe nomme bien cette balise.
+
+## Accès demandé à Grist
+
+Le widget demande l'accès **complet** (`requiredAccess: "full"`), le seul niveau qui lui permet
+de lire la structure des tables du document (les tables de métadonnées de Grist) et d'en
+créer : Grist demande à l'utilisateur de l'accorder à l'ajout du widget. Voici tout ce qu'il en
+fait, et rien d'autre :
+
+| Quoi                                     | Appel de l'API du widget                                                                    | Quand                                                                              |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Lire la liste des tables                 | `listTables`                                                                                | Import : avant de créer, pour refuser un identifiant déjà pris                     |
+| Lire la structure des tables             | `fetchTable` sur `_grist_Tables`, `_grist_Tables_column` et `_grist_Views_section`          | Export (liste, génération) ; Import (tables à compléter, références, vérifications) |
+| Créer des tables                         | `applyUserActions` : `AddTable`                                                             | Import « Nouvelle table », au clic sur le bouton d'action                          |
+| Ajouter des colonnes                     | `applyUserActions` : `AddVisibleColumn`                                                     | Import « Table existante », au clic sur le bouton d'action                         |
+| Compléter ce qui vient d'être créé       | `applyUserActions` : `ModifyColumn`, `SetDisplayFormula`, `UpdateRecord` (description d'une table, sur `_grist_Views_section`) | Juste après, sur les seules tables et colonnes que l'appel précédent a créées      |
+
+- **Les lignes d'une table ne sont jamais lues ni écrites** : le widget ne lit que la structure
+  (les tables de métadonnées ci-dessus) et n'écrit que des tables et des colonnes.
+- **Strictement additif** : aucune suppression, aucun renommage, aucune modification d'une table
+  ou d'une colonne qui existait avant. Un identifiant déjà pris est refusé, et les colonnes déjà
+  présentes d'une table existante sont laissées telles quelles.
+- **Une écriture n'a lieu qu'au clic sur le bouton d'action**, une fois l'aperçu vérifié
+  (« Créer 2 tables dans ce document », « Ajouter 3 colonnes à « Contacts » »…) : l'aperçu est la
+  confirmation, et l'annulation native de Grist (Ctrl+Z) défait l'action. L'export, lui, ne
+  fait que lire.
+- **Rien ne sort du navigateur** (`connect-src 'none'`) et rien n'est conservé hors de Grist,
+  hormis deux préférences d'affichage dans le `localStorage` de l'origine du widget : le thème
+  (`gristFactory.theme`) et la langue (`gristFactory.locale`), jamais un contenu du document.
+- **Deux messages dans la console du navigateur** (« Applying inline style violates… »,
+  « Refused to apply inline style… ») sont normaux : le script officiel de l'API Grist crée une
+  balise `<style>` pour le thème de Grist, que la politique de sécurité du widget (`style-src 'self'`)
+  refuse volontairement, le widget ayant son propre thème. Aucune conséquence ; voir
+  [SECURITY.md](./SECURITY.md).
+
+Des tests (`test/security.test.mjs`) vérifient ces propriétés dans le code : les seules actions
+envoyées à Grist sont celles du tableau, les seules tables lues sont ces tables de métadonnées, et
+les seules clés écrites dans le navigateur sont les deux préférences.
 
 ## Développement
 

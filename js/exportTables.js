@@ -5,9 +5,9 @@
  * are written there.
  */
 
-import { byIds, el, syncMasterCheckbox } from "./dom.js";
+import { byIds, buildElement, syncMasterCheckbox } from "./dom.js";
 import { queryMatcher } from "./search.js";
-import { t, tn } from "./i18n.js";
+import { translate, translatePlural } from "./i18n.js";
 
 const SEARCH_FROM = 7; // a shorter list is read faster than a table is typed
 
@@ -44,8 +44,8 @@ function renderSearchStatus(ui, shown) {
   const query = search.value.trim();
   const total = list.children.length;
   const hiddenTicked = selectedIds(ui).length - shown.filter((box) => box.checked).length;
-  const found = shown.length === 0 ? t("export.search.none", { query }) : tn("export.search.count", shown.length, { total });
-  const text = query && total > 0 ? [found, hiddenTicked > 0 && tn("export.search.hiddenTicked", hiddenTicked)].filter(Boolean).join(" ") : "";
+  const found = shown.length === 0 ? translate("export.search.none", { query }) : translatePlural("export.search.count", shown.length, { total });
+  const text = query && total > 0 ? [found, hiddenTicked > 0 && translatePlural("export.search.hiddenTicked", hiddenTicked)].filter(Boolean).join(" ") : "";
   if (searchStatus.textContent !== text) searchStatus.textContent = text; // a screen reader says again what is written again
 }
 
@@ -70,14 +70,14 @@ const isLeftOut = (excluded, tableId, colId) => Boolean(excluded.get(tableId)?.h
 /** A box for each column of `table`, ticked unless it was left out; the choice is written to `excluded` as it is made. */
 function columnBoxes(table, excluded) {
   return table.columns.map((colId) => {
-    const box = el("input", { type: "checkbox", checked: !isLeftOut(excluded, table.tableId, colId) });
+    const box = buildElement("input", { type: "checkbox", checked: !isLeftOut(excluded, table.tableId, colId) });
     box.addEventListener("change", () => {
       const left = excluded.get(table.tableId) ?? new Set();
       if (box.checked) left.delete(colId);
       else left.add(colId);
       excluded.set(table.tableId, left);
     });
-    return el("label", {}, [box, el("span", { text: colId })]);
+    return buildElement("label", {}, [box, buildElement("span", { text: colId })]);
   });
 }
 
@@ -86,17 +86,17 @@ function columnBoxes(table, excluded) {
  * first asked for. The button says how many columns are kept once some are left out.
  */
 function tableRow(table, ticked, excluded, position) {
-  const box = el("input", { type: "checkbox", class: "table-box", value: table.tableId, checked: ticked });
-  const count = el("span", { class: "tag", hidden: true });
-  const columns = el("div", { class: "columns-list", id: `export-columns-${position}`, role: "group", hidden: true });
-  const toggle = el("button", { type: "button", class: "columns-toggle", "aria-expanded": "false", "aria-controls": columns.id }, [count]);
+  const box = buildElement("input", { type: "checkbox", class: "table-box", value: table.tableId, checked: ticked });
+  const count = buildElement("span", { class: "tag", hidden: true });
+  const columns = buildElement("div", { class: "columns-list", id: `export-columns-${position}`, role: "group", hidden: true });
+  const toggle = buildElement("button", { type: "button", class: "columns-toggle", "aria-expanded": "false", "aria-controls": columns.id }, [count]);
   toggle.addEventListener("click", () => {
     const opening = columns.hidden;
     if (opening && columns.childElementCount === 0) columns.replaceChildren(...columnBoxes(table, excluded));
     columns.hidden = !opening;
     toggle.setAttribute("aria-expanded", String(opening));
   });
-  const item = el("li", {}, [el("div", { class: "table-row" }, [el("label", {}, [box, el("span", { text: table.tableId })]), toggle]), columns]);
+  const item = buildElement("li", {}, [buildElement("div", { class: "table-row" }, [buildElement("label", {}, [box, buildElement("span", { text: table.tableId })]), toggle]), columns]);
   return { table, item, count, toggle, columns };
 }
 
@@ -105,11 +105,11 @@ function renderColumnChoice({ table, count, toggle, columns }, excluded) {
   const kept = table.columns.filter((colId) => !isLeftOut(excluded, table.tableId, colId)).length;
   const some = kept < table.columns.length;
   count.hidden = !some;
-  count.textContent = some ? tn("export.columns.some", kept, { total: table.columns.length }) : "";
-  const name = t("export.columns.toggle", { tableId: table.tableId });
+  count.textContent = some ? translatePlural("export.columns.some", kept, { total: table.columns.length }) : "";
+  const name = translate("export.columns.toggle", { tableId: table.tableId });
   toggle.setAttribute("aria-label", some ? `${name}, ${count.textContent}` : name);
   toggle.title = name;
-  columns.setAttribute("aria-label", t("export.columns.group", { tableId: table.tableId }));
+  columns.setAttribute("aria-label", translate("export.columns.group", { tableId: table.tableId }));
 }
 
 /** `onChange()` is called when the user ticks, unticks or searches: what depends on the tables ticked is written again then. */
@@ -126,7 +126,7 @@ export function createTableList({ onChange, excluded }) {
       const shown = filterTables(ui);
       syncMasterCheckbox(ui.selectAll, shown.filter((box) => box.checked).length, shown.length);
       ui.selectAll.disabled = shown.length === 0;
-      ui.selectAllText.textContent = t(ui.search.value.trim() ? "export.selectAllShown" : "export.selectAll");
+      ui.selectAllText.textContent = translate(ui.search.value.trim() ? "export.selectAllShown" : "export.selectAll");
       renderSearchStatus(ui, shown);
       for (const row of rows) renderColumnChoice(row, excluded);
     },
