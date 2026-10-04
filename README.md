@@ -6,10 +6,11 @@ Deux onglets :
 
 - **Import** : recrée, dans le document Grist où le widget est ajouté, la structure
   d'une table (colonnes, types, références...) à partir de son code Python (menu de la
-  table, « Code View »), copié depuis n'importe quel document Grist.
-- **Export** : choisit une ou plusieurs tables de **ce** document et génère leur code, au
-  même format, prêt à être collé ailleurs (y compris dans ce même widget, dans un autre
-  document).
+  table, « Code View »), copié depuis n'importe quel document Grist ; on choisit ce qu'on
+  reprend, colonne par colonne et par élément (libellés, descriptions, choix, formules...).
+- **Export** : choisit une ou plusieurs tables de **ce** document, et ce qu'on en garde
+  (les mêmes éléments), puis génère leur code, au même format, prêt à être collé ailleurs
+  (y compris dans ce même widget, dans un autre document).
 
 Aucune donnée n'est envoyée où que ce soit : tout est lu et analysé entièrement dans le
 navigateur, et la seule action effectuée sur demande est la création d'une table ou
@@ -40,9 +41,9 @@ l'ajout de colonnes dans le document Grist courant, via l'API officielle du widg
 4. Vérifiez l'aperçu (types détectés, colonnes ignorées, remarques éventuelles) — chaque
    colonne a sa propre case à cocher (cochée par défaut, la case de l'en-tête les coche ou
    les décoche toutes) pour l'exclure individuellement de l'action, en plus de la sélection
-   par table ; une colonne décochée est grisée. Si le code contient des formules, la
-   case **Reprendre aussi les formules** (décochée par défaut, voir plus bas) apparaît sous
-   l'aperçu. Cliquez ensuite sur le bouton d'action.
+   par table ; une colonne décochée est grisée. Sous l'aperçu, le groupe **Éléments à
+   importer** liste ce que le texte contient au-delà du type des colonnes (voir plus bas) :
+   tout y est coché par défaut, sauf les formules. Cliquez ensuite sur le bouton d'action.
    Le bouton **Effacer**, à côté d'Analyser, réinitialise entièrement l'onglet pour
    recommencer avec un autre texte.
 
@@ -126,15 +127,41 @@ ne fait jamais. Si Grist refuse de relier une paire (version sans références
 bidirectionnelles, par exemple), les tables et leurs descriptions restent et le message de
 fin le dit.
 
+#### Choisir les éléments à importer
+
+Le type de chaque colonne est toujours importé. Le groupe **Éléments à importer**, sous
+l'aperçu, laisse choisir d'un coup ce que le texte apporte en plus :
+
+| Élément                   | Ce que le texte en dit                                         |
+| ------------------------- | -------------------------------------------------------------- |
+| **Libellés**              | `label='...'`, quand il diffère de l'identifiant               |
+| **Descriptions**          | `description='...'`                                            |
+| **Listes de choix**       | `choices=[...]` et le style de chaque choix                    |
+| **Options d'affichage**   | le reste de `widget_options` : alignement, formats, couleurs… |
+| **Colonnes d'affichage**  | `visible_col='...'`                                            |
+| **Liens bidirectionnels** | `reverse_of='...'`                                             |
+| **Formules**              | colonnes de formule et formules de déclenchement               |
+
+Seuls les éléments que le texte contient réellement sont proposés, chacun avec le nombre
+de colonnes qui le portent ; quand il n'en contient aucun, le groupe n'apparaît pas. Ces
+nombres suivent l'aperçu : ne comptent que les colonnes qui seront créées (tables cochées,
+colonnes cochées, colonnes absentes de la table existante). Tout est coché par défaut, sauf
+**Formules** (voir ci-dessous), et les cases reviennent à cet état à chaque analyse. Un
+élément décoché est laissé de côté à la création, comme si le texte ne le contenait pas :
+sans **Liens bidirectionnels**, deux colonnes qui se désignent restent deux références
+simples ; sans **Libellés**, chaque colonne garde le libellé que Grist déduit de son
+identifiant. Seules les formules laissent une remarque dans l'aperçu (les colonnes créées
+vides), puisqu'elles sont décochées sans que vous l'ayez demandé.
+
 #### Reprendre les formules
 
-La case **Reprendre aussi les formules** crée les colonnes de formule avec leur formule,
-et les colonnes de données avec leur formule de déclenchement (`def _default_...`, valeur
-calculée à la création d'une ligne). Le texte de la fonction est lu tel qu'écrit : un
-`return X` seul devient la formule `X`, les fonctions de plusieurs lignes restent telles
-quelles, et la valeur que rend une formule vide (`return None`, `return ''`...) donne une
-colonne sans formule, comme dans Grist ; la case n'est proposée que s'il y a une formule
-non vide à reprendre. La syntaxe `$Colonne` (écrite par l'onglet **Export**) et
+Cocher **Formules** crée les colonnes de formule avec leur formule, et les colonnes de
+données avec leur formule de déclenchement (`def _default_...`, valeur calculée à la
+création d'une ligne). Le texte de la fonction est lu tel qu'écrit : un `return X` seul
+devient la formule `X`, les fonctions de plusieurs lignes restent telles quelles, et la
+valeur que rend une formule vide (`return None`, `return ''`...) donne une colonne sans
+formule, comme dans Grist ; **Formules** n'est proposé que s'il y a une formule non vide
+à reprendre. La syntaxe `$Colonne` (écrite par l'onglet **Export**) et
 `rec.Colonne` (écrite par la vraie Code View) sont toutes deux valides pour Grist.
 
 Une chaîne qui s'étend sur plusieurs lignes (guillemets triples, antislash en fin de ligne,
@@ -148,10 +175,10 @@ une version plus récente, il perd alors l'indentation du code (4 espaces) en t�
 lignes (26 formules sur 400 dans le tirage, qui en indente beaucoup). L'onglet **Export**
 écrit toujours un texte que cette règle relit exactement.
 
-La case est **décochée par défaut, volontairement** : une formule est du code Python que
+**Formules** est **décoché par défaut, volontairement** : une formule est du code Python que
 Grist exécute dans ce document dès sa création, et un texte collé peut venir de
-n'importe où. Le widget n'exécute lui-même jamais rien (voir SECURITY.md) ; en cochant
-la case, vous confiez ces formules à Grist, comme si vous les aviez saisies dans les
+n'importe où. Le widget n'exécute lui-même jamais rien (voir SECURITY.md) ; en le cochant,
+vous confiez ces formules à Grist, comme si vous les aviez saisies dans les
 cellules. Une formule qui renvoie une erreur (colonne absente de la nouvelle table, par
 exemple) ne fait pas échouer l'import : ses cellules affichent l'erreur dans Grist.
 
@@ -167,7 +194,9 @@ widget l'applique juste après, dans une seconde étape. Un identifiant qui n'es
 que Grist déduirait du libellé (`Name` pour le libellé « Nom ») est resté indépendant de
 lui dans le document d'origine : l'import le fait de même, pour qu'une modification
 ultérieure du libellé ne renomme pas la colonne. Un texte Code View réel, issu
-directement de Grist (sans ces arguments), ne donne que les types.
+directement de Grist (sans ces arguments), ne donne que les types. Chacune de ces
+métadonnées est un élément que le groupe **Éléments à importer** laisse décocher (voir
+« Choisir les éléments à importer »).
 
 ### Limites connues
 
@@ -212,8 +241,12 @@ directement de Grist (sans ces arguments), ne donne que les types.
 1. Ouvrez l'onglet **Export**. La liste des tables de ce document se charge
    automatiquement (bouton **Actualiser la liste** pour la relire, sans perdre les tables
    déjà cochées).
-2. Cochez une ou plusieurs tables (la case **Tout cocher** les sélectionne toutes), puis
-   cliquez sur **Générer le code**.
+2. Cochez une ou plusieurs tables (la case **Tout cocher** les sélectionne toutes). Sous
+   la liste, le groupe **Éléments à exporter** liste ce que ces tables contiennent au-delà
+   du type de leurs colonnes (libellés, descriptions, listes de choix, options d'affichage,
+   colonnes d'affichage, liens bidirectionnels, formules), avec le nombre de colonnes
+   concernées. Tout est coché par défaut : décochez ce que le code ne doit pas contenir (le
+   type de chaque colonne est toujours exporté). Cliquez ensuite sur **Générer le code**.
 3. Copiez le code affiché (bouton **Copier**, ou sélection manuelle du texte) et
    collez-le où vous en avez besoin — par exemple dans l'onglet **Import** de ce même
    widget, ouvert sur un autre document.
@@ -231,8 +264,10 @@ Grist, par une fonction `_default_...` placée avant la colonne), la formule d'o
 recopiée quand elle existe, mais telle que Grist la stocke en interne (syntaxe
 `$Colonne`, sans traduire vers le `rec.Colonne` affiché par la vraie Code View) ; une
 formule vide est remplacée par la valeur par défaut du type, comme le fait Grist
-lui-même. À l'import, ces formules ne sont reprises que si la case **Reprendre aussi les
-formules** est cochée ; sinon seul le type déclaré compte.
+lui-même. À l'import, ces formules ne sont reprises que si **Formules** est coché dans le
+groupe **Éléments à importer** ; sinon seul le type déclaré compte. Décocher **Formules** à
+l'export écrit ces colonnes comme des colonnes de données, sans formule : le type seul
+voyage.
 
 ### Métadonnées capturées à l'export
 
@@ -240,10 +275,13 @@ Au-delà du type de chaque colonne, l'export capture et restitue le plus possibl
 configuration réelle, pour que l'import qui suit la restaure fidèlement — en particulier
 les choix définis (liste et style par choix), qui sont le cas le plus courant. Ceci est
 fait en ajoutant, sur la même ligne que chaque `grist.Xxx(...)`, des arguments nommés
-supplémentaires, tous optionnels :
+supplémentaires, tous optionnels, chacun étant un élément que le groupe **Éléments à
+exporter** laisse décocher (les formules en forment un de plus) :
 
-- **`choices=[...]`** : la liste des valeurs d'un Choix/Choix multiples.
-- **`widget_options='<JSON>'`** : le reste des options d'affichage de la colonne
+- **`choices=[...]`** (**Listes de choix**) : la liste des valeurs d'un Choix/Choix
+  multiples.
+- **`widget_options='<JSON>'`** (**Options d'affichage**, et pour le style par choix
+  **Listes de choix**) : le reste des options d'affichage de la colonne
   (`widgetOptions`, tel que Grist les stocke), sous forme d'un objet JSON — notamment le
   style par choix (`choiceOptions` : couleur de texte/fond, gras...), l'alignement, le
   retour à la ligne, le format numérique ou de date, et toute autre option générique
@@ -251,16 +289,18 @@ supplémentaires, tous optionnels :
   forme conditionnelle, formule compilée d'une condition de liste déroulante) : voir
   SECURITY.md pour le détail et la justification de chacune. Absent entièrement si la
   colonne n'a aucune option à en dehors des choix.
-- **`label='...'`** : le libellé affiché de la colonne, uniquement s'il diffère de son
-  identifiant (Grist les fait correspondre par défaut).
-- **`description='...'`** : la description de la colonne, si elle est renseignée.
-- **`visible_col='NomDeColonne'`** : pour une colonne de référence, l'identifiant (pas
+- **`label='...'`** (**Libellés**) : le libellé affiché de la colonne, uniquement s'il
+  diffère de son identifiant (Grist les fait correspondre par défaut).
+- **`description='...'`** (**Descriptions**) : la description de la colonne, si elle est
+  renseignée.
+- **`visible_col='NomDeColonne'`** (**Colonnes d'affichage**) : pour une colonne de
+  référence, l'identifiant (pas
   l'identifiant technique interne, propre au document et sans signification ailleurs) de
   la colonne de la table cible utilisée comme « colonne d'affichage ».
 
 Une référence bidirectionnelle est écrite, comme le fait la vraie Code View, avec
-**`reverse_of='NomDeColonne'`** (la colonne réciproque, dans la table cible) : ce
-n'est pas une extension de ce widget.
+**`reverse_of='NomDeColonne'`** (la colonne réciproque, dans la table cible ; élément
+**Liens bidirectionnels**) : ce n'est pas une extension de ce widget.
 
 **Ce sont des arguments propres à ce widget, pas le format officiel de la Code View de
 Grist** : Grist lui-même n'écrit, au mieux, que `choices=[...]` dans de rares cas, jamais
@@ -388,7 +428,8 @@ chose que l'API d'un widget : `listTables`, `fetchTable`, `applyUserActions` ave
 `retValues`). Il vérifie ce que le widget attend du moteur (normalisation des identifiants,
 description ignorée à la création, lot atomique...), l'aller-retour Export → Import de
 chaque type de colonne avec toutes ses options (avec et sans formules, références
-bidirectionnelles comprises), les identifiants contre le moteur (tables, et colonnes
+bidirectionnelles comprises), chaque élément laissé de côté à l'export puis à l'import (le
+même document des deux côtés), les identifiants contre le moteur (tables, et colonnes
 déduites de leur libellé), la logique d'import, l'interface complète pilotée dans
 Chromium, et le widget monté comme widget personnalisé dans la vraie page de Grist
 (iframe, vrai script d'API, vraie autorisation d'accès). Pour en lancer une :
@@ -430,6 +471,8 @@ js/importTab.js        onglet Import : câblage du DOM
 js/importer.js         logique de l'import sans DOM : résolution des colonnes, identifiants,
                        formules, création en un lot, puis détails et références bidirectionnelles
 js/exportTab.js        onglet Export
+js/elements.js         éléments d'une colonne (libellés, choix, formules...) : comptes et retrait, pour Import et Export
+js/elementsPicker.js   le groupe de cases à cocher de ces éléments (DOM), commun aux deux onglets
 js/parser.js           lecture du code source (motifs fixes + scanner de parenthèses, jamais exécuté)
 js/pyText.js           texte Python : littéraux, chaînes sur plusieurs lignes, parenthèse fermante, arguments
 js/gristTypes.js       types de colonne <-> constructeurs Code View (une table de types)

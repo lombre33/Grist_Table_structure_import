@@ -2,8 +2,8 @@
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { launchWidget } from "../browser/widgetPage.mjs";
-import { analyse, apply, previewRows, warnings } from "../browser/driver.mjs";
-import { instance, column, columnRef, addTable, snapshot } from "./support.mjs";
+import { analyse, apply, choice, offered, previewRows, warnings } from "../browser/driver.mjs";
+import { instance, column, columnRef, addTable, buildSource, expectedAfterImport, snapshot } from "./support.mjs";
 
 const widget = await launchWidget();
 after(() => widget.close());
@@ -46,11 +46,11 @@ test("a real Code View with formulas: left out by default, created and computed 
   inWidget(async (page, doc) => {
     const text = "@grist.UserTable\nclass Calc:\n  A = grist.Int()\n\n  def _default_Start(rec, table, value, user):\n    return rec.A + 100\n  Start = grist.Int()\n\n  @grist.formulaType(grist.Int())\n  def Double(rec, table):\n    return rec.A * 2\n";
     await analyse(page, text);
-    assert.equal(await page.isChecked("#with-formulas"), false);
+    assert.equal(await page.getByRole("checkbox", { name: /Formules/ }).isChecked(), false);
     assert.deepEqual(await previewRows(page), ["AEntier", "StartEntier formule de déclenchement", "DoubleEntier formule"]);
     assert.match((await warnings(page)).join(" "), /créées vides : Start, Double/);
 
-    await page.check("#with-formulas");
+    await page.getByRole("checkbox", { name: /Formules/ }).check();
     assert.deepEqual(await warnings(page), []);
     await apply(page);
     assert.deepEqual((await snapshot(doc)).Calc.map((col) => [col.id, col.isFormula, col.formula]), [["A", false, ""], ["Start", false, "rec.A + 100"], ["Double", true, "rec.A * 2"]]);
@@ -166,6 +166,64 @@ test("Export then Import through the interface keeps what Grist drops on its own
     assert.deepEqual(imported.Teams, expected.Teams);
     assert.equal(imported.Members[1].description, "Humeur\ndu jour");
     assert.deepEqual([imported.Members[0].reverseCol, imported.Teams[1].reverseCol], ["Roster", "Team"], "the two-way link is back");
+  });
+});
+
+test("elements left out in the Export tab, then others in the Import tab, are missing from the document that results", async () => {
+  const source = await instance.newDoc("e2e elements: source");
+  await buildSource(source, {
+    Teams: [{ id: "Title", type: "Text", label: "Intitulé", description: "Nom de l'équipe" }, { id: "Roster", type: "RefList:Members" }],
+    Members: [
+      { id: "Team", type: "Ref:Teams", visibleCol: "Title", reverse: "Roster" },
+      { id: "Mood", type: "Choice", label: "Humeur", description: "Du jour", widgetOptions: { choices: ["Content (ok)", "it's"], alignment: "center" } },
+      { id: "Shout", type: "Text", formula: "$Mood.upper()" },
+    ],
+  });
+  const before = await snapshot(source);
+
+  const exporter = await widget.open(source.grist);
+  await exporter.click("#tab-export");
+  await exporter.locator("#export-table-list li", { hasText: "Members" }).locator("input").check();
+  await exporter.click("#refs-include-btn");
+  assert.deepEqual(await offered(exporter, "export"), [
+    "[x] Libellés (2 colonnes)",
+    "[x] Descriptions (2 colonnes)",
+    "[x] Listes de choix (1 colonne)",
+    "[x] Options d’affichage (1 colonne)",
+    "[x] Colonnes d’affichage (1 colonne)",
+    "[x] Liens bidirectionnels (2 colonnes)",
+    "[x] Formules (1 colonne)",
+  ]);
+  await choice(exporter, "export", "Descriptions").uncheck();
+  await choice(exporter, "export", "Formules").uncheck();
+  await exporter.click("#generate-btn");
+  await exporter.waitForFunction(() => document.getElementById("export-output").value.includes("class Members"));
+  const text = await exporter.inputValue("#export-output");
+  assert.deepEqual(exporter.problems, []);
+  await exporter.close();
+  assert.doesNotMatch(text, /description=|def Shout/, "what was left out is not in the text");
+  assert.match(text, /label='Humeur'/);
+  assert.match(text, /visible_col='Title'/);
+  assert.match(text, /reverse_of='Roster'/);
+  assert.match(text, /\n {2}Shout = grist\.Text\(\)\n/, "the formula column is plain data");
+
+  await inWidget(async (page, target) => {
+    await analyse(page, text);
+    assert.deepEqual(await offered(page, "import"), [
+      "[x] Libellés (2 colonnes)",
+      "[x] Listes de choix (1 colonne)",
+      "[x] Options d’affichage (1 colonne)",
+      "[x] Colonnes d’affichage (1 colonne)",
+      "[x] Liens bidirectionnels (2 colonnes)",
+    ]); // only what the text has
+    await choice(page, "import", "Liens bidirectionnels").uncheck();
+    assert.match(await apply(page), /^2 tables créées \(Members, Teams\)/);
+
+    const after = await snapshot(target);
+    const wanted = (tableId) => expectedAfterImport(before[tableId], { omit: ["descriptions", "twoWay"] });
+    assert.deepEqual(after.Members, wanted("Members"));
+    assert.deepEqual(after.Teams, wanted("Teams"));
+    assert.deepEqual([after.Members[0].visibleCol, after.Members[0].reverseCol, after.Teams[0].untied, after.Members.at(-1).isFormula], ["Title", null, true, false], "the display column and the labels came, the link, the descriptions and the formula did not");
   });
 });
 

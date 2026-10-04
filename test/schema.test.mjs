@@ -7,6 +7,7 @@ import {
   fetchDocSchema,
   buildExportSchema,
   findReferencedTables,
+  omitFromExport,
 } from "../js/schema.js";
 
 test("zipRows converts column-oriented data into row objects", () => {
@@ -234,4 +235,48 @@ test("findReferencedTables lists the tables alphabetically", () => {
     { id: 2, parentId: 1, colId: "ToBee", type: "RefList:Bee", isFormula: false, parentPos: 2 },
   ];
   assert.deepEqual([...findReferencedTables(tables, columns, ["A"])], [["Bee", ["A.ToBee"]], ["Zed", ["A.ToZed"]]]);
+});
+
+const exportedColumn = (colId, extra = {}) => ({ colId, type: "Text", isFormula: false, formula: "", label: null, description: null, widgetOptions: null, visibleColId: null, reverseColId: null, ...extra });
+
+const SCHEMA = [
+  {
+    tableId: "Tasks",
+    columns: [
+      exportedColumn("Title", { label: "Titre", description: "Ce qu'il faut faire", widgetOptions: { alignment: "left" } }),
+      exportedColumn("Status", { type: "Choice", widgetOptions: { choices: ["Todo", "Done"], choiceOptions: { Done: { fillColor: "#2A9D53" } } } }),
+      exportedColumn("Owner", { type: "Ref:People", visibleColId: "Name", reverseColId: "Tasks" }),
+      exportedColumn("Stamp", { type: "Int", formula: "NOW()" }),
+      exportedColumn("Late", { type: "Bool", isFormula: true, formula: "$Due < TODAY()" }),
+      exportedColumn("Blank", { type: "Numeric", isFormula: true, formula: "" }),
+    ],
+  },
+  { tableId: "People", columns: [exportedColumn("Name")] },
+];
+
+test("omitFromExport with nothing omitted gives the schema as it is", () => {
+  assert.deepEqual(omitFromExport(SCHEMA, new Set()), SCHEMA);
+});
+
+test("omitFromExport leaves out the elements asked, in every table, without touching the schema given", () => {
+  const original = structuredClone(SCHEMA);
+  const columns = (omitted) => omitFromExport(SCHEMA, new Set(omitted))[0].columns;
+  const [title, status, owner] = columns(["labels", "descriptions", "choices", "options", "displayColumns", "twoWay"]);
+  assert.deepEqual([title.label, title.description, title.widgetOptions], [null, null, null]);
+  assert.equal(status.widgetOptions, null);
+  assert.deepEqual([owner.visibleColId, owner.reverseColId], [null, null]);
+  assert.deepEqual(columns(["labels"]).map((col) => col.label), [null, null, null, null, null, null]);
+  assert.deepEqual(columns(["choices"])[1].widgetOptions, null);
+  assert.deepEqual(columns(["options"]).map((col) => col.widgetOptions), [null, SCHEMA[0].columns[1].widgetOptions, null, null, null, null]);
+  assert.deepEqual(SCHEMA, original, "not changed");
+});
+
+test("omitFromExport writes a column whose formula is left out as plain data, trigger formulas and empty formulas included", () => {
+  const [, , , stamp, late, blank] = omitFromExport(SCHEMA, new Set(["formulas"]))[0].columns;
+  assert.deepEqual([stamp.isFormula, stamp.formula, stamp.type], [false, "", "Int"]);
+  assert.deepEqual([late.isFormula, late.formula, late.type], [false, "", "Bool"]);
+  assert.deepEqual([blank.isFormula, blank.formula, blank.type], [false, "", "Numeric"], "a column that is a formula column is no longer one, even with nothing in it");
+  const [title, status, owner] = omitFromExport(SCHEMA, new Set(["formulas"]))[0].columns;
+  assert.deepEqual([title, status, owner], SCHEMA[0].columns.slice(0, 3), "only the formulas go");
+  assert.deepEqual(omitFromExport(SCHEMA, new Set(["labels"]))[0].columns.slice(3).map((col) => [col.isFormula, col.formula]), [[false, "NOW()"], [true, "$Due < TODAY()"], [true, ""]], "formulas stay unless asked");
 });

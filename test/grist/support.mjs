@@ -29,15 +29,15 @@ import { createTables, resolveColumns, defaultTableId } from "../../js/importer.
 /**
  * Parses Code View text and creates its tables in `doc` as the Import tab does
  * with its defaults. `ids` renames tables, `exclude` lists unchecked columns, `withFormulas`
- * ticks the option that imports formulas.
+ * ticks the option that imports formulas, `omit` lists the elements (see js/elements.js) left out.
  */
-export async function importText(doc, text, { ids = {}, exclude = {}, withFormulas = false } = {}) {
+export async function importText(doc, text, { ids = {}, exclude = {}, withFormulas = false, omit = [] } = {}) {
   const { tables } = parseGristSchema(text);
   const known = await doc.tableIds();
   const destination = new Map(tables.map((table) => [table.tableId, ids[table.tableId] ?? defaultTableId(table.tableId)]));
   const entries = tables.map((table) => {
     const left = new Set(exclude[table.tableId]);
-    const { columns } = resolveColumns(table, destination, known, { excluded: left, withFormulas });
+    const { columns } = resolveColumns(table, destination, known, { excluded: left, withFormulas, omit: new Set(omit) });
     return { id: destination.get(table.tableId), columns: columns.filter((col) => !left.has(col.id)) };
   });
   return createTables(doc.grist, entries, { withFormulas });
@@ -76,7 +76,7 @@ export async function snapshot(doc) {
   );
 }
 
-import { fetchDocSchema, buildExportSchema } from "../../js/schema.js";
+import { fetchDocSchema, buildExportSchema, omitFromExport } from "../../js/schema.js";
 import { generateCode } from "../../js/codeGenerator.js";
 
 /**
@@ -106,10 +106,10 @@ export async function buildSource(doc, spec) {
   if (followUps.length > 0) await doc.apply(followUps);
 }
 
-/** The Export tab's text for the given tables of `doc`. */
-export async function exportText(doc, tableIds) {
+/** The Export tab's text for the given tables of `doc`, without the elements (see js/elements.js) in `omitted`. */
+export async function exportText(doc, tableIds, omitted = []) {
   const { tables, allColumns } = await fetchDocSchema(doc.grist);
-  return generateCode(buildExportSchema(tables, allColumns, tableIds));
+  return generateCode(omitFromExport(buildExportSchema(tables, allColumns, tableIds), new Set(omitted)));
 }
 
 /** Builds `spec` in a first document, exports it, imports the text in a second one (with the formulas if `withFormulas`). */
@@ -124,23 +124,42 @@ export async function roundTrip(spec, options) {
   return result;
 }
 
+const CHOICE_KEYS = new Set(["choices", "choiceOptions"]);
+const onlyKeys = (options, keep) => {
+  const kept = Object.fromEntries(Object.entries(options ?? {}).filter(([key]) => keep(key)));
+  return Object.keys(kept).length > 0 ? kept : null;
+};
+
+/** What the engine holds of a column once an element has been left out: the column as it would be had it never had it. */
+const WITHOUT = {
+  labels: (col) => ({ ...col, label: col.id, untied: false }),
+  descriptions: (col) => ({ ...col, description: "" }),
+  choices: (col) => ({ ...col, widgetOptions: onlyKeys(col.widgetOptions, (key) => !CHOICE_KEYS.has(key)) }),
+  options: (col) => ({ ...col, widgetOptions: onlyKeys(col.widgetOptions, (key) => CHOICE_KEYS.has(key)) }),
+  displayColumns: (col) => ({ ...col, visibleCol: null }),
+  twoWay: (col) => ({ ...col, reverseCol: null }),
+};
+
 /**
  * What an imported table must look like given the source's columns: data
  * columns first (as in Code View), formulas turned into empty data columns
- * unless `withFormulas`, and the widgetOptions the widget agrees to carry (no
- * rulesOptions, the dropdown condition reduced to its text).
+ * unless `withFormulas`, the widgetOptions the widget agrees to carry (no
+ * rulesOptions, the dropdown condition reduced to its text), and none of the
+ * elements in `omit` (the formulas are `withFormulas`'s).
  */
-export function expectedAfterImport(columns, { withFormulas = false } = {}) {
+export function expectedAfterImport(columns, { withFormulas = false, omit = [] } = {}) {
   const carried = (options) => {
     if (!options) return null;
     const { rulesOptions, dropdownCondition, ...rest } = options;
     const kept = { ...rest, ...(dropdownCondition && { dropdownCondition: { text: dropdownCondition.text } }) };
     return Object.keys(kept).length > 0 ? kept : null;
   };
-  return [...columns.filter((col) => !col.isFormula), ...columns.filter((col) => col.isFormula)].map((col) => ({
-    ...col,
-    isFormula: withFormulas && col.isFormula,
-    formula: withFormulas ? col.formula : "",
-    widgetOptions: carried(col.widgetOptions),
-  }));
+  return [...columns.filter((col) => !col.isFormula), ...columns.filter((col) => col.isFormula)].map((col) =>
+    omit.reduce((left, element) => WITHOUT[element]?.(left) ?? left, {
+      ...col,
+      isFormula: withFormulas && col.isFormula,
+      formula: withFormulas ? col.formula : "",
+      widgetOptions: carried(col.widgetOptions),
+    })
+  );
 }

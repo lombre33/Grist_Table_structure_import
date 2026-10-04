@@ -170,13 +170,12 @@
         <tbody id="columns-preview-body"></tbody>
       </table>
 
-      <div id="formulas-row" class="option" hidden>
-        <label>
-          <input type="checkbox" id="with-formulas" aria-describedby="formulas-hint">
-          <span id="with-formulas-label"></span>
-        </label>
-        <p id="formulas-hint" class="hint" data-i18n="import.formulas.hint">Les formules s’exécutent dans ce document dès leur création&nbsp;: n’activez cette option que pour du code de confiance. Sans elle, ces colonnes sont créées vides.</p>
-      </div>
+      <fieldset id="import-elements" class="elements" hidden>
+        <legend class="eyebrow" data-i18n="import.elements.legend">Éléments à importer</legend>
+        <ul id="import-elements-list" class="checklist elements-list"></ul>
+        <p class="hint" data-i18n="import.elements.hint">Seuls les éléments présents dans le texte collé sont proposés&nbsp;; le type de chaque colonne est toujours importé.</p>
+        <p id="formulas-hint" class="hint" hidden data-i18n="import.formulas.hint">Les formules s’exécutent dans ce document dès leur création&nbsp;: ne cochez «&nbsp;Formules&nbsp;» que pour du code de confiance. Sans cela, ces colonnes sont créées vides.</p>
+      </fieldset>
 
       <div id="warnings-block" hidden>
         <h3 class="eyebrow" data-i18n="import.warnings.eyebrow">Remarques</h3>
@@ -213,6 +212,12 @@
           <button id="refs-dismiss-btn" type="button" class="btn btn-ghost">Continuer sans elles</button>
         </div>
       </div>
+
+      <fieldset id="export-elements" class="elements" hidden>
+        <legend class="eyebrow" data-i18n="export.elements.legend">Éléments à exporter</legend>
+        <ul id="export-elements-list" class="checklist elements-list"></ul>
+        <p class="hint" data-i18n="export.elements.hint">Le type de chaque colonne est toujours exporté.</p>
+      </fieldset>
 
       <div class="actions">
         <button id="refresh-tables-btn" type="button" class="btn btn-ghost" data-i18n="export.refresh">Actualiser la liste</button>

@@ -36,11 +36,12 @@ davantage :
   `ModifyColumn` avec `reverseCol` (l'action que Grist utilise pour relier deux colonnes).
   Il ne cible, lui aussi, que des colonnes créées par le premier appel : relier une colonne
   qui existait déjà réécrirait ses valeurs. Un échec est signalé sans annuler la création.
-- **Import, formules (option)** : si l'utilisateur coche **Reprendre aussi les formules**
-  (décochée à chaque analyse), les colonnes de formule et les formules de déclenchement
-  du texte sont envoyées à Grist avec le même appel `AddTable` / `AddVisibleColumn`
-  (champs `isFormula` et `formula` de la définition de colonne). Voir « Le texte collé
-  n'est jamais exécuté » ci-dessous : le widget ne les évalue pas, Grist si.
+- **Import, formules (option)** : si l'utilisateur coche **Formules** dans le groupe
+  **Éléments à importer** (décoché à chaque analyse), les colonnes de formule et les
+  formules de déclenchement du texte sont envoyées à Grist avec le même appel
+  `AddTable` / `AddVisibleColumn` (champs `isFormula` et `formula` de la définition de
+  colonne). Voir « Le texte collé n'est jamais exécuté » ci-dessous : le widget ne les
+  évalue pas, Grist si.
 - **Export** : lecture seule. Le widget lit la structure des tables de ce document
   (`grist.docApi.fetchTable` sur les tables de métadonnées `_grist_Tables` et
   `_grist_Tables_column` — voir « Lecture des tables de métadonnées » ci-dessous) et
@@ -92,17 +93,20 @@ parseur à des milliers de textes d'entrée mutés au hasard (graine fixe) : il 
 d'exception et s'arrête toujours vite.
 
 Les **formules** sont le seul cas où du texte collé finit par s'exécuter, et ce n'est pas
-dans le widget : sans l'option **Reprendre aussi les formules**, aucune colonne n'est
-créée avec une formule (`isFormula: false`, `formula: ""` dans chaque définition envoyée ;
+dans le widget : sans l'option **Formules** du groupe **Éléments à importer**, aucune
+colonne n'est créée avec une formule (`isFormula: false`, `formula: ""` dans chaque définition envoyée ;
 `test/grist/importer.test.mjs` le vérifie dans un vrai document, même pour un texte qui
 contient du code). Avec l'option, le corps des fonctions est recopié tel quel dans le
 champ `formula` d'une colonne, que Grist évalue dans son propre bac à sable Python
 exactement comme une formule saisie dans une cellule : le widget n'ajoute ni ne retire
 aucun pouvoir à ce code, et ne l'interprète pas (`js/parser.js` n'en lit que l'indentation et
 les chaînes, pour savoir où la fonction s'arrête).
-La case est décochée par défaut, accompagnée d'une mise en garde (« n'activez cette option
-que pour du code de confiance »), précisément parce que l'origine d'un texte collé est
-inconnue.
+L'option est décochée par défaut, et à chaque analyse, accompagnée d'une mise en garde
+(« ne cochez “Formules” que pour du code de confiance »), précisément parce que l'origine
+d'un texte collé est inconnue. Les autres éléments du groupe (libellés, descriptions,
+listes de choix, options d'affichage, colonnes d'affichage, liens bidirectionnels) ne font
+que retirer, au choix de l'utilisateur, une partie de ce que l'import aurait appliqué :
+ils n'ajoutent aucun appel ni aucun pouvoir.
 
 ## Métadonnées de colonne capturées à l'export (choix, styles, `widget_options`)
 

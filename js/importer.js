@@ -3,6 +3,7 @@
  * Grist column definitions and apply them to the document. No DOM here.
  */
 
+import { elementCounts, omitElements } from "./elements.js";
 import { defaultLiteralForType, resolveColumnType, splitType } from "./gristTypes.js";
 import { fetchDocSchema, existingColumnIds } from "./schema.js";
 import { reportError } from "./util.js";
@@ -80,9 +81,11 @@ function formulaOf(code, type) {
  * in the document; `documentTableIds` (null if unknown) lists the tables already
  * there. A reference only stays one if its target is one of those, otherwise the
  * column becomes `Any`. Columns in `excluded` raise no warning; `withFormulas`
- * says that formulas are imported, so that nothing is said about their loss.
+ * says that formulas are imported, so that nothing is said about their loss. The columns come without the
+ * elements in `omit` (see elements.js), as if the text had none; `counts` says how many of the columns that
+ * are not excluded carry each element in the text.
  */
-export function resolveColumns(table, tableIds, documentTableIds, { excluded = new Set(), withFormulas = false } = {}) {
+export function resolveColumns(table, tableIds, documentTableIds, { excluded = new Set(), withFormulas = false, omit = new Set() } = {}) {
   const warnings = [];
   const columns = table.columns.map((col) => {
     const colWarnings = excluded.has(col.id) ? [] : warnings;
@@ -95,7 +98,7 @@ export function resolveColumns(table, tableIds, documentTableIds, { excluded = n
         resolved.type = `${splitType(resolved.type).name}:${target}`;
       } else {
         colWarnings.push({ key: "warn.refTargetMissingInDoc", params: { colId: col.id, target: resolved.refTarget } });
-        Object.assign(resolved, { type: "Any", widgetOptions: null, visibleColId: null });
+        Object.assign(resolved, { type: "Any", widgetOptions: null, visibleColId: null, reverseColId: null });
       }
     }
     return { id: col.id, kind: col.kind, formula, ...resolved };
@@ -103,7 +106,7 @@ export function resolveColumns(table, tableIds, documentTableIds, { excluded = n
 
   const computed = withFormulas ? [] : columns.filter((col) => isComputed(col) && !excluded.has(col.id));
   if (computed.length > 0) warnings.push({ key: "warn.computedColumns", params: { columns: computed.map((col) => col.id).join(", ") } });
-  return { columns, warnings };
+  return { columns: columns.map((col) => omitElements(col, omit)), warnings, counts: elementCounts(columns.filter((col) => !excluded.has(col.id))) };
 }
 
 const keyOf = (tableId, colId) => `${tableId}.${colId}`;
@@ -117,8 +120,8 @@ export function twoWayPairs(tables) {
   const all = tables.flatMap(({ id, columns }) => columns.map((col) => ({ tableId: id, col })));
   const byKey = new Map(all.map((entry) => [keyOf(entry.tableId, entry.col.id), entry]));
   return all.flatMap((a, i) => {
-    const b = a.col.reverseOf && byKey.get(keyOf(splitType(a.col.type).arg, a.col.reverseOf));
-    const mutual = b && b.col.reverseOf === a.col.id && splitType(b.col.type).arg === a.tableId;
+    const b = a.col.reverseColId && byKey.get(keyOf(splitType(a.col.type).arg, a.col.reverseColId));
+    const mutual = b && b.col.reverseColId === a.col.id && splitType(b.col.type).arg === a.tableId;
     return mutual && i < all.indexOf(b) ? [[a, b]] : [];
   });
 }
@@ -130,7 +133,7 @@ export const linkedColumns = (tables) => new Set(twoWayPairs(tables).flat().map(
 export function twoWayWarnings(tables) {
   const linked = linkedColumns(tables);
   return tables.flatMap(({ id, columns }) => {
-    const plain = columns.filter((col) => col.reverseOf && !linked.has(col));
+    const plain = columns.filter((col) => col.reverseColId && !linked.has(col));
     return plain.length > 0 ? [{ key: "warn.twoWayColumns", params: { columns: plain.map((col) => col.id).join(", ") }, table: id }] : [];
   });
 }

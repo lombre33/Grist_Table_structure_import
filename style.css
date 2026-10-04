@@ -570,7 +570,7 @@ label + .hint {
   margin-bottom: 3px;
 }
 
-/* Export checklist (also reused by the Import tab's multi-table picker) */
+/* Export checklist (also reused by the Import tab's multi-table picker, and by the choice of the elements to keep) */
 
 .checklist {
   list-style: none;
@@ -608,6 +608,38 @@ label + .hint {
   width: 16px;
   height: 16px;
   accent-color: var(--accent);
+}
+
+/* The elements of the columns (labels, choices, formulas…) that Export and Import let the user leave out: a few short rows side by side. */
+
+.elements {
+  margin: 14px 0 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.elements legend {
+  padding: 0;
+}
+
+.elements-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(12.5rem, 1fr));
+  max-height: none;
+  overflow: visible;
+}
+
+.elements-list li {
+  display: flex; /* a row that is taller than its neighbour keeps its content in the middle */
+}
+
+.elements-list label {
+  flex: 1;
+}
+
+.elements-list .tag {
+  margin-left: auto;
 }
 
 #export-output {

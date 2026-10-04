@@ -72,7 +72,7 @@ test("Export in one document, Import in another, both through Grist's own interf
   const target = await instance.newDoc("in Grist: target");
   const importer = await openWidgetIn(target);
   await analyse(importer.frame, text);
-  await importer.frame.check("#with-formulas");
+  await importer.frame.getByRole("checkbox", { name: /Formules/ }).check();
   assert.match(await apply(importer.frame), /^2 tables créées \(Members, Teams\)/);
   assert.deepEqual(importer.errors, []);
   await importer.page.close();

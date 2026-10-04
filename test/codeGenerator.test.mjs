@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { generateCode } from "../js/codeGenerator.js";
 import { parseGristSchema } from "../js/parser.js";
 import { resolveColumnType } from "../js/gristTypes.js";
+import { omitFromExport } from "../js/schema.js";
 
 const HEADER = "import grist\nfrom functions import *       # global uppercase functions\nimport datetime, math, re     # modules commonly needed in formulas\n";
 const data = (colId, type, extra = {}) => ({ colId, type, isFormula: false, ...extra });
@@ -81,7 +82,7 @@ test("a two-way reference names its counterpart first, as Code View does, and re
   assert.match(text, /Owner = grist\.Reference\('People', reverse_of='Pets'\)\n/);
   assert.match(text, /Many = grist\.ReferenceList\('People', reverse_of='Owner', label='Plusieurs'\)\n/);
   const read = readBack(text);
-  assert.deepEqual([read.get("Owner").reverseOf, read.get("Many").reverseOf, read.get("Plain").reverseOf], ["Pets", "Owner", null]);
+  assert.deepEqual([read.get("Owner").reverseColId, read.get("Many").reverseColId, read.get("Plain").reverseColId], ["Pets", "Owner", null]);
 });
 
 test("the other widgetOptions go in widget_options, without what must not travel", () => {
@@ -174,4 +175,40 @@ test("the code of a formula is indented from its own margin, whatever a line of 
 test("a formula of hundreds of thousands of lines is written like any other", () => {
   const lines = gen(formula("F", "Int", `${"x = 1\n".repeat(300000)}return x`)).split("\n");
   assert.ok(lines.length > 300000);
+});
+
+const RICH = [
+  {
+    tableId: "T",
+    columns: [
+      data("Mood", "Choice", { label: "Humeur", description: "Du jour", widgetOptions: { choices: ["a"], alignment: "center" } }),
+      data("Owner", "Ref:People", { visibleColId: "Name", reverseColId: "Pets" }),
+      data("Stamp", "Int", { formula: "1" }),
+      formula("Late", "Bool", "$A"),
+    ],
+  },
+];
+const LEFT_OUT = [
+  ["labels", /label='Humeur'/],
+  ["descriptions", /description='Du jour'/],
+  ["choices", /choices=\['a'\]/],
+  ["options", /widget_options='\{"alignment":"center"\}'/],
+  ["displayColumns", /visible_col='Name'/],
+  ["twoWay", /reverse_of='Pets'/],
+  ["formulas", /def Late|def _default_Stamp/],
+];
+
+test("an element left out of the export is gone from the text, and only that one", () => {
+  const written = (omitted) => generateCode(omitFromExport(RICH, new Set(omitted)));
+  for (const [element, pattern] of LEFT_OUT) {
+    assert.match(written([]), pattern, `${element} is written when nothing is left out`);
+    const text = written([element]);
+    assert.doesNotMatch(text, pattern, `${element} is left out`);
+    for (const [other, otherPattern] of LEFT_OUT) if (other !== element) assert.match(text, otherPattern, `${other} stays when only ${element} is left out`);
+  }
+});
+
+test("with every element left out, the export is the types of the columns", () => {
+  const text = generateCode(omitFromExport(RICH, new Set(LEFT_OUT.map(([element]) => element))));
+  assert.equal(text, `${HEADER}\n\n@grist.UserTable\nclass T:\n  Mood = grist.Choice()\n  Owner = grist.Reference('People')\n  Stamp = grist.Int()\n  Late = grist.Bool()\n`);
 });

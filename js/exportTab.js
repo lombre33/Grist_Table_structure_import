@@ -1,5 +1,7 @@
 import { $, el, checklistItem, restoreFocus, statusWriter, syncMasterCheckbox } from "./dom.js";
-import { fetchDocSchema, buildExportSchema, findReferencedTables } from "./schema.js";
+import { fetchDocSchema, buildExportSchema, findReferencedTables, omitFromExport } from "./schema.js";
+import { elementCounts } from "./elements.js";
+import { elementsPicker } from "./elementsPicker.js";
 import { generateCode } from "./codeGenerator.js";
 import { callGrist, reportError } from "./util.js";
 import { t, tn, onLocaleChange } from "./i18n.js";
@@ -18,6 +20,7 @@ export function initExportTab(grist) {
   const refsBanner = $("export-refs-banner");
   const includeBtn = $("refs-include-btn");
   const dismissBtn = $("refs-dismiss-btn");
+  const elementsBox = $("export-elements");
   const refsIntro = $("export-refs-banner-intro");
   const refsList = $("export-refs-list");
   const announcement = $("export-announcement");
@@ -32,6 +35,11 @@ export function initExportTab(grist) {
   let docSchema = null;
   let loaded = false;
   let busy = false; // the list is being read, or the code generated
+  const omitted = new Set(); // the elements (see elements.js) the user leaves out of the code
+  const showElements = elementsPicker($("export-elements-list"), (element, kept) => {
+    if (kept) omitted.delete(element);
+    else omitted.add(element);
+  });
   let dismissed = null; // the tables the user chose to do without, as missingTables().key
 
   refreshBtn.addEventListener("click", loadTables);
@@ -48,7 +56,7 @@ export function initExportTab(grist) {
     updateRefsBanner();
     generateBtn.focus({ preventScroll: true }); // the banner, which had the focus, is gone: the next step is here
   });
-  onLocaleChange(updateRefsBanner);
+  onLocaleChange(refresh);
 
   const selected = () => Array.from(tableList.querySelectorAll("input:checked"), (input) => input.value);
 
@@ -63,6 +71,8 @@ export function initExportTab(grist) {
     const ticked = selected().length;
     syncMasterCheckbox(selectAll, ticked, tableList.querySelectorAll("input").length);
     generateBtn.disabled = busy || ticked === 0;
+    const columns = docSchema ? buildExportSchema(docSchema.tables, docSchema.allColumns, selected()).flatMap((table) => table.columns) : [];
+    elementsBox.hidden = !showElements(elementCounts(columns), (element) => !omitted.has(element));
     updateRefsBanner();
   }
 
@@ -125,7 +135,7 @@ export function initExportTab(grist) {
     setBusy(true);
     try {
       docSchema = await callGrist(fetchDocSchema(grist)); // columns may have changed since the list was loaded
-      const schema = buildExportSchema(docSchema.tables, docSchema.allColumns, selected());
+      const schema = omitFromExport(buildExportSchema(docSchema.tables, docSchema.allColumns, selected()), omitted);
       output.value = generateCode(schema);
       outputBlock.hidden = false;
       setCopyStatus("");

@@ -5,6 +5,7 @@
  */
 
 import { RESERVED_COLUMN_IDS, splitType } from "./gristTypes.js";
+import { omitElements } from "./elements.js";
 import { isPlainObject } from "./widgetOptions.js";
 
 const isHidden = (colId) => RESERVED_COLUMN_IDS.has(colId) || colId.startsWith("gristHelper_") || colId.startsWith("#");
@@ -77,6 +78,17 @@ export function buildExportSchema(tables, allColumns, tableIds) {
         reverseColId: byRef.get(col.reverseCol)?.colId ?? null,
       })),
     }));
+}
+
+/** The export schema without the `omitted` elements (a Set): with the formulas left out, a formula column (blank or not) is written as plain data, and a trigger formula is dropped. */
+export function omitFromExport(schema, omitted) {
+  return schema.map((table) => ({
+    ...table,
+    columns: table.columns.map((col) => {
+      const kept = omitElements(col, omitted);
+      return omitted.has("formulas") && (col.isFormula || col.formula?.trim()) ? { ...kept, isFormula: false, formula: "" } : kept;
+    }),
+  }));
 }
 
 /**
