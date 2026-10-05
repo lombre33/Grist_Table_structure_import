@@ -2,6 +2,15 @@
 
 Widget personnalisé pour [Grist](https://www.getgrist.com/), à héberger sur GitHub Pages.
 
+> **Statut : Beta.** Le widget est complet et testé (tests unitaires, tests dans un navigateur
+> et sur de vraies instances Grist, de la 1.2.1 à une version de développement), mais jeune.
+> Il copie la **structure** d'une table, pas ses données, ses vues, ses droits d'accès ni ses
+> tables de synthèse ; il lit le code Python de façon stricte (voir « Limites connues ») ; il
+> demande l'accès **complet** au document (voir « Accès demandé à Grist ») ; il n'a été essayé que
+> dans Chromium, sans lecteur d'écran. Un problème ou une idée : ouvrez une
+> [issue](https://github.com/lombre33/Grist_Table_structure_import/issues). Une faille de
+> sécurité : voir [SECURITY.md](./SECURITY.md).
+
 Deux onglets :
 
 - **Import** : recrée, dans le document Grist où le widget est ajouté, la structure
@@ -69,9 +78,14 @@ qui résume ce qui va être ajouté : les tables avec le nombre de leurs colonne
 l'identifiant saisi), ou les colonnes ajoutées à la table choisie. Elle prévient quand des
 formules, cochées, vont s'exécuter dans le document, et rappelle que rien d'existant n'est
 supprimé ni modifié. **Annuler** (ou la touche Échap) n'écrit rien et laisse l'aperçu tel quel ;
-le bouton de confirmation a le focus, donc Entrée confirme, et une touche maintenue enfoncée
-depuis le bouton d'action ne vaut pas confirmation. Cette étape s'ajoute à l'aperçu et à
-l'annulation native du document (Ctrl+Z / Cmd+Z), qui défait l'action une fois faite.
+le bouton de confirmation a le focus, donc Entrée confirme (quand des formules vont s'exécuter,
+c'est **Annuler** qui a le focus : confirmer demande alors un clic voulu), et une touche maintenue
+enfoncée depuis le bouton d'action ne vaut pas confirmation. Cette étape s'ajoute à l'aperçu et à
+l'annulation de Grist, qui défait l'action une fois faite : son bouton **Annuler**, ou Ctrl+Z /
+Cmd+Z pressé hors du widget (le raccourci n'est pas transmis à Grist quand le focus est dans le
+widget). Elle défait l'import étape par étape, une par appel fait au document : la création des
+tables, puis les détails des colonnes (descriptions, colonnes affichées), puis les liens
+bidirectionnels, s'il y en a.
 
 ### Exemple de code accepté
 
@@ -116,14 +130,17 @@ Cette table sert dans les deux sens : à l'import, pour choisir le type de colon
 | `grist.Reference('Autre_Table')`       | Référence vers `Autre_Table`     |
 | `grist.ReferenceList('Autre_Table')`   | Références vers `Autre_Table` (liste) |
 | `grist.Attachments()`                  | Pièces jointes                   |
+| `grist.Blob()`                         | Binaire (`Blob`)                 |
 | tout le reste / type non reconnu       | Quelconque (`Any`)               |
 
 Par défaut, toutes les colonnes sont créées comme colonnes de données, y compris celles
 écrites avec `@grist.formulaType(...)` dans le code source, et sans formule. Ce que
 l'import ne reprend pas n'est pas perdu en silence : une remarque de l'aperçu liste les
 colonnes calculées (formule, ou formule de déclenchement `def _default_...`), créées
-vides, et les références bidirectionnelles qui ne peuvent pas être reliées (voir
-ci-dessous), créées comme références simples.
+vides, les références bidirectionnelles qui ne peuvent pas être reliées (voir
+ci-dessous), créées comme références simples, et les options (`label=`, `description=`,
+`choices=`, `widget_options=`, `visible_col=`, `reverse_of=`) écrites sous une forme que le
+widget ne lit pas (guillemets typographiques, nom de variable, `u'…'`), ignorées ou lues en partie.
 
 #### Références bidirectionnelles
 
@@ -192,7 +209,8 @@ lignes de la chaîne sont au moins aussi indentées que le code, le texte ne dit
 version il vient et il est lu comme celui d'une version antérieure à 1.7.20 ; collé depuis
 une version plus récente, il perd alors l'indentation du code (4 espaces) en tête de ces
 lignes (26 formules sur 400 dans le tirage, qui en indente beaucoup). L'onglet **Export**
-écrit toujours un texte que cette règle relit exactement.
+écrit toujours un texte que cette règle relit exactement (à un commentaire près : une formule
+qui ne contient que des commentaires n'a pas de code, et est relue comme une colonne sans formule).
 
 **Formules** est **décoché par défaut, volontairement** : une formule est du code Python que
 Grist exécute dans ce document dès sa création, et un texte collé peut venir de
@@ -239,7 +257,10 @@ métadonnées est un élément que le groupe **Éléments à importer** laisse d
   et `reverse_of=` sont lus — le reste est ignoré sans faire échouer l'import de la colonne.
 - Un appel dont les parenthèses ne sont pas refermées, ou une valeur texte qui s'étend sur
   plusieurs lignes dans un texte écrit à la main, est ignoré comme contenu non reconnu,
-  avec un avertissement. Le texte généré par l'onglet **Export** n'a jamais ce défaut :
+  avec un avertissement. Les commentaires (`# …`) en fin de ligne ou avant le corps d'une classe,
+  et les espaces insécables d'un texte copié depuis une page web, sont acceptés ; les guillemets
+  typographiques (`‘…’`), les chaînes préfixées `u'…'`, les noms de variable et les dictionnaires
+  ne le sont pas : l'option concernée est ignorée, avec un avertissement. Le texte généré par l'onglet **Export** n'a jamais ce défaut :
   les retours à la ligne y sont écrits `\n`.
 - Grist réécrit certains identifiants de colonne (`_x` devient `x`, `class` devient
   `cclass`) : le widget suit l'identifiant réellement créé. Une colonne nommée `grist`
@@ -253,6 +274,12 @@ métadonnées est un élément que le groupe **Éléments à importer** laisse d
   les vues et widgets de la page (ni leurs titres et descriptions), ni les tables de
   synthèse ne sont repris ou proposés. La description de la table elle-même l'est, pour les
   tables que l'import crée ; celle d'une table qui reçoit des colonnes n'est jamais modifiée.
+- Un texte énorme (des milliers de tables, des dizaines de milliers de colonnes) rend l'aperçu
+  lent : on le lit en une fraction de seconde, mais l'aperçu dessine chaque colonne (environ
+  une seconde pour 5 000 colonnes d'une table, et un clic de plus par case cochée). Importez
+  par parties. Les remarques de l'aperçu sont limitées aux 100 premières, avec le nombre des autres.
+- Une indentation qui mêle espaces et tabulations n'est pas du Python valide (Python refuse
+  cette indentation) : le widget la lit à la lettre, et peut laisser de côté des colonnes.
 - **Versions de Grist** : la suite complète (`npm run test:grist`, plus de 300 tests) passe
   sur Grist 1.2.1 (octobre 2024), 1.6.1, 1.7.1, 1.7.20 et une version de développement du
   1er octobre 2026. Avant 1.2, le moteur ne connaît pas les références bidirectionnelles
@@ -401,8 +428,10 @@ L'interface suit l'identité UI/UX commune aux widgets **Grist Factory** (grist-
   messages, bleu des petits textes) sont légèrement assombries pour atteindre 4,5:1 (WCAG
   AA, RGAA 3.2) là où elles donnaient 3,7 à 4,4, et les champs ont un contour à 3:1 ;
   `test/style.test.mjs` mesure ces contrastes dans les deux thèmes. Les zones cliquables
-  font au moins 24 px, le focus reste visible et revient au bouton qu'on vient d'actionner,
-ou au champ de texte quand il n'y a plus rien à actionner (table créée, colonnes ajoutées), les
+  font au moins 24 px (un test le mesure sur chaque écran), le focus reste visible et revient
+  au bouton qu'on vient d'actionner, ou au champ de texte quand il n'y a plus rien à actionner
+  (table créée, colonnes ajoutées), Tab et Maj+Tab restent dans une boîte de dialogue ouverte
+  (dans le cadre d'un widget Grist, le focus s'échapperait sinon vers la page), les
   champs, groupes et résultats ont un nom accessible et les fins d'analyse sont annoncées,
   l'onglet sélectionné reste repérable en mode contraste élevé (`forced-colors`), la page
   a un repère `main` et un titre par étape, et les onglets répondent aux flèches, à
@@ -419,14 +448,17 @@ ou au champ de texte quand il n'y a plus rien à actionner (table créée, colon
   à droite), mémorisé sur cet appareil, dans le `localStorage` du navigateur (le thème et la
   langue sont les seules données que le widget conserve ; voir « Accès demandé à Grist »).
   « Système » (par défaut) suit le thème du système d'exploitation.
-- **Icônes** : deux SVG en contour, en ligne dans `index.html`, aucune police d'icônes
+- **Icônes** : des SVG en contour, en ligne dans `index.html`, aucune police d'icônes
   ni emoji (voir SECURITY.md).
 - **Bilingue français / anglais** : réglable dans le même panneau. Toute chaîne visible
   de l'interface est traduite (`js/i18n.js`, dont un test vérifie que les deux langues
   ont les mêmes clés, formes plurielles et paramètres) — aussi bien les libellés fixes (titres,
   boutons, en-têtes, aide) que les messages générés dynamiquement pendant l'usage
-  (statuts de création/ajout, avertissements d'analyse), accords singulier/pluriel
-  compris (ex. « Table « X » créée avec 1 colonne. » / « ... avec 3 colonnes. »).
+  (statuts de création/ajout et de génération, avertissements d'analyse, qui suivent un
+  changement de langue), accords singulier/pluriel compris (ex. « Table « X » créée avec
+  1 colonne. » / « ... avec 3 colonnes. »). Restent dans la langue où elles ont été écrites : les
+  notes de fin d'import (rares : détails non appliqués, liens non reliés) et les messages d'erreur
+  renvoyés par Grist, en anglais, sauf le refus d'écriture, dit dans la langue de la page.
 - **Logo** : celui de Grist Factory, affiché discrètement juste à droite du bouton
   Réglages (`assets/grist-factory-logo.jpg`).
 - **Crédits** (panneau Réglages) : Grist Factory, site, licence.
@@ -447,7 +479,8 @@ ou au champ de texte quand il n'y a plus rien à actionner (table créée, colon
 La page charge l'API officielle de Grist depuis sa propre origine : `<script src="/grist-plugin-api.js">`,
 la forme qu'attend une instance, qui sert ce fichier à sa racine. Servi tel quel par la même
 origine que Grist, le widget ne contacte donc aucun autre domaine, et sa politique de sécurité
-(`script-src 'self'`) ne nomme aucune adresse.
+(`script-src 'self' 'unsafe-eval'`, ce dernier mot-clé étant imposé par l'API de Grist : voir
+SECURITY.md) ne nomme aucune adresse.
 
 La publication GitHub Pages ne peut pas compter sur une instance : `.github/workflows/pages.yml`
 télécharge l'API officielle (`https://docs.getgrist.com/grist-plugin-api.js`) au moment de publier,
@@ -492,8 +525,8 @@ fait, et rien d'autre :
 - **Une écriture n'a lieu qu'après confirmation** : le bouton d'action (« Créer 2 tables dans
   ce document », « Ajouter 3 colonnes à « Contacts » »…) ouvre une boîte qui résume ce qui sera
   ajouté, et rien n'est envoyé à Grist avant que l'utilisateur confirme ; Annuler n'écrit rien, et
-  l'annulation native de Grist (Ctrl+Z) défait l'action une fois faite. L'export, lui, ne fait
-  que lire.
+  le bouton Annuler de Grist (ou Ctrl+Z hors du widget) défait l'action une fois faite, étape par
+  étape. L'export, lui, ne fait que lire.
 - **Rien ne sort du navigateur** (`connect-src 'none'`), la page ne charge rien d'un autre domaine
   (l'API de Grist vient de sa propre origine, voir « Hébergement en réseau fermé ») et rien n'est
   conservé hors de Grist, hormis deux préférences d'affichage dans le `localStorage` de l'origine

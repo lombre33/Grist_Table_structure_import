@@ -98,5 +98,6 @@ test("the README says where Grist's API comes from, in the repository and once p
   assert.ok(readme.includes(to), "to the one the README says the published page has");
   const origin = "https://docs.getgrist.com/grist-plugin-api.js";
   assert.ok(workflow.includes(`_site/grist-plugin-api.js ${origin}`) && readme.includes(origin), "the file is fetched from the address the README names, and published beside the page");
-  assert.match(readme, /`script-src 'self'`/);
+  const scriptSrc = read("index.html").match(/script-src ([^;"]+);/)[1];
+  assert.ok(readme.includes(`\`script-src ${scriptSrc}\``), "the README quotes the script-src directive that the page really has");
 });

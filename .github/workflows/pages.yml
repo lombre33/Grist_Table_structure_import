@@ -43,7 +43,7 @@ jobs:
       - name: Serve Grist's API with the widget
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error --location --retry 3 --max-time 60 \
+          curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --retry 3 --max-time 60 \
             --output _site/grist-plugin-api.js https://docs.getgrist.com/grist-plugin-api.js
           test "$(wc -c < _site/grist-plugin-api.js)" -gt 200000   # an error page is far smaller than the API
           grep -q CustomSectionAPI _site/grist-plugin-api.js       # and does not hold its names

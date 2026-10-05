@@ -1,10 +1,21 @@
 {
   "name": "grist-table-structure-import",
-  "version": "1.0.0",
+  "version": "1.0.0-beta.1",
   "private": true,
   "description": "Widget custom Grist : recrée dans un document la structure d'une table copiée depuis un autre document Grist (Code View).",
   "type": "module",
   "license": "GPL-3.0-only",
+  "engines": {
+    "node": ">=22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lombre33/Grist_Table_structure_import.git"
+  },
+  "bugs": {
+    "url": "https://github.com/lombre33/Grist_Table_structure_import/issues"
+  },
+  "homepage": "https://github.com/lombre33/Grist_Table_structure_import#readme",
   "scripts": {
     "test": "node --test test/*.test.mjs",
     "test:browser": "node test/browser/run.mjs",

@@ -266,7 +266,7 @@ Grist ne sert qu'aux tests, jamais au widget publié.
 Les vulnérabilités connues de ces dépendances sont contrôlées à chaque envoi : l'intégration
 continue lance `npm audit --audit-level=high` après `npm ci` (une alerte haute ou critique
 fait échouer la construction, donc le déploiement), et `package-lock.json` épingle les versions.
-Au 4 octobre 2026, `npm audit` ne signale aucune vulnérabilité (0 sur les dépendances de développement,
+Au 5 octobre 2026, `npm audit` ne signale aucune vulnérabilité (0 sur les dépendances de développement,
 0 sur celles d'exécution, qui n'existent pas).
 
 ## Logo Grist Factory
