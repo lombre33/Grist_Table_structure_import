@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { resolveColumnType, buildTypeExpression, defaultLiteralForType, splitType } from "../js/gristTypes.js";
 import { typeLabel } from "../js/i18n.js";
+import { quotePython } from "../js/pyText.js";
 import { plain } from "./helpers.mjs";
 
 function resolve(dslType, argsRaw = "") {
@@ -58,6 +59,44 @@ test("DateTime without a time zone is UTC, with a warning", () => {
   assert.equal(type, "DateTime:UTC");
   assert.equal(warnings.length, 1);
   assert.equal(resolve("DateTime", "'Europe/Paris'").type, "DateTime:Europe/Paris");
+});
+
+test("only the name of a time zone goes into the type of a DateTime column: any other text is replaced by UTC, with a warning that quotes its beginning", () => {
+  for (const zone of ["UTC", "Europe/Paris", "America/Argentina/Buenos_Aires", "Etc/GMT+5", "America/Port-au-Prince", "GMT-0", "US/Pacific"]) {
+    const { type, warnings } = resolve("DateTime", `'${zone}'`);
+    assert.deepEqual([type, warnings], [`DateTime:${zone}`, []], zone);
+  }
+  const notZones = ["Europe Paris", "UTC ", " UTC", "", "UTC'", "a\\b", "UTC\n", "x(1)", "UTC;", "a#b", "1UTC", "Europe//Paris", "/UTC", "UTC/", "é/é", "a".repeat(41), "A/B/C/D/E"];
+  for (const zone of notZones.filter(Boolean)) {
+    const { type, warnings } = resolve("DateTime", quotePython(zone));
+    assert.equal(type, "DateTime:UTC", JSON.stringify(zone));
+    assert.deepEqual(warnings.map((warning) => warning.key), ["warn.dateTimeBadTimezone"], JSON.stringify(zone));
+    assert.ok(warnings[0].params.given.length <= 41, "what a warning quotes is short: forty characters and an ellipsis");
+  }
+  assert.equal(resolve("DateTime", `'${"a".repeat(41)}'`).warnings[0].params.given, `${"a".repeat(40)}…`);
+});
+
+test("an option that is written but cannot be read is said to be ignored, and one that is not written is not", () => {
+  const all = resolve("Choice", "label='A', description='B', choices=['x'], widget_options='{\"alignment\":\"center\"}'");
+  assert.deepEqual([all.warnings, all.label, all.description, all.widgetOptions], [[], "A", "B", { alignment: "center", choices: ["x"] }]);
+  assert.deepEqual(resolve("Reference", "'People', visible_col='Name', reverse_of='Pets'").warnings, []);
+  for (const [dslType, args, option] of [
+    ["Text", "label=\u201cNom\u201d", "label"],
+    ["Text", "label=u'Nom'", "label"],
+    ["Text", "description=name", "description"],
+    ["Reference", "'People', visible_col=NAME", "visible_col"],
+    ["Reference", "'People', reverse_of=f'x'", "reverse_of"],
+    ["Choice", "choices=OPTIONS", "choices"],
+    ["Choice", "choices=['a', B]", "choices"],
+    ["Choice", "choices=(\u2018a\u2019, \u2018b\u2019)", "choices"],
+    ["Text", "widget_options={'alignment': 'center'}", "widget_options"],
+  ]) {
+    const { warnings } = resolve(dslType, args);
+    assert.deepEqual(warnings.map((warning) => [warning.key, warning.params.option]), [["warn.unreadableOption", option]], args);
+  }
+  assert.deepEqual(resolve("Choice", "choices=['a', B]").widgetOptions, { choices: ["a"] }, "what can be read of a list is kept");
+  for (const args of ["choices=[]", "choices=[ ]", "label=''"]) assert.deepEqual(resolve("Choice", args).warnings, [], args);
+  assert.equal(resolve("Text", `label=${"x".repeat(200)}`).warnings[0].params.given.length, 41, "what a warning quotes is short");
 });
 
 test("a reference must name a table that is a plain identifier, otherwise the column becomes Any", () => {

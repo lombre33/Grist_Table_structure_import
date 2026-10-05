@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { findMatchingClose, parseArguments, parseString, parseStringList, quotePython, stringLines } from "../js/pyText.js";
+import { findMatchingClose, indentOf, parseArguments, parseString, parseStringList, quotePython, stringLines, withoutComment } from "../js/pyText.js";
 
 test("quotePython escapes what would end the literal or break the line", () => {
   assert.equal(quotePython("it's"), "'it\\'s'");
@@ -53,6 +53,28 @@ test("parseArguments copes with nothing, a trailing comma and spaces around =", 
   assert.deepEqual(parseArguments("'A', label = 'B' ,"), { positional: ["'A'"], kwargs: { label: "'B'" } });
 });
 
+test("a comment ends a line of code, a # inside a string does not", () => {
+  assert.equal(withoutComment("A = grist.Text()  # note"), "A = grist.Text()");
+  assert.equal(withoutComment("x = 'a # b'  # c"), "x = 'a # b'");
+  assert.equal(withoutComment("x = \"it's # b\" # c"), "x = \"it's # b\"");
+  assert.equal(withoutComment("x = 'a \\' # b'"), "x = 'a \\' # b'", "an escaped quote does not end the string");
+  assert.equal(withoutComment("# only a comment"), "");
+  assert.equal(withoutComment("A = grist.Text()  # c'est"), "A = grist.Text()");
+  assert.equal(withoutComment("no comment"), "no comment");
+});
+
+test("indentation is made of spaces, tabs and the no-break spaces of a text copied from a web page", () => {
+  assert.equal(indentOf("\u00a0\u00a0 \tx"), 4);
+  assert.equal(indentOf("x  "), 0);
+  assert.equal(indentOf("\u00a0"), 1);
+});
+
+test("parseStringList tells of the items it leaves out, which are not strings", () => {
+  const skipped = [];
+  assert.deepEqual(parseStringList("['a', b, 3, \"c\"]", (piece) => skipped.push(piece)), ["a", "c"]);
+  assert.deepEqual(skipped, ["b", "3"]);
+});
+
 test("parseStringList reads the strings of a list, whatever they contain", () => {
   assert.deepEqual(parseStringList("['a', \"b\", 'it\\'s', 'x, y', '']"), ["a", "b", "it's", "x, y", ""]);
   for (const source of ["[]", "['a'", "'a'", "('a', 'b')", undefined]) assert.equal(parseStringList(source), null, String(source));
@@ -84,4 +106,19 @@ test("stringLines takes a triple-quoted string that is never closed for no strin
 
 test("stringLines knows the prefixes of Python strings", () => {
   for (const prefix of ["r", "b", "f", "u", "rb", "BR", "Rf", "fR"]) assert.deepEqual(stringLines(`x = ${prefix}"""a\nb"""\ny`.split("\n")), [false, true, false], prefix);
+});
+
+test("a text full of triple quotes that never close is read in linear time: each opener does not go through the rest of the text again", () => {
+  for (const unit of ['\\"""', "\\'''", '\\"""\n']) {
+    const started = performance.now();
+    stringLines(unit.repeat(20000).split("\n"));
+    assert.ok(performance.now() - started < 1000, `${JSON.stringify(unit)} repeated 20000 times took as long as a walk to the end of the text for each opener`);
+  }
+});
+
+test("a triple quote that closes after many escaped ones is still one string, and the lines inside it are flagged", () => {
+  const text = `x = '''${'\\\'\'\'\n'.repeat(500)}'''\ny = 1`;
+  const flags = stringLines(text.split("\n"));
+  assert.equal(flags.length, 502);
+  assert.deepEqual([flags[0], flags[1], flags[500], flags[501]], [false, true, true, false], "the lines after the first, up to the one with the closing quotes, start inside the string");
 });

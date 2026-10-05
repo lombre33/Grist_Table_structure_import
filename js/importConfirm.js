@@ -4,7 +4,7 @@
  * leaves the preview as it was.
  */
 
-import { buildElement, byIds } from "./dom.js";
+import { buildElement, byIds, trapFocus } from "./dom.js";
 import { translate, translatePlural } from "./i18n.js";
 import { callsRequest, isComputed } from "./importer.js";
 import { modeOf } from "./importUi.js";
@@ -42,6 +42,7 @@ function formulaNotes(state, columns) {
 export function createConfirmation() {
   const ui = byIds({ dialog: "confirm-dialog", title: "confirm-title", intro: "confirm-intro", list: "confirm-list", notes: "confirm-notes", cancelBtn: "confirm-cancel-btn", okBtn: "confirm-ok-btn" });
   let settle = () => {}; // gives the answer to whoever asked, once
+  trapFocus(ui.dialog);
 
   /** The answer is given in the click itself: the page does not wait for the dialog's own `close` event to go on, since a task could run in between. */
   const answer = (confirmed) => {
@@ -51,7 +52,10 @@ export function createConfirmation() {
     give(confirmed);
   };
   ui.cancelBtn.addEventListener("click", () => answer(false));
-  ui.okBtn.addEventListener("click", () => answer(true));
+  ui.okBtn.addEventListener("click", (event) => {
+    if (event.detail > 1) return; // the second click of a double click on the button that opened the dialog may land here: it is not a decision
+    answer(true);
+  });
   ui.dialog.addEventListener("close", () => answer(false)); // Escape: the browser has closed it, and that is a no
   ui.okBtn.addEventListener("keydown", (event) => {
     if (event.repeat) event.preventDefault(); // a key held down since the button that opened the dialog is not a decision
@@ -66,6 +70,6 @@ export function createConfirmation() {
       ui.okBtn.textContent = action;
       settle = resolve;
       ui.dialog.showModal();
-      ui.okBtn.focus(); // Enter confirms, Escape cancels
+      (notes.length > 0 ? ui.cancelBtn : ui.okBtn).focus(); // Enter confirms, Escape cancels; with a caution to read, Enter cancels: confirming takes a deliberate click
     });
 }

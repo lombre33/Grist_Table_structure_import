@@ -15,25 +15,48 @@ export function parseString(source) {
   return match ? (match[1] ?? match[2]).replace(/\\(.)/g, (_, ch) => UNESCAPED[ch] ?? ch) : null;
 }
 
-/** The number of spaces and tabs a line starts with. */
-export const indentOf = (line) => line.match(/^[ \t]*/)[0].length;
+/** The number of spaces and tabs a line starts with, and of the no-break spaces that a text copied from a web page has in their place. */
+export const indentOf = (line) => line.match(/^[ \t\u00a0]*/)[0].length;
 
 const WORD = /\w+/y;
 const STRING_PREFIX = /^(?:[rubf]|r[bf]|[bf]r)$/i;
 const isQuote = (ch) => ch === "'" || ch === '"';
 
+const UNKNOWN = -2;
+
 /**
  * Index after the string whose opening quotes are at `at`: the end of its line when a single-quoted one is
  * left open, -1 when a triple-quoted one is never closed. A backslash escapes the next character, a line break included.
+ * `reached` remembers, for each kind of triple quote, where a walk that goes through a position ends up: the walks
+ * of the openers that follow in the same text join the ones already made instead of going to the end of the text again.
  */
-function stringEnd(text, at) {
+function stringEnd(text, at, reached) {
   const delimiter = text.startsWith(text[at].repeat(3), at) ? text[at].repeat(3) : text[at];
-  for (let i = at + delimiter.length; i < text.length; i++) {
-    if (text[i] === "\\") i++;
-    else if (text.startsWith(delimiter, i)) return i + delimiter.length;
-    else if (text[i] === "\n" && delimiter.length === 1) return i;
+  if (delimiter.length === 1) {
+    for (let i = at + 1; i < text.length; i++) {
+      if (text[i] === "\\") i++;
+      else if (text[i] === delimiter) return i + 1;
+      else if (text[i] === "\n") return i;
+    }
+    return text.length;
   }
-  return delimiter.length === 1 ? text.length : -1;
+  const memo = (reached[delimiter] ??= new Int32Array(text.length + 2).fill(UNKNOWN));
+  const path = [];
+  let end = -1;
+  for (let i = at + 3; i < text.length; ) {
+    if (memo[i] !== UNKNOWN) {
+      end = memo[i];
+      break;
+    }
+    path.push(i);
+    if (text[i] === "\\") i += 2;
+    else if (text.startsWith(delimiter, i)) {
+      end = i + 3;
+      break;
+    } else i++;
+  }
+  for (const position of path) memo[position] = end;
+  return end;
 }
 
 /**
@@ -41,7 +64,7 @@ function stringEnd(text, at) {
  * Python reads them: after a backslash, or inside brackets, over comments and line breaks.
  */
 function stringRanges(text) {
-  const scan = { ranges: [], joined: null, depth: 0 }; // joined: the string, or the strings, being read; depth: the brackets open
+  const scan = { ranges: [], joined: null, depth: 0, reached: {} }; // joined: the string, or the strings, being read; depth: the brackets open
   for (let i = 0; i < text.length; ) i = scanFrom(text, i, scan);
   endJoined(scan);
   return scan.ranges;
@@ -76,7 +99,7 @@ function scanFrom(text, i, scan) {
 
 /** The string whose opening quotes are at `quote` (its prefix starting at `i`): one more for the string being joined, or none when it is never closed. */
 function scanString(text, i, quote, scan) {
-  const end = stringEnd(text, quote);
+  const end = stringEnd(text, quote, scan.reached);
   if (end === -1) {
     endJoined(scan); // opened and never closed: not a string, the quotes mean nothing
     return quote + 3; // past the opening quotes, three at most: what follows is code again
@@ -121,6 +144,12 @@ function* codeChars(text, from = 0) {
   }
 }
 
+/** `text` without the comment that ends it (a `#` inside a string is no comment). */
+export function withoutComment(text) {
+  for (const [i, ch] of codeChars(text)) if (ch === "#") return text.slice(0, i).trimEnd();
+  return text;
+}
+
 /** Index of the bracket closing the one at `openIndex` (a `)` inside 'Oui (confirmé)' does not count), or -1. */
 export function findMatchingClose(text, openIndex) {
   if (!"([{".includes(text[openIndex])) return -1;
@@ -150,9 +179,14 @@ export function parseArguments(text) {
   return { positional, kwargs };
 }
 
-/** The strings of a list literal given as source text (`['a', "b"]`), or null when there is none. */
-export function parseStringList(source) {
+/** The strings of a list literal given as source text (`['a', "b"]`), or null when there is none; `onSkipped` is told of each item that is not a string, which is left out. */
+export function parseStringList(source, onSkipped = () => {}) {
   if (!source?.startsWith("[") || !source.endsWith("]")) return null;
-  const items = parseArguments(source.slice(1, -1)).positional.map(parseString).filter((item) => item !== null);
-  return items.length > 0 ? items : null;
+  const items = parseArguments(source.slice(1, -1)).positional.map((piece) => {
+    const item = parseString(piece);
+    if (item === null) onSkipped(piece);
+    return item;
+  });
+  const strings = items.filter((item) => item !== null);
+  return strings.length > 0 ? strings : null;
 }

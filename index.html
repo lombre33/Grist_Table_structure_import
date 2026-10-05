@@ -74,11 +74,11 @@
         <div class="segmented" role="radiogroup" aria-labelledby="settings-language">
           <label class="segmented-option">
             <input type="radio" name="locale-choice" value="fr" checked>
-            <span>Français</span>
+            <span lang="fr">Français</span>
           </label>
           <label class="segmented-option">
             <input type="radio" name="locale-choice" value="en">
-            <span>English</span>
+            <span lang="en">English</span>
           </label>
         </div>
       </section>
@@ -104,13 +104,13 @@
   </dialog>
 
   <!-- What the Import asks before it writes in the document; js/importConfirm.js fills it for each use -->
-  <dialog id="confirm-dialog" class="dialog" aria-labelledby="confirm-title" aria-describedby="confirm-intro">
+  <dialog id="confirm-dialog" class="dialog dialog-fixed-actions" aria-labelledby="confirm-title" aria-describedby="confirm-intro confirm-notes">
     <div class="dialog-body">
       <h2 id="confirm-title" class="dialog-title"></h2>
       <p id="confirm-intro"></p>
       <ul id="confirm-list" class="confirm-list"></ul>
       <div id="confirm-notes"></div>
-      <p class="hint" data-i18n="import.confirm.safe">Rien n’est supprimé ni modifié dans ce qui existe déjà&nbsp;; Ctrl+Z annule l’action.</p>
+      <p class="hint" data-i18n="import.confirm.safe">Rien n’est supprimé ni modifié dans ce qui existe déjà&nbsp;; le bouton Annuler de Grist défait l’action.</p>
     </div>
     <div class="dialog-actions">
       <button id="confirm-cancel-btn" type="button" class="btn btn-ghost" data-i18n="import.confirm.cancel">Annuler</button>
@@ -184,7 +184,7 @@
 
       <div id="target-table-row" class="field" hidden>
         <label for="target-table-select" data-i18n="import.targetTable.label">Table à compléter</label>
-        <select id="target-table-select"></select>
+        <select id="target-table-select" aria-describedby="target-table-error"></select>
         <p id="target-table-error" class="field-error" hidden></p>
       </div>
 

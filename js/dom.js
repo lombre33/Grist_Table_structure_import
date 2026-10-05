@@ -1,5 +1,7 @@
 /** DOM construction without innerHTML: untrusted text only ever reaches the page through textContent, properties or text nodes. */
 
+import { onLocaleChange } from "./i18n.js";
+
 export const $ = (id) => document.getElementById(id);
 
 /** The elements of the page whose ids are listed: `byIds({ list: "export-table-list" })` is `{ list: <that element> }`. */
@@ -26,11 +28,23 @@ export function checklistItem(value, text, checked = false) {
   return buildElement("li", {}, [buildElement("label", {}, [buildElement("input", { type: "checkbox", value, checked }), buildElement("span", { text })])]);
 }
 
-/** A function that shows one message (nothing for a falsy one) in `region`, scrolled into view. */
+/**
+ * A function that shows one message (nothing for a falsy one) in `region`, scrolled into view. A message given as a
+ * function of no argument is the text it returns, written again when the language changes.
+ */
 export function statusWriter(region) {
+  let shown = null; // { message, level }
+  const write = () => {
+    const message = typeof shown?.message === "function" ? shown.message() : shown?.message;
+    region.replaceChildren(...(message ? [buildElement("p", { class: `status status-${shown.level}`, text: message })] : []));
+    return message;
+  };
+  onLocaleChange(() => {
+    if (typeof shown?.message === "function") write();
+  });
   return (message, level = "info") => {
-    region.replaceChildren(...(message ? [buildElement("p", { class: `status status-${level}`, text: message })] : []));
-    if (message) region.scrollIntoView({ block: "nearest" });
+    shown = { message, level };
+    if (write()) region.scrollIntoView({ block: "nearest" });
   };
 }
 
@@ -42,6 +56,32 @@ export function statusWriter(region) {
 export function restoreFocus(control, disabled = control) {
   const holder = document.activeElement;
   if ((holder === document.body || holder === disabled) && !control.disabled) control.focus({ preventScroll: true });
+}
+
+const FOCUSABLE = 'button, input, select, textarea, summary, a[href], [tabindex]:not([tabindex="-1"])';
+
+/** The controls that Tab stops on in `container`, in order: a group of radios is one stop, its checked one. */
+function tabStops(container) {
+  return [...container.querySelectorAll(FOCUSABLE)].filter((control) => {
+    if (control.disabled || control.getClientRects().length === 0) return false;
+    return control.type !== "radio" || control.checked || !container.querySelector(`input[type="radio"][name="${control.name}"]:checked`);
+  });
+}
+
+/**
+ * Keeps Tab and Shift+Tab inside `dialog` while it is open. In a frame, as in Grist, the focus would otherwise leave
+ * for the page around it, where Escape no longer reaches the dialog.
+ */
+export function trapFocus(dialog) {
+  dialog.addEventListener("keydown", (event) => {
+    if (event.key !== "Tab") return;
+    const stops = tabStops(dialog);
+    const edge = event.shiftKey ? stops[0] : stops.at(-1);
+    if (stops.length > 0 && document.activeElement === edge) {
+      event.preventDefault();
+      (event.shiftKey ? stops.at(-1) : stops[0]).focus();
+    }
+  });
 }
 
 /** A checkbox standing for a group: ticked when all of its `total` are, in between when only some are. */

@@ -12,16 +12,17 @@ import { freshExisting, freshState, toggleElement } from "./importState.js";
 import { onChecklistChange, onModeChange, onSelectAll, render, renderExisting, updateModeUI } from "./importView.js";
 import { analyze, apply, clearAll, clearResults } from "./importFlow.js";
 
-export function initImportTab(grist) {
+/** `onDocumentChange` is called once the document has been written to: what other parts of the widget know of it is out of date. */
+export function initImportTab(grist, { onDocumentChange = () => {} } = {}) {
   const ui = importUi();
   const setStatus = statusWriter(ui.statusRegion);
   if (!grist) {
     ui.analyzeBtn.disabled = true;
-    setStatus(translate("error.noGristApi"), "error");
+    setStatus(() => translate("error.noGristApi"), "error");
     return;
   }
 
-  const ctx = { grist, ui, setStatus, state: freshState(), confirm: createConfirmation() };
+  const ctx = { grist, ui, setStatus, state: freshState(), confirm: createConfirmation(), onDocumentChange };
   ctx.render = () => render(ctx);
   ctx.showElements = elementsPicker(
     ui.elementsList,

@@ -87,3 +87,9 @@ test("selectOptions keeps the kinds asked, and nothing when none is left", () =>
   assert.equal(selectOptions({ alignment: "center" }, { choices: true, display: false }), null);
   for (const empty of [null, undefined, {}, []]) assert.equal(selectOptions(empty, { choices: true, display: true }), null, String(empty));
 });
+
+test("a color is exactly six hexadecimal digits after a #: shorter, longer, other characters and non-strings are dropped", () => {
+  const kept = (color) => sanitizeWidgetOptions({ textColor: color })?.textColor;
+  for (const color of ["#A1b2C3", "#000000", "#ffffff"]) assert.equal(kept(color), color, color);
+  for (const color of ["#fff", "#12345", "#1234567", "#12345678", "#12345G", "123456", " #123456", "#123456 ", "red", "", null, 1]) assert.equal(kept(color), undefined, String(color));
+});

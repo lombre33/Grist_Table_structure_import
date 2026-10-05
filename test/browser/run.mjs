@@ -199,7 +199,7 @@ const TESTS = [
     assert.equal(await textOf(page, "#confirm-intro"), "Sera ajouté à ce document :");
     assert.deepEqual((await page.$$eval("#confirm-list li", (items) => items.map((item) => item.textContent))).map(plain), ["X — 2 colonnes"]);
     assert.equal(await count(page, "#confirm-notes p"), 0, "no formula, no warning");
-    assert.match(await textOf(page, "#confirm-dialog .hint"), /^Rien n’est supprimé ni modifié dans ce qui existe déjà ; Ctrl\+Z annule l’action\.$/);
+    assert.match(await textOf(page, "#confirm-dialog .hint"), /^Rien n’est supprimé ni modifié dans ce qui existe déjà ; le bouton Annuler de Grist défait l’action\.$/);
     assert.equal(await textOf(page, "#confirm-ok-btn"), "Créer la table dans ce document", "the button says what the one that opened the dialog said");
     assert.equal(await textOf(page, "#confirm-cancel-btn"), "Annuler");
     assert.equal(await page.evaluate(() => document.activeElement.id), "confirm-ok-btn", "Enter confirms");
@@ -238,6 +238,42 @@ const TESTS = [
     await page.keyboard.press("Escape");
     await page.waitForFunction(() => window.answers.length === 1);
     assert.deepEqual(await page.evaluate(() => window.answers), [false]);
+  }],
+
+  ["Import: a confirmation taller than a short pane scrolls its content, and keeps its title and its two buttons in view", async (page) => {
+    await page.setViewportSize({ width: 320, height: 300 });
+    await analyse(page, `${WITH_REQUEST}${Array.from({ length: 8 }, (_, i) => `\n@grist.UserTable\nclass Other${i}:\n  A = grist.Text()\n`).join("")}`);
+    await keepElement(page, "import", "Formules");
+    await page.click("#action-btn");
+    const boxes = await page.evaluate(() => ["confirm-title", "confirm-cancel-btn", "confirm-ok-btn"].map((id) => [id, Math.round(document.getElementById(id).getBoundingClientRect().top), Math.round(document.getElementById(id).getBoundingClientRect().bottom)]));
+    for (const [id, top, bottom] of boxes) assert.ok(top >= 0 && bottom <= 300, `${id} is from ${top} to ${bottom} px in a pane of 300 px`);
+    assert.equal(await page.$eval("#confirm-dialog .dialog-body", (body) => body.scrollHeight > body.clientHeight), true, "what does not fit scrolls");
+  }],
+
+  ["Import: a double click on the action button does not confirm the dialog it opens, even where the button of the dialog ends up under the cursor", async (page, grist) => {
+    await page.setViewportSize({ width: 320, height: 480 }); // a pane of this size puts the confirming button where the action button was
+    await analyse(page, "@grist.UserTable\nclass Fresh:\n  Name = grist.Text()\n  Age = grist.Int()\n");
+    await page.evaluate(() => document.getElementById("create-actions").scrollIntoView({ block: "end" }));
+    const box = await page.locator("#action-btn").boundingBox();
+    await page.mouse.dblclick(box.x + box.width / 2, box.y + box.height / 2);
+    await page.waitForTimeout(200);
+    assert.equal(grist.calls.length, 0, "nothing was written by a double click");
+    assert.equal(await page.evaluate(() => document.getElementById("confirm-dialog").open), true, "the dialog waits for a decision");
+    await page.click("#confirm-ok-btn");
+    await page.waitForSelector("#import-status-region .status-success");
+    assert.equal(grist.calls.length, 1, "a single click on it confirms");
+  }],
+
+  ["Import: the second click of a double click, which reaches the button of the dialog whatever the layout, is not a decision", async (page, grist) => {
+    await analyse(page, TYPES);
+    await page.click("#action-btn");
+    await page.evaluate(() => document.getElementById("confirm-ok-btn").dispatchEvent(new MouseEvent("click", { detail: 2, bubbles: true })));
+    await page.waitForTimeout(200);
+    assert.equal(grist.calls.length, 0);
+    assert.equal(await page.evaluate(() => document.getElementById("confirm-dialog").open), true);
+    await page.evaluate(() => document.getElementById("confirm-ok-btn").dispatchEvent(new MouseEvent("click", { detail: 1, bubbles: true })));
+    await page.waitForSelector("#import-status-region .status-success");
+    assert.equal(grist.calls.length, 1);
   }],
 
   ["Import: several tables are listed with the ids typed and the columns still ticked, and Enter confirms", async (page, grist) => {
@@ -283,6 +319,8 @@ const TESTS = [
     await page.click("#action-btn");
     assert.deepEqual((await notes()).map(plain), ["Les formules s’exécuteront dans ce document dès leur création : ne confirmez que pour du code de confiance."]);
     assert.equal(await page.$eval("#confirm-notes p", (note) => note.className), "status status-warning", "a caution, not an information");
+    assert.equal(await page.evaluate(() => document.activeElement.id), "confirm-cancel-btn", "with a caution to read, Enter cancels: confirming takes a click");
+    assert.equal(await page.$eval("#confirm-dialog", (dialog) => dialog.getAttribute("aria-describedby").split(" ").map((id) => document.getElementById(id).textContent).join(" ")).then(plain), "Sera ajouté à ce document : Les formules s’exécuteront dans ce document dès leur création : ne confirmez que pour du code de confiance.", "what the dialog says of itself includes its caution");
     await page.click("#confirm-cancel-btn");
     await analyse(page, TYPES);
     await page.click("#action-btn");
@@ -316,7 +354,7 @@ const TESTS = [
     assert.equal(await page.getByRole("dialog", { name: "Create this table?" }).count(), 1);
     assert.equal(await textOf(page, "#confirm-intro"), "Will be added to this document:");
     assert.deepEqual(await page.$$eval("#confirm-list li", (items) => items.map((item) => item.textContent)), ["X — 2 columns"]);
-    assert.equal(await textOf(page, "#confirm-dialog .hint"), "Nothing that already exists is removed or changed; Ctrl+Z undoes the action.");
+    assert.equal(await textOf(page, "#confirm-dialog .hint"), "Nothing that already exists is removed or changed; Grist’s Undo button reverts the action.");
     assert.equal(await textOf(page, "#confirm-cancel-btn"), "Cancel");
     assert.equal(await textOf(page, "#confirm-ok-btn"), "Create the table in this document");
   }, { locale: "en" }],
@@ -351,6 +389,101 @@ const TESTS = [
     await page.waitForSelector("#import-status-region .status-success");
     assert.equal(grist.calls.length, 1);
   }, { delay: 300 }],
+
+  ["Import: a Grist that never answers the write is given up on after two minutes, and the page can be used again", async (page, grist) => {
+    let asked = false;
+    grist.docApi.applyUserActions = () => {
+      asked = true;
+      return new Promise(() => {});
+    };
+    await page.clock.install();
+    await analyse(page, MULTI);
+    const outcome = apply(page);
+    await page.waitForFunction(() => document.getElementById("import-status-region").textContent.trim() !== "");
+    while (!asked) await page.waitForTimeout(20);
+    assert.equal(await page.isDisabled("#action-btn"), true, "while the write is waited for");
+    await page.clock.fastForward(120000);
+    assert.match(await outcome, /Échec de la création : Grist n’a pas répondu.*vérifiez le document avant de recommencer/);
+    assert.equal(await page.isDisabled("#analyze-btn"), false);
+    assert.equal(await page.isDisabled("#action-btn"), false, "the preview is still there to be applied again");
+    assert.equal(page.problems.length, 1, "the failure is logged, as it is meant to be");
+    page.problems.length = 0;
+  }],
+
+  ["Import: a text that gives hundreds of notes shows the first ones and says how many are left", async (page) => {
+    await analyse(page, `@grist.UserTable\nclass T:\n  A = grist.Text()\n${"  not a column\n".repeat(300)}`);
+    assert.equal(await count(page, "#warnings-list li"), 101);
+    assert.equal(plain(await page.locator("#warnings-list li").last().textContent()), "… et 200 autres remarques non affichées.");
+    await analyse(page, `@grist.UserTable\nclass T:\n  A = grist.Text()\n${"  not a column\n".repeat(101)}`);
+    assert.equal(plain(await page.locator("#warnings-list li").last().textContent()), "… et 1 autre remarque non affichée.");
+    assert.equal(await count(page, "#warnings-list li"), 101);
+    await analyse(page, `@grist.UserTable\nclass T:\n  A = grist.Text()\n${"  not a column\n".repeat(100)}`);
+    assert.equal(await count(page, "#warnings-list li"), 100, "a hundred are all shown");
+  }],
+
+  ["the status messages of both tabs follow a change of language, the one that says a table was created and the one that says the code was generated", async (page) => {
+    const english = async () => {
+      await page.click("#settings-btn");
+      await page.click('label.segmented-option:has(input[value="en"])');
+      await page.click("#settings-close-btn");
+    };
+    await analyse(page, TYPES);
+    assert.equal(await apply(page), "Table « X » créée avec 2 colonnes.");
+    await page.click("#tab-export");
+    await tick(page, "Standalone_Table");
+    await generate(page);
+    assert.equal(await textOf(page, "#export-status-region"), "Code généré pour 1 table, 1 colonne au total.");
+    await english();
+    assert.equal(await textOf(page, "#export-status-region"), "Code generated for 1 table, 1 column in total.");
+    await page.click("#tab-import");
+    assert.equal(await textOf(page, "#import-status-region"), "Table “X” created with 2 columns.");
+  }],
+
+  ["Export: what an Import has just created is in the list when the tab is opened again, without refreshing it", async (page) => {
+    await page.click("#tab-export");
+    await page.waitForSelector("#export-table-list input");
+    assert.deepEqual((await shownTables(page)).map((text) => text.replace(/\s.*/, "")), ALL_TABLES);
+    await page.click("#tab-import");
+    await analyse(page, "@grist.UserTable\nclass Fresh_Table:\n  A = grist.Text()\n");
+    await apply(page);
+    await page.click("#tab-export");
+    await page.waitForFunction(() => [...document.querySelectorAll("#export-table-list li")].some((item) => item.textContent.includes("Fresh_Table")));
+    await page.click("#tab-import");
+    await page.click("#tab-export");
+    assert.equal(await count(page, "#export-status-region p"), 0, "back from a tab without a write, the list is not read again");
+  }],
+
+  ["Export: a table that was ticked and is gone when the code is generated is said to be missing from it", async (page, grist) => {
+    await page.click("#tab-export");
+    await tick(page, "Standalone_Table");
+    await tick(page, "Other_Table");
+    const fetchTable = grist.docApi.fetchTable;
+    grist.docApi.fetchTable = async (name) => {
+      const table = await fetchTable(name);
+      if (name !== "_grist_Tables") return table;
+      const kept = table.tableId.map((tableId) => tableId !== "Other_Table");
+      return Object.fromEntries(Object.entries(table).map(([key, values]) => [key, values.filter((_, i) => kept[i])]));
+    };
+    await generate(page);
+    assert.equal(await textOf(page, "#export-status-region"), "Code généré pour 1 table, 1 colonne au total. 1 table cochée n’existe plus dans ce document : actualisez la liste.");
+  }],
+
+  ["Import: a button that cannot be used says why: the identifier of a table to correct", async (page) => {
+    await analyse(page, "@grist.UserTable\nclass Existing_Table:\n  A = grist.Text()\n");
+    assert.equal(await page.isDisabled("#action-btn"), true);
+    assert.equal(await textOf(page, "#action-btn"), "Corrigez l’identifiant de la table");
+    await page.fill("#table-id-0", "Fresh_Table");
+    assert.equal(await textOf(page, "#action-btn"), "Créer la table dans ce document");
+    await analyse(page, MULTI);
+    await page.fill("#table-id-1", "9bad");
+    assert.equal(await textOf(page, "#action-btn"), "Corrigez les identifiants des tables");
+  }],
+
+  ["Import: the message that says which tables were created names ten of them, however many there are", async (page) => {
+    const many = Array.from({ length: 12 }, (_, i) => `@grist.UserTable\nclass Made_${String(i + 1).padStart(2, "0")}:\n  A = grist.Text()\n`).join("\n");
+    await analyse(page, many);
+    assert.equal(await apply(page), "12 tables créées (Made_01, Made_02, Made_03, Made_04, Made_05, Made_06, Made_07, Made_08, Made_09, Made_10…), 12 colonnes au total.");
+  }],
 
   ["Import: switching language rebuilds the preview, the notes and the button", async (page) => {
     await analyse(page, "@grist.UserTable\nclass X:\n  A = grist.Reference('Ghost')\n");
@@ -701,6 +834,55 @@ const TESTS = [
     assert.equal(boxes.length, 7);
     for (const [width, height] of boxes) assert.ok(width >= 24 && height >= 24, `${width} x ${height}`);
   }],
+
+  ["Accessibility: whatever can be clicked or ticked is a target of at least 24 px, on every screen of both tabs and in the dialog", async (page) => {
+    const small = () =>
+      page.evaluate(() => {
+        const controls = document.querySelectorAll("button, select, summary, input[type=checkbox], input[type=radio], input[type=text], input[type=search], textarea, a[href]");
+        return [...controls]
+          .filter((control) => control.getClientRects().length > 0)
+          .map((control) => [control, control.matches("input[type=checkbox], input[type=radio]") ? control.closest("label") ?? control : control])
+          .map(([control, target]) => [control.id || control.className || control.tagName, target.getBoundingClientRect()])
+          .filter(([, box]) => box.width < 24 || box.height < 24)
+          .map(([name, box]) => `${name}: ${Math.round(box.width)} x ${Math.round(box.height)}`);
+      });
+    assert.deepEqual(await small(), [], "start");
+    await analyse(page, ALL_ELEMENTS);
+    await unfold(page, "import");
+    assert.deepEqual(await small(), [], "import preview");
+    await page.click("#tab-export");
+    await tick(page, "Existing_Table");
+    assert.deepEqual(await small(), [], "export list");
+    await page.locator("#export-table-list li", { hasText: "Existing_Table" }).locator(".columns-toggle").click();
+    await unfold(page, "export");
+    await generate(page);
+    assert.deepEqual(await small(), [], "export unfolded, with its code");
+    await page.click("#settings-btn");
+    assert.deepEqual(await small(), [], "settings");
+  }],
+
+  ["Accessibility: Tab and Shift+Tab stay inside a dialog, even in a frame whose page has fields after it, as in Grist", async (page) => {
+    const frame = page.widgetFrame;
+    const focused = () => frame.evaluate(() => document.activeElement.id);
+    const dialogOfFocus = () => frame.evaluate(() => document.activeElement.closest("dialog")?.id);
+    await analyse(frame, TYPES);
+    await frame.click("#action-btn");
+    assert.equal(await focused(), "confirm-ok-btn");
+    await page.keyboard.press("Tab");
+    assert.equal(await focused(), "confirm-cancel-btn", "from the last button to the first");
+    await page.keyboard.press("Shift+Tab");
+    assert.equal(await focused(), "confirm-ok-btn", "from the first to the last");
+    await page.keyboard.press("Escape");
+
+    await frame.click("#settings-btn");
+    for (const key of ["Tab", "Shift+Tab"]) {
+      for (let times = 1; times <= 14; times++) {
+        await page.keyboard.press(key);
+        assert.equal(await dialogOfFocus(), "settings-dialog", `${key}, ${times} times`);
+      }
+    }
+    assert.equal(await page.evaluate(() => document.activeElement.id), "", "the field of the page around was never reached");
+  }, { framed: true }],
 
   ["Accessibility: in forced colours the selected tab and the cards that background alone marked keep an outline", async (page) => {
     await page.emulateMedia({ forcedColors: "active" });

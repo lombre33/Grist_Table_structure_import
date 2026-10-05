@@ -17,7 +17,7 @@ const grist = window.grist;
 grist?.ready({ requiredAccess: "full" });
 
 const exportTab = initExportTab(grist);
-initImportTab(grist);
+initImportTab(grist, { onDocumentChange: () => exportTab.markStale() });
 
 /** The tabs, in the order of the tablist: each has a button `tab-<name>` and a panel `panel-<name>`. */
 const TABS = ["import", "export"];

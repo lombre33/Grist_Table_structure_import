@@ -364,3 +364,74 @@ test("the columns added to a table that exists leave its description alone", asy
   assert.equal((await addColumns(grist, { tableId: "Contacts", tableRef: 1 }, fresh)).added, 1);
   assert.deepEqual(grist.calls.flat().map(([name]) => name), ["AddVisibleColumn", "ModifyColumn"], "the description of the column, not of the table");
 });
+
+test("formulas reach the document only when they are asked for: otherwise a formula column and a column with a trigger formula are created empty", async () => {
+  const source = table(["Total", "Numeric", "", "formula", "return $A * 2"], ["Stamp", "Text", "", "trigger", "return 'x'"], ["Plain", "Text"]);
+  const { columns } = resolveColumns(source, ids(), [], { withFormulas: true });
+  const summary = (payload) => payload.map(({ id, isFormula, formula }) => [id, isFormula, formula]);
+
+  for (const [withFormulas, expected] of [
+    [false, [["Total", false, ""], ["Stamp", false, ""], ["Plain", false, ""]]],
+    [true, [["Total", true, "$A * 2"], ["Stamp", false, "'x'"], ["Plain", false, ""]]],
+  ]) {
+    const created = recordingGrist({ after: { T: ["Total", "Stamp", "Plain"] } });
+    await createTables(created, [{ id: "T", columns }], { withFormulas });
+    assert.deepEqual(summary(created.calls[0][0][2]), expected, `createTables, withFormulas: ${withFormulas}`);
+
+    const added = recordingGrist({ after: { Contacts: ["Name"] } });
+    await addColumns(added, { tableId: "Contacts", tableRef: 1 }, columns, { withFormulas });
+    assert.deepEqual(summary(added.calls[0].map(([, , , payload]) => ({ ...payload }))), expected, `addColumns, withFormulas: ${withFormulas}`);
+  }
+});
+
+test("a table whose id is taken, whatever the case, stops the creation before anything is written: the others are not created either", async () => {
+  const grist = recordingGrist({ before: ["people", "ORDERS", "Other"], after: { People: ["A"], Orders: ["A"], Fresh: ["A"] } });
+  await assert.rejects(createTables(grist, [made("Fresh", ["A", "Text", ""]), made("People", ["A", "Text", ""]), made("Orders", ["A", "Text", ""])]), /People, Orders/);
+  assert.deepEqual(grist.calls, []);
+});
+
+test("the columns that a table already has, whatever the case, are not added again, and nothing is written when none is missing", async () => {
+  const wanted = made("X", ["name", "Text", ""], ["EMAIL", "Text", ""], ["Phone", "Text", ""]).columns;
+  const grist = recordingGrist({ after: { Contacts: ["Name", "Email"] } });
+  assert.equal((await addColumns(grist, { tableId: "Contacts", tableRef: 1 }, wanted)).added, 1);
+  assert.deepEqual(grist.calls[0].map(([name, tableId, colId]) => [name, tableId, colId]), [["AddVisibleColumn", "Contacts", "Phone"]]);
+
+  const complete = recordingGrist({ after: { Contacts: ["Name", "Email"] } });
+  assert.deepEqual(await addColumns(complete, { tableId: "Contacts", tableRef: 1 }, wanted.slice(0, 2)), { added: 0, note: "" });
+  assert.deepEqual(complete.calls, []);
+});
+
+test("a creation that Grist refuses is an error, and nothing follows it: no detail, no link", async () => {
+  const grist = recordingGrist({ after: { T: ["A"] } });
+  const refusing = { docApi: { ...grist.docApi, applyUserActions: async (actions) => { grist.calls.push(actions); throw new Error("refused by Grist"); } } };
+  await assert.rejects(createTables(refusing, [{ ...made("T", ["A", "Text", "description='Une colonne'"]), description: "Une table" }]), /refused by Grist/);
+  assert.equal(grist.calls.length, 1);
+});
+
+test("a Grist that stays silent is given up on: eight seconds for a read, two minutes for a write, and what was created before stays reported", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const flush = () => new Promise((resolve) => setImmediate(resolve)); // lets the importer reach its next call to Grist
+  const never = () => new Promise(() => {});
+
+  const silentRead = createTables({ docApi: { listTables: never } }, [made("T", ["A", "Text", ""])]);
+  t.mock.timers.tick(8000);
+  await assert.rejects(silentRead, /Délai dépassé/);
+
+  const grist = recordingGrist({ after: { T: ["A"] } });
+  let outcome = "pending";
+  const silentCreation = createTables({ docApi: { ...grist.docApi, applyUserActions: never } }, [made("T", ["A", "Text", ""])]).catch((err) => (outcome = err.message));
+  await flush();
+  t.mock.timers.tick(8000); // the deadline of a read is not the one of a write
+  await flush();
+  assert.equal(outcome, "pending");
+  t.mock.timers.tick(112000);
+  await silentCreation;
+  assert.match(outcome, /vérifiez le document avant de recommencer/);
+
+  const silentDetails = createTables({ docApi: { ...grist.docApi, applyUserActions: (actions) => (actions[0][0] === "AddTable" ? grist.docApi.applyUserActions(actions) : never()) } }, [{ ...made("T", ["A", "Text", ""]), description: "Une table" }]);
+  await flush();
+  t.mock.timers.tick(120000);
+  const { tables, note } = await silentDetails;
+  assert.equal(tables[0].id, "T", "the table is there");
+  assert.match(note, /vérifiez le document avant de recommencer/);
+});

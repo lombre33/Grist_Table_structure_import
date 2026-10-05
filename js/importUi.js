@@ -38,7 +38,7 @@ export const importUi = () => ({
   modeRadios: Array.from(document.querySelectorAll('input[name="import-mode"]')),
 });
 
-/** Marks the option of the mode that is chosen: the styles do not rely on :has(). */
+/** Marks the option of the mode that is chosen: how it looks once chosen does not rely on :has(). */
 export const markChosenMode = (ui) => syncCheckedClass(ui.modeRadios, "is-checked", ".segmented-option");
 
 /** What the user chose to do with the code: "create" (a new table) or "existing" (columns added to a table of the document). */

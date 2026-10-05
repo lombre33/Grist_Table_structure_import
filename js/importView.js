@@ -12,6 +12,7 @@ import { markChosenMode, modeOf } from "./importUi.js";
 import { batchOf, documentTableIds, newEntry, tickableColumns, withFormulas } from "./importState.js";
 
 const COMPUTED_TAGS = { formula: "import.preview.formula", trigger: "import.preview.trigger" };
+const MAX_NOTES_SHOWN = 100; // a text pasted from anywhere can give one note per line
 
 /** Writes the preview again, for the mode that is chosen. */
 export function render(ctx) {
@@ -116,7 +117,7 @@ function columnRow(ctx, col, { excluded, rerender, status = null, locked = false
 }
 
 /** Resolves and checks every ticked table again: called after each change the user makes. */
-export function renderCreate(ctx) {
+function renderCreate(ctx) {
   const { ui, state } = ctx;
   const destination = new Map(state.entries.map((entry) => [entry.table.tableId, entry.id.trim()]));
   const resolved = state.entries.map((entry) =>
@@ -136,7 +137,7 @@ export function renderCreate(ctx) {
   renderWarnings(ctx, notes);
   const anyColumn = batch.some((table) => table.columns.length > 0);
   ui.actionBtn.disabled = state.busy || !valid || !anyColumn;
-  ui.actionBtn.textContent = createLabel(state.entries.length, anyColumn);
+  ui.actionBtn.textContent = createLabel(state.entries.length, { valid, anyColumn });
 }
 
 /** Says, under each field, the description the table will have: the one its code gives it, as long as that element is kept. */
@@ -173,8 +174,9 @@ function createRows(ctx, batch, linked) {
 }
 
 /** What the button says: what it creates, or what is missing for it to. */
-function createLabel(tableCount, anyColumn) {
+function createLabel(tableCount, { valid, anyColumn }) {
   if (tableCount === 0) return translate("import.action.chooseTables");
+  if (!valid) return translatePlural("import.action.fixIds", tableCount);
   if (!anyColumn) return translate("import.action.noColumns");
   return tableCount > 1 ? translatePlural("import.action.createTables", tableCount) : translate("import.action.create");
 }
@@ -237,12 +239,14 @@ export function renderElements({ ui, state, showElements }, counts) {
   ui.formulasHint.hidden = counts.formulas === 0;
 }
 
-/** The notes about the text and about what would be applied, each naming its table when there are several. */
+/** The notes about the text and about what would be applied, each naming its table when there are several; the first ones, when a text gives a great many. */
 export function renderWarnings({ ui, state }, more = []) {
-  const texts = [...state.warnings, ...more].map(({ key, params, table }) => {
+  const notes = [...state.warnings, ...more];
+  const texts = notes.slice(0, MAX_NOTES_SHOWN).map(({ key, params, table }) => {
     const message = translate(key, params);
     return table && state.parsed.length > 1 ? translate("warn.tablePrefix", { tableId: table, message }) : message;
   });
+  if (notes.length > MAX_NOTES_SHOWN) texts.push(translatePlural("warn.more", notes.length - MAX_NOTES_SHOWN));
   ui.warningsBlock.hidden = texts.length === 0;
   ui.warningsList.replaceChildren(...texts.map((text) => buildElement("li", { text })));
 }

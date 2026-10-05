@@ -6,7 +6,7 @@
 import { elementCounts, omitElements } from "./elements.js";
 import { defaultLiteralForType, resolveColumnType, splitType } from "./gristTypes.js";
 import { fetchDocSchema, existingColumnIds } from "./schema.js";
-import { reportError } from "./util.js";
+import { callGrist, reportError, writeGrist } from "./util.js";
 import { translate, translatePlural } from "./i18n.js";
 
 // Table ids Grist creates as they are. It rewrites anything else (capital first
@@ -157,12 +157,12 @@ const columnPayload = (col, withFormulas) => ({
  *   as Grist named them, and what could not be applied afterwards, if anything.
  */
 export async function createTables(grist, tables, { withFormulas = false } = {}) {
-  const taken = new Set((await grist.docApi.listTables()).map((id) => id.toLowerCase()));
+  const taken = new Set((await callGrist(grist.docApi.listTables())).map((id) => id.toLowerCase()));
   const clashes = tables.filter(({ id }) => taken.has(id.toLowerCase())).map(({ id }) => id);
   if (clashes.length > 0) throw new Error(translatePlural("import.error.tableCollision", clashes.length, { ids: clashes.join(", ") }));
 
   const actions = tables.map(({ id, columns }) => ["AddTable", id, columns.map((col) => columnPayload(col, withFormulas))]);
-  const { retValues } = await grist.docApi.applyUserActions(actions);
+  const { retValues } = await writeGrist(grist.docApi.applyUserActions(actions));
   const created = tables.map(({ columns, description }, i) => ({
     id: retValues[i].table_id,
     description,
@@ -177,14 +177,12 @@ export async function createTables(grist, tables, { withFormulas = false } = {})
  * @returns {{added: number, note: string}}
  */
 export async function addColumns(grist, table, columns, { withFormulas = false } = {}) {
-  const { allColumns } = await fetchDocSchema(grist);
+  const { allColumns } = await callGrist(fetchDocSchema(grist));
   const existingIds = existingColumnIds(allColumns, table.tableRef);
   const missing = columns.filter((col) => !existingIds.has(col.id.toLowerCase()));
   if (missing.length === 0) return { added: 0, note: "" };
 
-  const { retValues } = await grist.docApi.applyUserActions(
-    missing.map((col) => ["AddVisibleColumn", table.tableId, col.id, columnPayload(col, withFormulas)])
-  );
+  const { retValues } = await writeGrist(grist.docApi.applyUserActions(missing.map((col) => ["AddVisibleColumn", table.tableId, col.id, columnPayload(col, withFormulas)])));
   const added = missing.map((col, i) => ({ ...col, id: retValues[i].colId }));
   const note = await afterCreation(grist, [{ id: table.tableId, columns: missing }], [{ id: table.tableId, columns: added }]);
   return { added: added.length, note };
@@ -212,9 +210,9 @@ async function applyDetails(grist, tables) {
   if (columns.length === 0 && described.length === 0) return "";
 
   try {
-    const schema = described.length > 0 || columns.some((col) => col.visibleColId) ? await fetchDocSchema(grist) : null;
+    const schema = described.length > 0 || columns.some((col) => col.visibleColId) ? await callGrist(fetchDocSchema(grist)) : null;
     const actions = [...descriptionActions(schema, described), ...columns.flatMap((col) => columnActions(schema, col))];
-    if (actions.length > 0) await grist.docApi.applyUserActions(actions);
+    if (actions.length > 0) await writeGrist(grist.docApi.applyUserActions(actions));
     return columns.filter((col) => col.visibleColId && !displayColumnRef(schema, col)).map(visibleColMissing).join("");
   } catch (err) {
     return translate("import.note.refineFailed", { error: reportError(err) });
@@ -260,8 +258,9 @@ const visibleColMissing = (col) => ` ${translate("warn.visibleColMissing", { col
 async function linkTwoWay(grist, pairs) {
   if (pairs.length === 0) return "";
   try {
-    const schema = await fetchDocSchema(grist);
-    await grist.docApi.applyUserActions(pairs.map(([column, counterpart]) => ["ModifyColumn", column.tableId, column.id, { reverseCol: columnRef(schema, counterpart.tableId, counterpart.id) }]));
+    const schema = await callGrist(fetchDocSchema(grist));
+    const links = pairs.map(([column, counterpart]) => ["ModifyColumn", column.tableId, column.id, { reverseCol: columnRef(schema, counterpart.tableId, counterpart.id) }]);
+    await writeGrist(grist.docApi.applyUserActions(links));
     return "";
   } catch (err) {
     return translate("import.note.linkFailed", { error: reportError(err) });

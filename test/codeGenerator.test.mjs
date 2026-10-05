@@ -5,6 +5,7 @@ import { parseGristSchema } from "../js/parser.js";
 import { resolveColumnType } from "../js/gristTypes.js";
 import { quotePython } from "../js/pyText.js";
 import { omitFromExport } from "../js/schema.js";
+import { seeded } from "./random.mjs";
 
 const HEADER = "import grist\nfrom functions import *       # global uppercase functions\nimport datetime, math, re     # modules commonly needed in formulas\n";
 const data = (colId, type, extra = {}) => ({ colId, type, isFormula: false, ...extra });
@@ -161,6 +162,16 @@ const MULTI_LINE_STRINGS = [
     'x = """a\n      deep\n    four"""\nreturn x',
     /def F\(rec, table\):\n {4}x = """a\n {10}deep\n {8}four"""\n {4}return x\n/,
   ],
+  [
+    "spaces alone on a line of a multi-line string are part of the string, whatever the layout",
+    's = """first\n        a\n    \n        b"""\nreturn s',
+    /def F\(rec, table\):\n {4}s = """first\n {12}a\n {8}\n {12}b"""\n {4}return s\n/,
+  ],
+  [
+    "spaces alone on a line of a multi-line string that Grist leaves unindented are kept",
+    's = """first\n  a\n  \n  b"""\nreturn s',
+    /def F\(rec, table\):\n {4}s = """first\n {2}a\n {2}\n {2}b"""\n {4}return s\n/,
+  ],
 ];
 
 for (const [name, code, written] of MULTI_LINE_STRINGS) {
@@ -172,6 +183,23 @@ for (const [name, code, written] of MULTI_LINE_STRINGS) {
     assert.deepEqual(tables[0].columns.map((col) => [col.id, col.code]), [["F", code], ["G", "return 1"]]);
   });
 }
+
+test("formulas of random layouts, with strings of lines indented any way and lines of spaces alone, are read back as they were written", () => {
+  const random = seeded(2026);
+  const pick = (items) => items[Math.floor(random() * items.length)];
+  const spaces = (max) => " ".repeat(Math.floor(random() * (max + 1)));
+  const stringBlock = (margin) => {
+    const inside = Array.from({ length: Math.floor(random() * 5) }, () => pick([() => "", () => spaces(9), () => `${spaces(9)}text # not a comment`, () => `${spaces(9)}"quoted" 'too'`])());
+    return [`${margin}s = """first`, ...inside, `${spaces(6)}last"""`];
+  };
+  const statement = () => pick([() => ["a = 1"], () => ["# a comment"], () => [""], () => stringBlock(""), () => ["if a:", "    b = 2"], () => ["if a:", ...stringBlock("    ")], () => ["x = (1,", "     2)"]])();
+  for (let i = 0; i < 3000; i++) {
+    const code = [...Array.from({ length: 1 + Math.floor(random() * 4) }, statement).flat(), "return a"].join("\n").trim();
+    const { tables, warnings } = parseGristSchema(gen(formula("F", "Text", code)));
+    assert.deepEqual(warnings, [], JSON.stringify(code));
+    assert.equal(tables[0].columns[0].code, code, JSON.stringify(code));
+  }
+});
 
 test("the code of a formula is indented from its own margin, whatever a line of a string leaves", () => {
   const text = gen(formula("F", "Text", '  note = """first\nsecond"""\n  return note'));

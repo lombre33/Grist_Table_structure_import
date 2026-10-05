@@ -104,6 +104,18 @@ class T:
   assert.deepEqual(warnings.map((w) => w.key), ["warn.reservedColumnId", "warn.duplicateColumnId"]);
 });
 
+test("a duplicate is the later one, whichever case each is written in: the first of the two is kept", () => {
+  const { tables, warnings } = parseGristSchema("@grist.UserTable\nclass T:\n  a = grist.Int()\n  A = grist.Text()\n  b = grist.Int()\n  B = grist.Int()\n");
+  assert.deepEqual(tables[0].columns.map((col) => col.id), ["a", "b"]);
+  assert.deepEqual(warnings.map((warning) => [warning.key, warning.params.colId]), [["warn.duplicateColumnId", "A"], ["warn.duplicateColumnId", "B"]]);
+});
+
+test("the helper columns Grist hides are not imported, like its own id and manualSort: each is said to be ignored", () => {
+  const { tables, warnings } = parseGristSchema("@grist.UserTable\nclass T:\n  A = grist.Text()\n  gristHelper_Display = grist.Any()\n  gristHelper_Other = grist.Int()\n  B = grist.Int()\n");
+  assert.deepEqual(tables[0].columns.map((col) => col.id), ["A", "B"]);
+  assert.deepEqual(warnings.map((warning) => [warning.key, warning.params.colId]), [["warn.reservedColumnId", "gristHelper_Display"], ["warn.reservedColumnId", "gristHelper_Other"]]);
+});
+
 test("ignores comments and unrecognized decorators without crashing", () => {
   const source = `
 @grist.UserTable
@@ -118,6 +130,39 @@ class T:
     ["A"]
   );
   assert.deepEqual(warnings.map((w) => w.key), ["warn.unknownDecorator"]);
+});
+
+test("a comment before the first statement of a class does not hide its body, whatever the indentation of the comment", () => {
+  for (const text of [
+    "@grist.UserTable\nclass T:\n# a note at the margin\n  A = grist.Text()\n",
+    "@grist.UserTable\nclass T:\n      # a note indented deeper than the code\n  A = grist.Text()\n",
+    "@grist.UserTable\nclass T:\n\n  # a note\n\n  A = grist.Text()\n",
+    "@grist.UserTable\n# between the decorator and the class\nclass T:\n  A = grist.Text()\n",
+  ]) {
+    const { tables, warnings } = parseGristSchema(text);
+    assert.deepEqual([tables.map((table) => table.columns.map((col) => col.id)), warnings], [[["A"]], []], JSON.stringify(text));
+  }
+});
+
+test("no-break spaces, which a text copied from a web page has for its indentation, indent like spaces", () => {
+  const nb = "\u00a0";
+  const body = `${nb}${nb}A = grist.Text()\n${nb}${nb}@grist.formulaType(grist.Int())\n${nb}${nb}def F(rec, table):\n${nb}${nb}${nb}${nb}return 1\n`;
+  for (const text of [`@grist.UserTable\nclass T:\n${body}`, `${nb}${nb}@grist.UserTable\n${nb}${nb}class T:\n${body.replace(/^/gm, `${nb}${nb}`)}`]) {
+    const { tables, warnings } = parseGristSchema(text);
+    assert.deepEqual(tables[0].columns.map((col) => [col.id, col.code]), [["A", ""], ["F", "return 1"]]);
+    assert.deepEqual(warnings, []);
+  }
+});
+
+test("a comment that ends a statement is no part of it: the decorator, the class, a column, a formula and a docstring are read all the same", () => {
+  const { tables, warnings } = parseGristSchema(
+    "@grist.UserTable  # la table\nclass T:  # ses colonnes\n  'La table'  # sa description\n  A = grist.Text()  # texte\n  B = grist.Text(description='un # dans la chaîne')  # note\n" +
+      "  @grist.formulaType(grist.Int())  # typé\n  def F(rec, table):  # calculée\n    return 1  # un\n  pass  # fin\n"
+  );
+  assert.deepEqual(warnings, []);
+  assert.equal(tables[0].description, "La table");
+  assert.deepEqual(tables[0].columns.map((col) => [col.id, col.kind, col.code]), [["A", "data", ""], ["B", "data", ""], ["F", "formula", "return 1  # un"]]);
+  assert.equal(resolveColumnType("Text", tables[0].columns[1].argsRaw, "B", []).description, "un # dans la chaîne");
 });
 
 test("a column value containing a literal parenthesis no longer breaks parsing", () => {

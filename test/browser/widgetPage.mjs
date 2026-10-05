@@ -46,8 +46,11 @@ export async function launchWidget() {
   const url = `http://127.0.0.1:${server.address().port}/index.html`;
   const pages = [];
 
-  /** `bypassCSP` is for tests that inject a script of their own (axe-core): the CSP is checked by the others. */
-  async function open(grist, { locale, bypassCSP } = {}) {
+  /**
+   * `bypassCSP` is for tests that inject a script of their own (axe-core): the CSP is checked by the others.
+   * `framed` puts the widget in a frame of a page that has a field after it, as Grist does: `page.widgetFrame` is the widget.
+   */
+  async function open(grist, { locale, bypassCSP, framed } = {}) {
     const page = await browser.newPage({ bypassCSP });
     if (process.env.WIDGET_TEST_TIMEOUT) page.setDefaultTimeout(Number(process.env.WIDGET_TEST_TIMEOUT)); // a shorter wait while the tests are being written: what is not there is not coming
     page.problems = [];
@@ -61,7 +64,16 @@ export async function launchWidget() {
       };
       if (initialLocale) localStorage.setItem("gristFactory.locale", initialLocale);
     }, locale);
-    await page.goto(url);
+    if (framed) {
+      const host = new URL("/host.html", url).href; // served from the same address: a frame opened from about:blank is refused access to a local one
+      await page.route(host, (route) => route.fulfill({ contentType: "text/html", body: `<iframe src="${url}" style="width: 700px; height: 600px"></iframe><textarea id="host-field"></textarea>` }));
+      await page.goto(host);
+      page.widgetFrame = await (await page.waitForSelector("iframe")).contentFrame();
+      await page.widgetFrame.waitForLoadState("load");
+      await page.widgetFrame.waitForSelector("#tab-import");
+    } else {
+      await page.goto(url);
+    }
     pages.push(page);
     return page;
   }

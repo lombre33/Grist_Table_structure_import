@@ -124,3 +124,34 @@ test("columns added to an existing table show up in its page", async () => {
   const email = (await doc.columns("Contacts")).find((col) => col.colId === "Email");
   assert.ok(shown.some((field) => field.colRef === email.id), "the new column is in the table's grid");
 });
+
+test("what an import wrote is undone by Grist: its Undo button, one step for each call the import made, and Ctrl+Z from outside the widget, and not from inside the widget", async () => {
+  const doc = await instance.newDoc("in Grist: undo");
+  const { frame, page, errors } = await openWidgetIn(doc);
+  const descriptions = async (tableId) => (await snapshot(doc))[tableId]?.map((col) => col.description);
+  const until = async (read, expected, what) => {
+    for (let waited = 0; waited < 10000 && JSON.stringify(await read()) !== JSON.stringify(expected); waited += 200) await new Promise((resolve) => setTimeout(resolve, 200));
+    assert.deepEqual(await read(), expected, what);
+  };
+
+  await analyse(frame, "@grist.UserTable\nclass Undone:\n  A = grist.Text(description='Une colonne')\n");
+  assert.match(await apply(frame), /^Table « Undone » créée/);
+  assert.deepEqual(await descriptions("Undone"), ["Une colonne"]);
+
+  await page.keyboard.press("Control+z"); // the focus is in the widget, where the shortcut is the browser's, not Grist's
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+  assert.deepEqual(await descriptions("Undone"), ["Une colonne"], "Ctrl+Z in the widget undoes nothing in the document");
+
+  await page.locator(".test-undo").click();
+  await until(() => descriptions("Undone"), [""], "the first step takes the details back: the table is there, without its description");
+  await page.locator(".test-undo").click();
+  await until(() => descriptions("Undone"), undefined, "the second step takes the table back");
+
+  await analyse(frame, "@grist.UserTable\nclass Again:\n  A = grist.Text()\n");
+  assert.match(await apply(frame), /^Table « Again » créée/);
+  await page.locator("body").click({ position: { x: 3, y: 3 } }); // the focus leaves the widget for the page of Grist
+  await page.keyboard.press("Control+z");
+  await until(() => descriptions("Again"), undefined, "Ctrl+Z, from the page of Grist, takes the table back");
+  assert.deepEqual(errors, []);
+  await page.close();
+});

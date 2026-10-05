@@ -4,8 +4,8 @@
  * warning, `{ key, params, table }`, rendered by the interface.
  */
 
-import { findMatchingClose, indentOf, parseString, stringLines } from "./pyText.js";
-import { RESERVED_COLUMN_IDS } from "./gristTypes.js";
+import { findMatchingClose, indentOf, parseString, stringLines, withoutComment } from "./pyText.js";
+import { isReservedColumnId } from "./gristTypes.js";
 
 const CLASS_RE = /^class\s+([A-Za-z_]\w*)\s*(?:\([^)]*\)\s*)?:\s*$/; // the spaces after the bases are in the group: two `\s*` side by side would try each split of a long run
 const ASSIGN_RE = /^([A-Za-z_]\w*)\s*=\s*grist\.([A-Za-z_]\w*)\s*\(/;
@@ -39,6 +39,8 @@ function classify(text) {
 }
 
 const isCode = (line) => line.trim() !== "" && !line.trim().startsWith("#");
+/** What a line says as a statement: without the spaces around it and without the comment that ends it (empty for a blank line or a comment). */
+const statementOf = (line) => withoutComment(line.trim());
 
 /**
  * The body of the function written at `parentIndent` whose header precedes line `from`: its code without the
@@ -89,10 +91,10 @@ export function parseGristSchema(sourceText) {
   const warnings = [];
 
   for (let i = 0; i < lines.length; i++) {
-    if (inString[i] || lines[i].trim() !== "@grist.UserTable") continue;
+    if (inString[i] || statementOf(lines[i]) !== "@grist.UserTable") continue;
     let header = i + 1;
-    while (header < lines.length && lines[header].trim() === "") header++;
-    const match = lines[header]?.match(CLASS_RE);
+    while (header < lines.length && statementOf(lines[header]) === "") header++;
+    const match = header < lines.length ? statementOf(lines[header]).match(CLASS_RE) : null;
     if (!match) {
       warnings.push({ key: "warn.decoratorNoClass", params: { line: i + 1 } });
       continue;
@@ -115,7 +117,7 @@ const warn = (body, key, params) => body.warnings.push({ key, params, table: bod
 /** Adds `column` (`{ id, dslType, argsRaw, kind, code }`) read at `line`, unless its id is reserved or already taken. */
 function addColumn(body, column, line) {
   const { id } = column;
-  if (RESERVED_COLUMN_IDS.has(id)) warn(body, "warn.reservedColumnId", { line, colId: id });
+  if (isReservedColumnId(id)) warn(body, "warn.reservedColumnId", { line, colId: id });
   else if (body.seen.has(id.toLowerCase())) warn(body, "warn.duplicateColumnId", { line, colId: id });
   else {
     body.seen.add(id.toLowerCase());
@@ -175,16 +177,16 @@ const READERS = {
 /** The description and the columns of the class body starting at `start`, which ends at the first line indented less than it. */
 function parseTableBody(lines, inString, start, table) {
   let i = start;
-  while (i < lines.length && lines[i].trim() === "") i++;
+  while (i < lines.length && statementOf(lines[i]) === "") i++; // the body starts at its first statement, not at a comment before it
   const bodyIndent = i < lines.length ? indentOf(lines[i]) : 0;
   if (bodyIndent === 0) return { description: null, columns: [], warnings: [], end: i };
 
   const body = newBody(table, { lines, inString, bodyIndent });
   let opening = true; // no statement read yet: a string is the docstring only there
   for (; i < lines.length; i++) {
-    const text = lines[i].trim();
+    const text = statementOf(lines[i]);
     const indent = indentOf(lines[i]);
-    if (inString[i] || text === "" || text.startsWith("#") || indent > bodyIndent) continue;
+    if (inString[i] || text === "" || indent > bodyIndent) continue;
     if (indent < bodyIndent) break;
 
     const docstring = opening ? parseString(text) : null;

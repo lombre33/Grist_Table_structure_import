@@ -1,4 +1,4 @@
-import { $, syncCheckedClass } from "./dom.js";
+import { $, syncCheckedClass, trapFocus } from "./dom.js";
 import { initLocale, setLocale } from "./i18n.js";
 import { load, save } from "./storage.js";
 
@@ -28,6 +28,7 @@ function bindChoice(name, current, onChange) {
 /** The Réglages dialog: theme and language, both applied at once and remembered. */
 export function initSettings() {
   const dialog = $("settings-dialog");
+  trapFocus(dialog);
   $("settings-btn").addEventListener("click", () => dialog.showModal());
   $("settings-close-btn").addEventListener("click", () => dialog.close());
   dialog.addEventListener("click", (event) => {

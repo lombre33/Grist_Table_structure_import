@@ -70,7 +70,7 @@ function formulaBody(formula, blankLiteral) {
   return lines
     .map((line, i) => {
       if (inString[i] && asWritten) return line;
-      if (line.trim() === "") return "";
+      if (line === "" || (!inString[i] && line.trim() === "")) return ""; // spaces alone in a string are part of it
       return body + (inString[i] ? line : line.slice(common));
     })
     .join("\n");

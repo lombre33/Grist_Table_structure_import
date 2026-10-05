@@ -1,6 +1,6 @@
 /**
  * What the Import tab does with the document, step by step: read the text and the document, apply the choice,
- * go back to the start. `ctx` is { grist, ui, state, setStatus, confirm, render, showElements }.
+ * go back to the start. `ctx` is { grist, ui, state, setStatus, confirm, render, showElements, onDocumentChange }.
  */
 
 import { parseGristSchema } from "./parser.js";
@@ -16,7 +16,7 @@ import { batchOf, newEntry, resetState, withFormulas } from "./importState.js";
 import { fillTargetSelect, render, renderElements, renderTableIds, renderWarnings, targetTable, updateModeUI } from "./importView.js";
 
 /** Reads the document's tables and columns: the references and the "existing table" mode need them, and a failure is a note, not an error. */
-export async function loadSchema({ grist, ui, state }) {
+async function loadSchema({ grist, ui, state }) {
   ui.analyzeBtn.disabled = true;
   try {
     state.docSchema = await callGrist(fetchDocSchema(grist));
@@ -41,7 +41,7 @@ export async function analyze(ctx) {
   ui.previewSection.hidden = false;
   if (!found) return showNothingFound(ctx);
 
-  setStatus(translate("import.status.analyzing"));
+  setStatus(() => translate("import.status.analyzing"));
   ui.actionBtn.disabled = true; // the button of the previous analysis, its tables gone
   await loadSchema(ctx);
   restoreFocus(ui.analyzeBtn);
@@ -112,21 +112,30 @@ export async function apply(ctx) {
   }
 }
 
+const MAX_IDS_SHOWN = 10;
+
+/** The ids of the tables created, as many as a sentence can hold. */
+const listed = (ids) => (ids.length > MAX_IDS_SHOWN ? `${ids.slice(0, MAX_IDS_SHOWN).join(", ")}…` : ids.join(", "));
+
 async function create(ctx) {
   const { grist, state, setStatus } = ctx;
   const batch = batchOf(state);
-  setStatus(translatePlural("import.status.creating", batch.length));
+  setStatus(() => translatePlural("import.status.creating", batch.length));
   try {
     const { tables: created, note } = await createTables(grist, batch, { withFormulas: withFormulas(state) });
-    const columnsPhrase = translatePlural("common.columnsCount", created.reduce((total, table) => total + table.columns.length, 0));
-    const summary =
-      created.length > 1
-        ? translate("import.success.createdMulti", { count: created.length, ids: created.map((table) => table.id).join(", "), columnsPhrase })
+    const columnCount = created.reduce((total, table) => total + table.columns.length, 0);
+    const summary = () => {
+      const columnsPhrase = translatePlural("common.columnsCount", columnCount);
+      return created.length > 1
+        ? translate("import.success.createdMulti", { count: created.length, ids: listed(created.map((table) => table.id)), columnsPhrase })
         : translate("import.success.createdSingle", { tableId: created[0].id, columnsPhrase });
+    };
     clearResults(ctx);
-    setStatus(summary + note, "success");
+    setStatus(() => summary() + note, "success");
+    ctx.onDocumentChange();
   } catch (err) {
-    setStatus(translate("import.error.createFailed", { error: reportError(err) }), "error");
+    const error = reportError(err);
+    setStatus(() => translate("import.error.createFailed", { error }), "error");
   }
 }
 
@@ -134,14 +143,16 @@ async function addToExisting(ctx) {
   const { grist, state, setStatus } = ctx;
   const target = targetTable(ctx);
   if (!target) return;
-  setStatus(translate("import.status.addingColumns", { table: target.tableId }));
+  setStatus(() => translate("import.status.addingColumns", { table: target.tableId }));
   try {
     const columns = state.existing.columns.filter((col) => !state.existing.excluded.has(col.id));
     const { added, note } = await addColumns(grist, target, columns, { withFormulas: withFormulas(state) });
     await loadSchema(ctx);
-    if (added === 0) setStatus(translate("import.info.noNewColumns", { table: target.tableId }));
-    else setStatus(translatePlural("import.success.columnsAdded", added, { table: target.tableId }) + note, "success");
+    if (added === 0) setStatus(() => translate("import.info.noNewColumns", { table: target.tableId }));
+    else setStatus(() => translatePlural("import.success.columnsAdded", added, { table: target.tableId }) + note, "success");
+    ctx.onDocumentChange();
   } catch (err) {
-    setStatus(translate("import.error.addColumnsFailed", { error: reportError(err) }), "error");
+    const error = reportError(err);
+    setStatus(() => translate("import.error.addColumnsFailed", { error }), "error");
   }
 }

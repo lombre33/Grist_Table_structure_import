@@ -12,7 +12,7 @@ test("typeLabel gives a readable name, with the target or time zone when there i
   assert.equal(label("DateTime:UTC"), "Date et heure (UTC)");
 });
 
-test("tn follows the plural rules of the language: in French zero is singular", () => {
+test("translatePlural follows the plural rules of the language: in French zero is singular", () => {
   assert.equal(translatePlural("common.columnsCount", 0), "0 colonne");
   assert.equal(translatePlural("common.columnsCount", 1), "1 colonne");
   assert.equal(translatePlural("common.columnsCount", 2), "2 colonnes");

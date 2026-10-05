@@ -123,6 +123,8 @@ export const STRINGS = {
       "dans un document Grist (elle ne fonctionne pas seule, hors d’un document), avec le fichier " +
       "grist-plugin-api.js servi à côté d’elle (voir le README).",
     "error.timeout": "Délai dépassé en attendant la réponse du document Grist.",
+    "error.noWriteAccess": "Vous n’avez pas le droit de modifier ce document ({error}).",
+    "error.writeTimeout": "Grist n’a pas répondu à l’écriture dans le délai prévu (deux minutes). Elle a pu aboutir : vérifiez le document avant de recommencer.",
     "common.tablesCount": { one: "{n} table", other: "{n} tables" },
     "common.columnsCount": { one: "{n} colonne", other: "{n} colonnes" },
     // The name of each type of column in the preview ({arg} is the table a reference points to, or the time zone); see typeLabel().
@@ -142,8 +144,10 @@ export const STRINGS = {
 
     // The notes about the text that was read (parser.js) and about what would be created (importer.js), listed under the preview.
     "warn.invalidWidgetOptions": "Colonne « {colId} » : widget_options n’est pas un JSON valide, ignoré.",
+    "warn.unreadableOption": "Colonne « {colId} » : l’option « {option} » n’est pas lisible telle qu’écrite ({given}), ignorée ou lue en partie.",
     "warn.dateTimeNoTimezone":
       "Colonne « {colId} » : fuseau horaire non précisé pour DateTime, « {timezone} » utilisé par défaut (à vérifier).",
+    "warn.dateTimeBadTimezone": "Colonne « {colId} » : « {given} » n’est pas un nom de fuseau horaire, « {timezone} » utilisé par défaut (à vérifier).",
     "warn.refTargetMissingSyntax": "Colonne « {colId} » : table cible introuvable pour {dslType}, importée en tant que « Any ».",
     "warn.unknownType": "Colonne « {colId} » : type « {dslType} » non reconnu, importée en tant que « Any ».",
 
@@ -161,6 +165,7 @@ export const STRINGS = {
       "Références bidirectionnelles créées comme références simples (la colonne réciproque n’est pas créée en même " +
       "temps) : {columns}.",
     "warn.tablePrefix": "Table « {tableId} » — {message}",
+    "warn.more": { one: "… et {n} autre remarque non affichée.", other: "… et {n} autres remarques non affichées." },
 
     "import.error.fetchDocInfo": "Impossible de récupérer les informations de ce document : {error}",
     "warn.refTargetMissingInDoc":
@@ -184,6 +189,7 @@ export const STRINGS = {
     "import.action.addColumns": { one: "Ajouter {n} colonne à « {table} »", other: "Ajouter {n} colonnes à « {table} »" },
     "import.action.chooseTables": "Cochez au moins une table",
     "import.action.noColumns": "Aucune colonne à créer",
+    "import.action.fixIds": { one: "Corrigez l’identifiant de la table", other: "Corrigez les identifiants des tables" },
     "import.confirm.createTitle": { one: "Créer cette table ?", other: "Créer ces {n} tables ?" },
     "import.confirm.createIntro": "Sera ajouté à ce document :",
     "import.confirm.tableLine": "{tableId} — {columnsPhrase}",
@@ -194,7 +200,7 @@ export const STRINGS = {
       one: "{columns} : cette formule appelle REQUEST, qui peut envoyer des données de ce document vers un autre serveur. Ne confirmez que si vous faites confiance à ce code.",
       other: "{columns} : ces formules appellent REQUEST, qui peut envoyer des données de ce document vers un autre serveur. Ne confirmez que si vous faites confiance à ce code.",
     },
-    "import.confirm.safe": "Rien n’est supprimé ni modifié dans ce qui existe déjà ; Ctrl+Z annule l’action.",
+    "import.confirm.safe": "Rien n’est supprimé ni modifié dans ce qui existe déjà ; le bouton Annuler de Grist défait l’action.",
     "import.confirm.cancel": "Annuler",
     "import.confirm.ok": "Confirmer", // what the button says before the dialog gives it the label of the action it confirms
     "import.status.new": "Nouvelle",
@@ -205,7 +211,7 @@ export const STRINGS = {
       one: "Cette table existe déjà dans ce document : {ids}. Choisissez un autre identifiant.",
       other: "Ces tables existent déjà dans ce document : {ids}. Choisissez d’autres identifiants.",
     },
-    "import.note.refineFailed": " Détails des colonnes (descriptions, colonnes d’affichage...) non appliqués : {error}",
+    "import.note.refineFailed": " Détails des colonnes (descriptions, colonnes d’affichage…) non appliqués : {error}",
     "import.note.linkFailed": " Références bidirectionnelles non reliées : {error}",
     "import.preview.twoWay": "bidirectionnelle",
     "import.success.createdMulti": "{count} tables créées ({ids}), {columnsPhrase} au total.",
@@ -238,6 +244,7 @@ export const STRINGS = {
     "export.status.loading": "Lecture des tables du document…",
     "export.status.generating": "Génération du code en cours…",
     "export.success.generated": "Code généré pour {tablesPhrase}, {columnsPhrase} au total.",
+    "export.note.gone": { one: "{n} table cochée n’existe plus dans ce document : actualisez la liste.", other: "{n} tables cochées n’existent plus dans ce document : actualisez la liste." },
     "export.error.generateFailed": "Échec de la génération : {error}",
     "export.copy.done": "Copié.",
     "export.copy.fallback":
@@ -296,9 +303,9 @@ export const STRINGS = {
     "element.tableDescriptions": "Table descriptions",
     "element.tableDescriptions.hint": "The help text of the table.",
     "element.choices": "Choice lists",
-    "element.choices.hint": "The choices offered, with their colours.",
+    "element.choices.hint": "The choices offered, with their colors.",
     "element.options": "Cell format",
-    "element.options.hint": "Alignment, number and date formats, colours…",
+    "element.options.hint": "Alignment, number and date formats, colors…",
     "element.displayColumns": "Column shown by references",
     "element.displayColumns.hint": "Which column of the linked table a reference cell shows.",
     "element.twoWay": "Two-way links",
@@ -346,6 +353,8 @@ export const STRINGS = {
       "(it does not work standalone, outside of a document), with the file grist-plugin-api.js " +
       "served next to it (see the README).",
     "error.timeout": "Timed out waiting for a response from the Grist document.",
+    "error.noWriteAccess": "You are not allowed to change this document ({error}).",
+    "error.writeTimeout": "Grist did not answer the write within the time allowed (two minutes). It may still have gone through: check the document before trying again.",
     "common.tablesCount": { one: "{n} table", other: "{n} tables" },
     "common.columnsCount": { one: "{n} column", other: "{n} columns" },
     "type.Text": "Text",
@@ -363,7 +372,9 @@ export const STRINGS = {
     "type.Any": "Any",
 
     "warn.invalidWidgetOptions": "Column “{colId}”: widget_options is not valid JSON, ignored.",
+    "warn.unreadableOption": "Column “{colId}”: the “{option}” option cannot be read as written ({given}), ignored or only partly read.",
     "warn.dateTimeNoTimezone": "Column “{colId}”: no timezone given for DateTime, defaulting to “{timezone}” (please check).",
+    "warn.dateTimeBadTimezone": "Column “{colId}”: “{given}” is not the name of a time zone, defaulting to “{timezone}” (please check).",
     "warn.refTargetMissingSyntax": "Column “{colId}”: no target table found for {dslType}, imported as “Any”.",
     "warn.unknownType": "Column “{colId}”: unrecognized type “{dslType}”, imported as “Any”.",
 
@@ -379,6 +390,7 @@ export const STRINGS = {
     "warn.twoWayColumns":
       "Two-way references created as plain references (their counterpart column is not created with them): {columns}.",
     "warn.tablePrefix": "Table “{tableId}” — {message}",
+    "warn.more": { one: "… and {n} more note not shown.", other: "… and {n} more notes not shown." },
 
     "import.error.fetchDocInfo": "Could not retrieve this document’s information: {error}",
     "warn.refTargetMissingInDoc":
@@ -400,6 +412,7 @@ export const STRINGS = {
     "import.action.addColumns": { one: "Add {n} column to “{table}”", other: "Add {n} columns to “{table}”" },
     "import.action.chooseTables": "Tick at least one table",
     "import.action.noColumns": "No column to create",
+    "import.action.fixIds": { one: "Fix the table’s identifier", other: "Fix the tables’ identifiers" },
     "import.confirm.createTitle": { one: "Create this table?", other: "Create these {n} tables?" },
     "import.confirm.createIntro": "Will be added to this document:",
     "import.confirm.tableLine": "{tableId} — {columnsPhrase}",
@@ -410,7 +423,7 @@ export const STRINGS = {
       one: "{columns}: this formula calls REQUEST, which can send data from this document to another server. Only confirm if you trust this code.",
       other: "{columns}: these formulas call REQUEST, which can send data from this document to another server. Only confirm if you trust this code.",
     },
-    "import.confirm.safe": "Nothing that already exists is removed or changed; Ctrl+Z undoes the action.",
+    "import.confirm.safe": "Nothing that already exists is removed or changed; Grist’s Undo button reverts the action.",
     "import.confirm.cancel": "Cancel",
     "import.confirm.ok": "Confirm",
     "import.status.new": "New",
@@ -421,7 +434,7 @@ export const STRINGS = {
       one: "This table already exists in this document: {ids}. Choose another identifier.",
       other: "These tables already exist in this document: {ids}. Choose other identifiers.",
     },
-    "import.note.refineFailed": " Column details (descriptions, display columns...) not applied: {error}",
+    "import.note.refineFailed": " Column details (descriptions, display columns…) not applied: {error}",
     "import.note.linkFailed": " Two-way references not linked: {error}",
     "import.preview.twoWay": "two-way",
     "import.success.createdMulti": "{count} tables created ({ids}), {columnsPhrase} in total.",
@@ -453,6 +466,7 @@ export const STRINGS = {
     "export.status.loading": "Reading this document’s tables…",
     "export.status.generating": "Generating code…",
     "export.success.generated": "Code generated for {tablesPhrase}, {columnsPhrase} in total.",
+    "export.note.gone": { one: "{n} ticked table no longer exists in this document: refresh the list.", other: "{n} ticked tables no longer exist in this document: refresh the list." },
     "export.error.generateFailed": "Generation failed: {error}",
     "export.copy.done": "Copied.",
     "export.copy.fallback": "Automatic copy isn’t available here: the text is selected, use Ctrl+C (Cmd+C on Mac).",

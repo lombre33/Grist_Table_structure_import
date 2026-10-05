@@ -21,8 +21,8 @@ export function initExportTab(grist) {
   const setStatus = statusWriter($("export-status-region"));
   if (!grist) {
     ui.refreshBtn.disabled = true;
-    setStatus(translate("error.noGristApi"), "error");
-    return { activate() {} };
+    setStatus(() => translate("error.noGristApi"), "error");
+    return { activate() {}, markStale() {} };
   }
 
   // docSchema: the document's tables and columns; busy: the list is being read, or the code generated;
@@ -51,6 +51,10 @@ export function initExportTab(grist) {
       if (state.loaded) return;
       state.loaded = true;
       loadTables(ctx);
+    },
+    /** The document has changed since the list was read: the next visit to the tab reads it again. */
+    markStale() {
+      state.loaded = false;
     },
   };
 }
@@ -95,7 +99,7 @@ function dismiss(ctx) {
 async function loadTables(ctx) {
   const { grist, ui, state, setStatus, tables, banner, output } = ctx;
   const kept = new Set(tables.selected());
-  setStatus(translate("export.status.loading"));
+  setStatus(() => translate("export.status.loading"));
   output.hide();
   tables.hide();
   banner.reset();
@@ -105,7 +109,8 @@ async function loadTables(ctx) {
     setStatus(null);
     tables.show(tablesWithColumns(state.docSchema), kept);
   } catch (err) {
-    setStatus(translate("export.error.fetchTables", { error: reportError(err) }), "error");
+    const error = reportError(err);
+    setStatus(() => translate("export.error.fetchTables", { error }), "error");
   } finally {
     setBusy(ctx, false);
     restoreFocus(ui.refreshBtn);
@@ -116,7 +121,7 @@ async function loadTables(ctx) {
 async function generate(ctx) {
   const { grist, ui, state, setStatus, tables, output } = ctx;
   if (tables.selected().length === 0) return;
-  setStatus(translate("export.status.generating"));
+  setStatus(() => translate("export.status.generating"));
   setBusy(ctx, true);
   try {
     state.docSchema = await callGrist(fetchDocSchema(grist)); // columns may have changed since the list was loaded
@@ -124,10 +129,17 @@ async function generate(ctx) {
     const schema = omitFromExport(buildExportSchema(kept.tables, kept.allColumns, tables.selected()), state.omitted);
     output.show(generateCode(schema));
     const columns = schema.reduce((total, table) => total + table.columns.length, 0);
-    setStatus(translate("export.success.generated", { tablesPhrase: translatePlural("common.tablesCount", schema.length), columnsPhrase: translatePlural("common.columnsCount", columns) }), "success");
+    const gone = tables.selected().length - schema.length; // ticked, and no longer in the document
+    setStatus(
+      () =>
+        translate("export.success.generated", { tablesPhrase: translatePlural("common.tablesCount", schema.length), columnsPhrase: translatePlural("common.columnsCount", columns) }) +
+        (gone > 0 ? ` ${translatePlural("export.note.gone", gone)}` : ""),
+      "success"
+    );
     output.reveal();
   } catch (err) {
-    setStatus(translate("export.error.generateFailed", { error: reportError(err) }), "error");
+    const error = reportError(err);
+    setStatus(() => translate("export.error.generateFailed", { error }), "error");
   } finally {
     setBusy(ctx, false);
     restoreFocus(ui.generateBtn);

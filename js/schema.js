@@ -4,11 +4,11 @@
  * with full access.
  */
 
-import { RESERVED_COLUMN_IDS, splitType } from "./gristTypes.js";
+import { isReservedColumnId, splitType } from "./gristTypes.js";
 import { omitElements, omitTable } from "./elements.js";
 import { isPlainObject } from "./widgetOptions.js";
 
-const isHidden = (colId) => RESERVED_COLUMN_IDS.has(colId) || colId.startsWith("gristHelper_") || colId.startsWith("#");
+const isHidden = (colId) => isReservedColumnId(colId) || colId.startsWith("#");
 
 /** Rows of what `fetchTable` returns, which is column-oriented: `{ id: [...], colId: [...] }`. */
 export function zipRows(columns) {
