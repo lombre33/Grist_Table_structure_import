@@ -26,6 +26,11 @@ class TableB:
 
 const TYPES = "@grist.UserTable\nclass X:\n  A = grist.Reference('Other_Table')\n  B = grist.Int()\n";
 
+/** What the confirmation says of one column whose formula is left out, and of two (a formula and a trigger formula). */
+const LEFT_OUT_ONE_FR = "1 colonne a une formule ou une formule de déclenchement dans le texte : elle sera créée vide. Pour la reprendre, annulez, dépliez « Éléments à importer » et cochez « Formules ».";
+const LEFT_OUT_TWO_FR = "2 colonnes ont une formule ou une formule de déclenchement dans le texte : elles seront créées vides. Pour les reprendre, annulez, dépliez « Éléments à importer » et cochez « Formules ».";
+const WITH_FORMULA_AND_TRIGGER = "@grist.UserTable\nclass X:\n  A = grist.Int()\n  def _default_Stamp(rec, table, value, user):\n    return 'x'\n  Stamp = grist.Text()\n\n  @grist.formulaType(grist.Int())\n  def Double(rec, table):\n    return rec.A * 2\n";
+
 const WITH_FORMULA = "@grist.UserTable\nclass X:\n  A = grist.Int()\n\n  @grist.formulaType(grist.Int())\n  def Double(rec, table):\n    return rec.A * 2\n";
 
 const WITH_REQUEST = "@grist.UserTable\nclass Fetch:\n  A = grist.Text()\n\n  @grist.formulaType(grist.Text())\n  def Remote(rec, table):\n    return REQUEST('https://example.org/?q=' + rec.A).content\n\n  @grist.formulaType(grist.Int())\n  def Double(rec, table):\n    return 2\n";
@@ -313,7 +318,9 @@ const TESTS = [
     await analyse(page, WITH_FORMULA);
     const notes = () => page.$$eval("#confirm-notes p", (items) => items.map((item) => item.textContent));
     await page.click("#action-btn");
-    assert.deepEqual(await notes(), [], "left out, they are created empty: nothing will run");
+    assert.deepEqual((await notes()).map(plain), [LEFT_OUT_ONE_FR], "left out, they are created empty: nothing will run, and the dialog says so");
+    assert.equal(await page.$eval("#confirm-notes p", (note) => note.className), "status status-info", "an information, not a caution");
+    assert.equal(await page.evaluate(() => document.activeElement.id), "confirm-ok-btn", "nothing to be wary of: Enter confirms");
     await page.click("#confirm-cancel-btn");
     await keepElement(page, "import", "Formules");
     await page.click("#action-btn");
@@ -338,7 +345,7 @@ const TESTS = [
     await page.click("#confirm-cancel-btn");
     await leaveOutElement(page, "import", "Formules");
     await page.click("#action-btn");
-    assert.equal(await count(page, "#confirm-notes p"), 0, "left out, the formulas are not created: nothing will call REQUEST");
+    assert.deepEqual((await page.$$eval("#confirm-notes p", (items) => items.map((item) => item.textContent))).map(plain), [LEFT_OUT_TWO_FR], "left out, the formulas are not created: nothing will call REQUEST, and only the information is given");
   }],
 
   ["Import: the warning about REQUEST speaks English to an English reader", async (page) => {
@@ -346,6 +353,32 @@ const TESTS = [
     await keepElement(page, "import", "Formulas");
     await page.click("#action-btn");
     assert.equal(await page.locator("#confirm-notes p").last().textContent(), "Fetch.Remote: this formula calls REQUEST, which can send data from this document to another server. Only confirm if you trust this code.");
+  }, { locale: "en" }],
+
+  ["Import: a formula and a trigger formula left out are said so in the preview and in the confirmation, and the dialog does not hold back Enter", async (page) => {
+    await analyse(page, WITH_FORMULA_AND_TRIGGER);
+    assert.deepEqual(await previewRows(page), ["AEntier", "StampTexte formule de déclenchement non reprise", "DoubleEntier formule non reprise"]);
+    await page.click("#action-btn");
+    assert.deepEqual((await page.$$eval("#confirm-notes p", (items) => items.map((item) => item.textContent))).map(plain), [LEFT_OUT_TWO_FR]);
+    assert.equal(await page.evaluate(() => document.activeElement.id), "confirm-ok-btn");
+    await page.click("#confirm-cancel-btn");
+
+    await page.locator("#columns-preview-body tr", { hasText: "Stamp" }).locator("input").click(); // taken out of what is created: it is no longer counted
+    await page.click("#action-btn");
+    assert.deepEqual((await page.$$eval("#confirm-notes p", (items) => items.map((item) => item.textContent))).map(plain), [LEFT_OUT_ONE_FR]);
+    await page.click("#confirm-cancel-btn");
+
+    await keepElement(page, "import", "Formules");
+    assert.deepEqual(await previewRows(page), ["AEntier", "StampTexte formule de déclenchement", "DoubleEntier formule"]);
+    await page.click("#action-btn");
+    assert.equal(await page.$eval("#confirm-notes p", (note) => note.className), "status status-warning", "asked for, they run: a caution again");
+  }],
+
+  ["Import: the column whose formula is left out says so to an English reader, in the preview and in the confirmation", async (page) => {
+    await analyse(page, WITH_FORMULA);
+    assert.deepEqual(await previewRows(page), ["AInteger", "DoubleInteger formula left out"]);
+    await page.click("#action-btn");
+    assert.equal(await page.locator("#confirm-notes p").textContent(), "1 column has a formula or trigger formula in the text: it will be created empty. To keep it, cancel, unfold “Elements to import” and tick “Formulas”.");
   }, { locale: "en" }],
 
   ["Import: the confirmation speaks the language of the page", async (page) => {
@@ -605,9 +638,10 @@ const TESTS = [
     await unfold(page, "import");
     assert.equal(await page.getByRole("checkbox", { name: /Formules/ }).isChecked(), false);
     assert.match(await textOf(page, "#warnings-list"), /créées vides : Double/);
-    assert.deepEqual(await previewRows(page), ["AEntier", "DoubleEntier formule"]);
+    assert.deepEqual(await previewRows(page), ["AEntier", "DoubleEntier formule non reprise"], "the preview says what the column will be: created without its formula");
 
     await keepElement(page, "import", "Formules");
+    assert.deepEqual(await previewRows(page), ["AEntier", "DoubleEntier formule"], "asked for, the formula is taken: nothing is said to be left out");
     assert.equal(await hidden(page, "warnings-block"), true, "nothing is lost, so nothing is said");
     await apply(page);
     const [[, , columns]] = grist.calls[0];

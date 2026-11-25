@@ -512,6 +512,13 @@ table#columns-preview {
   white-space: nowrap;
 }
 
+/* What the import leaves out (the formulas, until they are asked for): outlined, not filled. */
+.tag-left-out {
+  padding: 0 6px;
+  border: 1px dashed currentColor;
+  background: transparent;
+}
+
 .option {
   margin-top: 14px;
 }

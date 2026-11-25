@@ -11,7 +11,7 @@ import { modeOf } from "./importUi.js";
 import { batchOf, withFormulas } from "./importState.js";
 import { targetTable } from "./importView.js";
 
-/** What the dialog says for what the button is about to do (`ctx`: see importTab.js): `{ title, intro, lines, notes, action }`. */
+/** What the dialog says for what the button is about to do (`ctx`: see importTab.js): `{ title, intro, lines, notes, action }`; a note is `{ text, caution }`. */
 export function confirmationOf(ctx) {
   const { ui, state } = ctx;
   let title, intro, lines, columns;
@@ -31,11 +31,17 @@ export function confirmationOf(ctx) {
   return { title, intro, lines, notes: formulaNotes(state, columns), action: ui.actionBtn.textContent }; // the button of the dialog says what the one that opened it said
 }
 
-/** What the user is told about the formulas they are about to run: that they will, and which of them can send data out. */
+/**
+ * What the user is told about the formulas of the columns about to be created: that they will run, and which of them can send
+ * data out (cautions); or, left out, that those columns are created empty and how to have them (information, nothing to be wary of).
+ */
 function formulaNotes(state, columns) {
-  if (!withFormulas(state) || !columns.some(isComputed)) return [];
+  const computed = columns.filter(isComputed);
+  if (computed.length === 0) return [];
+  if (!withFormulas(state)) return [{ text: translatePlural("import.confirm.formulasLeftOut", computed.length), caution: false }];
   const requesting = columns.filter(callsRequest).map((col) => `${col.tableId}.${col.id}`);
-  return [translate("import.confirm.formulas"), ...(requesting.length > 0 ? [translatePlural("import.confirm.request", requesting.length, { columns: requesting.join(", ") })] : [])];
+  const cautions = [translate("import.confirm.formulas"), ...(requesting.length > 0 ? [translatePlural("import.confirm.request", requesting.length, { columns: requesting.join(", ") })] : [])];
+  return cautions.map((text) => ({ text, caution: true }));
 }
 
 /** Wires the dialog once; the function it returns shows it for the texts given and tells, once it is closed, whether the user confirmed. */
@@ -66,10 +72,10 @@ export function createConfirmation() {
       ui.title.textContent = title;
       ui.intro.textContent = intro;
       ui.list.replaceChildren(...lines.map((text) => buildElement("li", { text })));
-      ui.notes.replaceChildren(...notes.map((text) => buildElement("p", { class: "status status-warning", text })));
+      ui.notes.replaceChildren(...notes.map(({ text, caution }) => buildElement("p", { class: caution ? "status status-warning" : "status status-info", text })));
       ui.okBtn.textContent = action;
       settle = resolve;
       ui.dialog.showModal();
-      (notes.length > 0 ? ui.cancelBtn : ui.okBtn).focus(); // Enter confirms, Escape cancels; with a caution to read, Enter cancels: confirming takes a deliberate click
+      (notes.some((note) => note.caution) ? ui.cancelBtn : ui.okBtn).focus(); // Enter confirms, Escape cancels; with a caution to read, Enter cancels: confirming takes a deliberate click
     });
 }

@@ -77,7 +77,9 @@ tables dans ce document », « Ajouter 3 colonnes à cette table »…) ouvre un
 qui résume ce qui va être ajouté : les tables avec le nombre de leurs colonnes (sous
 l'identifiant saisi), ou les colonnes ajoutées à la table choisie. Elle prévient quand des
 formules, cochées, vont s'exécuter dans le document, et rappelle que rien d'existant n'est
-supprimé ni modifié. **Annuler** (ou la touche Échap) n'écrit rien et laisse l'aperçu tel quel ;
+supprimé ni modifié. Quand le texte contient des formules que vous n'avez pas cochées, elle
+dit combien de colonnes seront créées vides et comment les reprendre (c'est une information,
+pas une mise en garde). **Annuler** (ou la touche Échap) n'écrit rien et laisse l'aperçu tel quel ;
 le bouton de confirmation a le focus, donc Entrée confirme (quand des formules vont s'exécuter,
 c'est **Annuler** qui a le focus : confirmer demande alors un clic voulu), et une touche maintenue
 enfoncée depuis le bouton d'action ne vaut pas confirmation. Cette étape s'ajoute à l'aperçu et à
@@ -137,7 +139,8 @@ Par défaut, toutes les colonnes sont créées comme colonnes de données, y com
 écrites avec `@grist.formulaType(...)` dans le code source, et sans formule. Ce que
 l'import ne reprend pas n'est pas perdu en silence : une remarque de l'aperçu liste les
 colonnes calculées (formule, ou formule de déclenchement `def _default_...`), créées
-vides, les références bidirectionnelles qui ne peuvent pas être reliées (voir
+vides (chacune porte aussi, dans l'aperçu, une pastille « non reprise » tant que **Formules**
+n'est pas coché), les références bidirectionnelles qui ne peuvent pas être reliées (voir
 ci-dessous), créées comme références simples, et les options (`label=`, `description=`,
 `choices=`, `widget_options=`, `visible_col=`, `reverse_of=`) écrites sous une forme que le
 widget ne lit pas (guillemets typographiques, nom de variable, `u'…'`), ignorées ou lues en partie.
@@ -186,8 +189,9 @@ n'est jamais modifiée). Tout est coché par défaut, sauf
 élément décoché est laissé de côté à la création, comme si le texte ne le contenait pas :
 sans **Liens bidirectionnels**, deux colonnes qui se désignent restent deux références
 simples ; sans **Libellés**, chaque colonne garde le libellé que Grist déduit de son
-identifiant. Seules les formules laissent une remarque dans l'aperçu (les colonnes créées
-vides), puisqu'elles sont décochées sans que vous l'ayez demandé.
+identifiant. Seules les formules laissent une trace : une remarque et une pastille « non
+reprise » dans l'aperçu, une note dans la boîte de confirmation (les colonnes créées vides),
+puisqu'elles sont décochées sans que vous l'ayez demandé.
 
 #### Reprendre les formules
 

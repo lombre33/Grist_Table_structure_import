@@ -61,6 +61,7 @@ export const STRINGS = {
     "import.preview.status": "Statut",
     "import.preview.formula": "formule",
     "import.preview.trigger": "formule de déclenchement",
+    "import.preview.leftOut": "non reprise", // beside "formule": while the formulas are not asked for, the column is created without it
     // The elements a column carries besides its type (see elements.js): the name of each and the line that says what it is,
     // the same for Import and Export. The summary of the choice (elements.summary.*) is written on the folded group.
     "element.labels": "Libellés",
@@ -196,6 +197,10 @@ export const STRINGS = {
     "import.confirm.addTitle": "Ajouter à « {table} » ?",
     "import.confirm.addIntro": { one: "Cette colonne sera ajoutée :", other: "Ces {n} colonnes seront ajoutées :" },
     "import.confirm.formulas": "Les formules s’exécuteront dans ce document dès leur création : ne confirmez que pour du code de confiance.",
+    "import.confirm.formulasLeftOut": {
+      one: "1 colonne a une formule ou une formule de déclenchement dans le texte : elle sera créée vide. Pour la reprendre, annulez, dépliez « Éléments à importer » et cochez « Formules ».",
+      other: "{n} colonnes ont une formule ou une formule de déclenchement dans le texte : elles seront créées vides. Pour les reprendre, annulez, dépliez « Éléments à importer » et cochez « Formules ».",
+    },
     "import.confirm.request": {
       one: "{columns} : cette formule appelle REQUEST, qui peut envoyer des données de ce document vers un autre serveur. Ne confirmez que si vous faites confiance à ce code.",
       other: "{columns} : ces formules appellent REQUEST, qui peut envoyer des données de ce document vers un autre serveur. Ne confirmez que si vous faites confiance à ce code.",
@@ -296,6 +301,7 @@ export const STRINGS = {
     "import.preview.status": "Status",
     "import.preview.formula": "formula",
     "import.preview.trigger": "trigger formula",
+    "import.preview.leftOut": "left out",
     "element.labels": "Labels",
     "element.labels.hint": "The name shown for each column, if it differs from its identifier.",
     "element.descriptions": "Column descriptions",
@@ -419,6 +425,10 @@ export const STRINGS = {
     "import.confirm.addTitle": "Add to “{table}”?",
     "import.confirm.addIntro": { one: "This column will be added:", other: "These {n} columns will be added:" },
     "import.confirm.formulas": "The formulas will run in this document as soon as they are created: only confirm code you trust.",
+    "import.confirm.formulasLeftOut": {
+      one: "1 column has a formula or trigger formula in the text: it will be created empty. To keep it, cancel, unfold “Elements to import” and tick “Formulas”.",
+      other: "{n} columns have a formula or trigger formula in the text: they will be created empty. To keep them, cancel, unfold “Elements to import” and tick “Formulas”.",
+    },
     "import.confirm.request": {
       one: "{columns}: this formula calls REQUEST, which can send data from this document to another server. Only confirm if you trust this code.",
       other: "{columns}: these formulas call REQUEST, which can send data from this document to another server. Only confirm if you trust this code.",

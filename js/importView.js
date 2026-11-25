@@ -109,9 +109,14 @@ function columnRow(ctx, col, { excluded, rerender, status = null, locked = false
     rerender();
     boxes()[position]?.focus();
   });
-  const tags = [isComputed(col) && COMPUTED_TAGS[col.kind], linked && "import.preview.twoWay"].filter(Boolean);
+  const computed = isComputed(col);
+  const tags = [
+    computed && { key: COMPUTED_TAGS[col.kind] },
+    computed && !withFormulas(ctx.state) && { key: "import.preview.leftOut", class: "tag tag-left-out" }, // the column is created without it until the user asks for the formulas
+    linked && { key: "import.preview.twoWay" },
+  ].filter(Boolean);
   const included = !locked && !excluded.has(col.id);
-  const type = buildElement("td", {}, [typeLabel(col.type), ...tags.flatMap((key) => [" ", buildElement("span", { class: "tag", text: translate(key) })])]);
+  const type = buildElement("td", {}, [typeLabel(col.type), ...tags.flatMap(({ key, class: tagClass = "tag" }) => [" ", buildElement("span", { class: tagClass, text: translate(key) })])]);
   const cells = [buildElement("td", { class: "col-checkbox" }, [buildElement("label", {}, [checkbox])]), buildElement("td", { text: col.id }), type];
   return buildElement("tr", { class: included ? "" : "is-excluded" }, status ? [...cells, status] : cells);
 }
